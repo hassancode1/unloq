@@ -2,6 +2,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ConvexProvider, ConvexReactClient } from "convex/react";
+import Toast from "react-native-toast-message";
 import {
   useFonts,
   Inter_400Regular,
@@ -11,6 +12,7 @@ import {
   Inter_800ExtraBold,
 } from "@expo-google-fonts/inter";
 import { useAppStore } from "./store/useAppStore";
+import AppSplashScreen from "./app/splash";
 import OnboardingScreen from "./app/onboarding";
 import GoalSetupScreen from "./app/goal-setup";
 import HomeScreen from "./app/home";
@@ -37,7 +39,7 @@ export default function App() {
     }
   }, [fontsLoaded]);
 
-  if (!fontsLoaded) return null;
+  if (!fontsLoaded) return <AppSplashScreen />;
 
   return (
     <ConvexProvider client={convex}>
@@ -50,6 +52,7 @@ export default function App() {
         )}
         {flow === "home" && <HomeScreen />}
       </SafeAreaProvider>
+      <Toast />
     </ConvexProvider>
   );
 }

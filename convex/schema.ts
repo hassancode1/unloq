@@ -25,6 +25,7 @@ export default defineSchema({
     lessonNumber: v.number(),
     title: v.string(),
     keyConcept: v.string(),
+    content: v.optional(v.array(v.object({ heading: v.string(), body: v.string() }))),
     flashcards: v.array(
       v.object({ front: v.string(), back: v.string() })
     ),

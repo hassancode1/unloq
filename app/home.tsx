@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import React, { useState } from 'react';
 import {
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -26,6 +27,7 @@ import type { AppColors } from '../constants/Colors';
 import UploadScreen from './upload';
 import StatsScreen from './stats';
 import SettingsScreen from './settings';
+import LessonPlayer from './lesson-player';
 
 type Tab = 'learn' | 'stats' | 'settings';
 
@@ -126,10 +128,10 @@ const tabStyles = StyleSheet.create({
 
 // ── Courses tab ──────────────────────────────────────────────────────────────
 
-function CoursesTab({ onUpload, C, fs, F }: { onUpload: () => void; C: AppColors; fs: (n: number) => number; F: any }) {
+function CoursesTab({ onUpload, onCourseSelect, C, fs, F }: { onUpload: () => void; onCourseSelect: (id: Id<'courses'>) => void; C: AppColors; fs: (n: number) => number; F: any }) {
   const styles = React.useMemo(() => makeCourseStyles(C), [C]);
   const { goalConfig, dailyProgress } = useAppStore();
-  const courses = (useQuery(api.courses.list) ?? []) as any[];
+  const courses = ((useQuery(api.courses.list) ?? []) as any[]).filter((c: any) => c.status !== 'error');
   const removeCourse = useMutation(api.courses.remove);
 
   const handleCoursePress = async (course: any) => {
@@ -137,9 +139,42 @@ function CoursesTab({ onUpload, C, fs, F }: { onUpload: () => void; C: AppColors
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       await removeCourse({ courseId: course._id as Id<'courses'> });
       onUpload();
-    } else {
+    } else if (course.status === 'ready') {
       Haptics.selectionAsync();
+      onCourseSelect(course._id as Id<'courses'>);
     }
+  };
+
+  const handleCourseLongPress = (course: any) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Alert.alert(
+      course.title,
+      'What would you like to do?',
+      [
+        {
+          text: 'Delete Course',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Delete Course',
+              'This will permanently delete the course and all its lessons.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete',
+                  style: 'destructive',
+                  onPress: async () => {
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                    await removeCourse({ courseId: course._id as Id<'courses'> });
+                  },
+                },
+              ],
+            );
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ],
+    );
   };
 
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -265,6 +300,8 @@ function CoursesTab({ onUpload, C, fs, F }: { onUpload: () => void; C: AppColors
                     style={[styles.courseRow, idx < courses.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border }]}
                     activeOpacity={0.75}
                     onPress={() => handleCoursePress(course)}
+                    onLongPress={() => handleCourseLongPress(course)}
+                    delayLongPress={400}
                   >
                     <View style={[styles.courseIcon, { backgroundColor: `${color}18`, borderColor: `${color}30` }]}>
                       <Text style={{ fontSize: 22 }}>
@@ -318,14 +355,16 @@ export default function HomeScreen() {
   const { C, fs, F } = useTheme();
   const [activeTab, setActiveTab] = useState<Tab>('learn');
   const [showUpload, setShowUpload] = useState(false);
+  const [activeCourse, setActiveCourse] = useState<Id<'courses'> | null>(null);
 
   if (showUpload) return <UploadScreen onBack={() => setShowUpload(false)} />;
+  if (activeCourse) return <LessonPlayer courseId={activeCourse} onBack={() => setActiveCourse(null)} />;
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg, paddingTop: insets.top }}>
       {/* Screen content */}
       <View style={{ flex: 1 }}>
-        {activeTab === 'learn'    && <CoursesTab onUpload={() => setShowUpload(true)} C={C} fs={fs} F={F} />}
+        {activeTab === 'learn'    && <CoursesTab onUpload={() => setShowUpload(true)} onCourseSelect={setActiveCourse} C={C} fs={fs} F={F} />}
         {activeTab === 'stats'    && <StatsScreen />}
         {activeTab === 'settings' && <SettingsScreen />}
       </View>

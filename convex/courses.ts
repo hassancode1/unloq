@@ -7,6 +7,22 @@ export const list = query({
   },
 });
 
+export const listWithProgress = query({
+  handler: async (ctx) => {
+    const courses = await ctx.db.query("courses").order("desc").collect();
+    return Promise.all(
+      courses.map(async (course) => {
+        const lessons = await ctx.db
+          .query("lessons")
+          .withIndex("by_course", (q) => q.eq("courseId", course._id))
+          .collect();
+        const completedCount = lessons.filter((l) => l.completed).length;
+        return { ...course, completedCount, lessonCount: lessons.length };
+      }),
+    );
+  },
+});
+
 export const get = query({
   args: { courseId: v.id("courses") },
   handler: async (ctx, { courseId }) => {
@@ -66,6 +82,7 @@ export const insertLesson = mutation({
     lessonNumber: v.number(),
     title: v.string(),
     keyConcept: v.string(),
+    content: v.optional(v.array(v.object({ heading: v.string(), body: v.string() }))),
     flashcards: v.array(v.object({ front: v.string(), back: v.string() })),
     quiz: v.array(
       v.object({

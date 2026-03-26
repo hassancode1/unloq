@@ -39,45 +39,84 @@ export default function SettingsScreen() {
   const styles = React.useMemo(() => makeStyles(C), [C]);
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
+    <View style={[styles.root]}>
       {/* ── Header ── */}
       <View style={styles.header}>
-        <Text style={[styles.headerTitle, { fontSize: fs(26), fontFamily: F.bold, color: C.text }]}>Profile</Text>
+        <Text
+          style={[
+            styles.headerTitle,
+            { fontSize: fs(26), fontFamily: F.bold, color: C.text },
+          ]}
+        >
+          Profile
+        </Text>
       </View>
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 48 }]}
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: insets.bottom + 48 },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         {/* ── Avatar ── */}
-        <Animated.View entering={FadeInDown.duration(280)} style={styles.identity}>
+        <Animated.View
+          entering={FadeInDown.duration(280)}
+          style={styles.identity}
+        >
           <View style={[styles.avatarRing, { borderColor: `${C.gold}55` }]}>
             <View style={styles.avatar}>
               <Text style={{ fontSize: fs(38) }}>🎓</Text>
             </View>
           </View>
-          <Text style={[styles.identityName, { fontSize: fs(22), fontFamily: F.bold, color: C.text }]}>
+          <Text
+            style={[
+              styles.identityName,
+              { fontSize: fs(22), fontFamily: F.bold, color: C.text },
+            ]}
+          >
             Learner
           </Text>
-          <Text style={[styles.identitySub, { fontSize: fs(12), fontFamily: F.regular, color: C.muted }]}>
-            طالب العلم · Seeker of Knowledge
+          <Text
+            style={[
+              styles.identitySub,
+              { fontSize: fs(12), fontFamily: F.regular, color: C.muted },
+            ]}
+          >
+            Seeker of Knowledge
           </Text>
         </Animated.View>
 
         {/* ── Appearance ── */}
         <Animated.View entering={FadeInDown.delay(60).duration(280)}>
-          <Text style={[styles.cap, { fontSize: fs(10), fontFamily: F.extraBold, color: C.muted }]}>
+          <Text
+            style={[
+              styles.cap,
+              { fontSize: fs(10), fontFamily: F.extraBold, color: C.muted },
+            ]}
+          >
             Appearance
           </Text>
           <View style={styles.card}>
             {/* Dark mode row */}
             <View style={styles.row}>
-              <View style={[styles.iconBox, { backgroundColor: `${C.primary}18` }]}>
-                <Ionicons name={isDark ? 'moon' : 'sunny-outline'} size={16} color={C.primary} />
+              <View
+                style={[styles.iconBox, { backgroundColor: `${C.primary}18` }]}
+              >
+                <Ionicons
+                  name={isDark ? "moon" : "sunny-outline"}
+                  size={16}
+                  color={C.primary}
+                />
               </View>
-              <Text style={[styles.rowLabel, { fontSize: fs(14), fontFamily: F.medium, color: C.text }]}>
-                {isDark ? 'Dark Mode' : 'Light Mode'}
+              <Text
+                style={[
+                  styles.rowLabel,
+                  { fontSize: fs(14), fontFamily: F.medium, color: C.text },
+                ]}
+              >
+                {isDark ? "Dark Mode" : "Light Mode"}
               </Text>
               <Switch
                 value={isDark}
@@ -95,10 +134,17 @@ export default function SettingsScreen() {
 
             {/* Font size row */}
             <View style={styles.row}>
-              <View style={[styles.iconBox, { backgroundColor: `${C.primary}18` }]}>
+              <View
+                style={[styles.iconBox, { backgroundColor: `${C.primary}18` }]}
+              >
                 <Ionicons name="text-outline" size={16} color={C.primary} />
               </View>
-              <Text style={[styles.rowLabel, { fontSize: fs(14), fontFamily: F.medium, color: C.text }]}>
+              <Text
+                style={[
+                  styles.rowLabel,
+                  { fontSize: fs(14), fontFamily: F.medium, color: C.text },
+                ]}
+              >
                 Text Size
               </Text>
               <View style={styles.stepper}>
@@ -108,18 +154,49 @@ export default function SettingsScreen() {
                     { borderColor: C.border, backgroundColor: C.surfaceAlt },
                     fontScale <= FONT_SCALE_MIN && styles.stepBtnDisabled,
                   ]}
-                  onPress={() => { Haptics.selectionAsync(); decreaseFontScale(); }}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    decreaseFontScale();
+                  }}
                   disabled={fontScale <= FONT_SCALE_MIN}
                   activeOpacity={0.7}
                 >
-                  <Text style={[styles.stepBtnA, { color: fontScale <= FONT_SCALE_MIN ? C.muted : C.primary, fontFamily: F.bold, fontSize: 15 }]}>
+                  <Text
+                    style={[
+                      styles.stepBtnA,
+                      {
+                        color:
+                          fontScale <= FONT_SCALE_MIN ? C.muted : C.primary,
+                        fontFamily: F.bold,
+                        fontSize: 15,
+                      },
+                    ]}
+                  >
                     A
                   </Text>
-                  <Ionicons name="remove" size={9} color={fontScale <= FONT_SCALE_MIN ? C.muted : C.primary} />
+                  <Ionicons
+                    name="remove"
+                    size={9}
+                    color={fontScale <= FONT_SCALE_MIN ? C.muted : C.primary}
+                  />
                 </TouchableOpacity>
 
-                <View style={[styles.stepDisplay, { borderColor: C.border, backgroundColor: C.surfaceAlt }]}>
-                  <Text style={[styles.stepDisplayTxt, { fontSize: fs(12), fontFamily: F.semiBold, color: C.text }]}>
+                <View
+                  style={[
+                    styles.stepDisplay,
+                    { borderColor: C.border, backgroundColor: C.surfaceAlt },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.stepDisplayTxt,
+                      {
+                        fontSize: fs(12),
+                        fontFamily: F.semiBold,
+                        color: C.text,
+                      },
+                    ]}
+                  >
                     {Math.round(fontScale * 100)}%
                   </Text>
                 </View>
@@ -130,14 +207,31 @@ export default function SettingsScreen() {
                     { borderColor: C.border, backgroundColor: C.surfaceAlt },
                     fontScale >= FONT_SCALE_MAX && styles.stepBtnDisabled,
                   ]}
-                  onPress={() => { Haptics.selectionAsync(); increaseFontScale(); }}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    increaseFontScale();
+                  }}
                   disabled={fontScale >= FONT_SCALE_MAX}
                   activeOpacity={0.7}
                 >
-                  <Text style={[styles.stepBtnA, { color: fontScale >= FONT_SCALE_MAX ? C.muted : C.primary, fontFamily: F.bold, fontSize: 20 }]}>
+                  <Text
+                    style={[
+                      styles.stepBtnA,
+                      {
+                        color:
+                          fontScale >= FONT_SCALE_MAX ? C.muted : C.primary,
+                        fontFamily: F.bold,
+                        fontSize: 20,
+                      },
+                    ]}
+                  >
                     A
                   </Text>
-                  <Ionicons name="add" size={9} color={fontScale >= FONT_SCALE_MAX ? C.muted : C.primary} />
+                  <Ionicons
+                    name="add"
+                    size={9}
+                    color={fontScale >= FONT_SCALE_MAX ? C.muted : C.primary}
+                  />
                 </TouchableOpacity>
               </View>
             </View>
@@ -146,26 +240,70 @@ export default function SettingsScreen() {
 
         {/* ── Learning Goal ── */}
         <Animated.View entering={FadeInDown.delay(120).duration(280)}>
-          <Text style={[styles.cap, { fontSize: fs(10), fontFamily: F.extraBold, color: C.muted }]}>
+          <Text
+            style={[
+              styles.cap,
+              { fontSize: fs(10), fontFamily: F.extraBold, color: C.muted },
+            ]}
+          >
             Learning Goal
           </Text>
           <View style={styles.card}>
             {goalConfig ? (
               <>
                 {[
-                  { icon: 'calendar-outline', label: 'Frequency',     value: fmtFrequency(goalConfig) },
-                  { icon: 'book-outline',     label: 'Daily lessons', value: `${goalConfig.lessonTarget} lesson${goalConfig.lessonTarget !== 1 ? 's' : ''}` },
-                  { icon: 'time-outline',     label: 'Lock time',     value: fmtLockTime(goalConfig.lockTime) },
+                  {
+                    icon: "calendar-outline",
+                    label: "Frequency",
+                    value: fmtFrequency(goalConfig),
+                  },
+                  {
+                    icon: "book-outline",
+                    label: "Daily lessons",
+                    value: `${goalConfig.lessonTarget} lesson${goalConfig.lessonTarget !== 1 ? "s" : ""}`,
+                  },
+                  {
+                    icon: "time-outline",
+                    label: "Lock time",
+                    value: fmtLockTime(goalConfig.lockTime),
+                  },
                 ].map((item, i, arr) => (
                   <View key={item.label}>
                     <View style={styles.row}>
-                      <View style={[styles.iconBox, { backgroundColor: `${C.primary}12` }]}>
-                        <Ionicons name={item.icon as any} size={15} color={C.primary} />
+                      <View
+                        style={[
+                          styles.iconBox,
+                          { backgroundColor: `${C.primary}12` },
+                        ]}
+                      >
+                        <Ionicons
+                          name={item.icon as any}
+                          size={15}
+                          color={C.primary}
+                        />
                       </View>
-                      <Text style={[styles.rowLabel, { fontSize: fs(14), fontFamily: F.medium, color: C.sub }]}>
+                      <Text
+                        style={[
+                          styles.rowLabel,
+                          {
+                            fontSize: fs(14),
+                            fontFamily: F.medium,
+                            color: C.sub,
+                          },
+                        ]}
+                      >
                         {item.label}
                       </Text>
-                      <Text style={[styles.rowValue, { fontSize: fs(14), fontFamily: F.semiBold, color: C.text }]}>
+                      <Text
+                        style={[
+                          styles.rowValue,
+                          {
+                            fontSize: fs(14),
+                            fontFamily: F.semiBold,
+                            color: C.text,
+                          },
+                        ]}
+                      >
                         {item.value}
                       </Text>
                     </View>
@@ -176,23 +314,52 @@ export default function SettingsScreen() {
                 <TouchableOpacity
                   style={styles.actionRow}
                   activeOpacity={0.7}
-                  onPress={() => { Haptics.selectionAsync(); setFlow('goalsetup'); }}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setFlow("goalsetup");
+                  }}
                 >
                   <Ionicons name="create-outline" size={15} color={C.primary} />
-                  <Text style={[styles.actionTxt, { fontSize: fs(14), fontFamily: F.medium, color: C.primary }]}>
+                  <Text
+                    style={[
+                      styles.actionTxt,
+                      {
+                        fontSize: fs(14),
+                        fontFamily: F.medium,
+                        color: C.primary,
+                      },
+                    ]}
+                  >
                     Edit goal
                   </Text>
-                  <Ionicons name="chevron-forward" size={14} color={C.primary} />
+                  <Ionicons
+                    name="chevron-forward"
+                    size={14}
+                    color={C.primary}
+                  />
                 </TouchableOpacity>
               </>
             ) : (
               <TouchableOpacity
                 style={styles.actionRow}
                 activeOpacity={0.7}
-                onPress={() => setFlow('goalsetup')}
+                onPress={() => setFlow("goalsetup")}
               >
-                <Ionicons name="add-circle-outline" size={15} color={C.primary} />
-                <Text style={[styles.actionTxt, { fontSize: fs(14), fontFamily: F.medium, color: C.primary }]}>
+                <Ionicons
+                  name="add-circle-outline"
+                  size={15}
+                  color={C.primary}
+                />
+                <Text
+                  style={[
+                    styles.actionTxt,
+                    {
+                      fontSize: fs(14),
+                      fontFamily: F.medium,
+                      color: C.primary,
+                    },
+                  ]}
+                >
                   Set up your learning goal
                 </Text>
                 <Ionicons name="chevron-forward" size={14} color={C.primary} />
@@ -203,33 +370,51 @@ export default function SettingsScreen() {
 
         {/* ── App Info ── */}
         <Animated.View entering={FadeInDown.delay(180).duration(280)}>
-          <Text style={[styles.cap, { fontSize: fs(10), fontFamily: F.extraBold, color: C.muted }]}>
+          <Text
+            style={[
+              styles.cap,
+              { fontSize: fs(10), fontFamily: F.extraBold, color: C.muted },
+            ]}
+          >
             About
           </Text>
           <View style={styles.card}>
             <View style={styles.row}>
-              <View style={[styles.iconBox, { backgroundColor: `${C.primary}12` }]}>
-                <Ionicons name="phone-portrait-outline" size={15} color={C.primary} />
+              <View
+                style={[styles.iconBox, { backgroundColor: `${C.primary}12` }]}
+              >
+                <Ionicons
+                  name="phone-portrait-outline"
+                  size={15}
+                  color={C.primary}
+                />
               </View>
-              <Text style={[styles.rowLabel, { fontSize: fs(14), fontFamily: F.medium, color: C.sub }]}>Version</Text>
-              <Text style={[styles.rowValue, { fontSize: fs(14), fontFamily: F.semiBold, color: C.text }]}>1.0.0</Text>
-            </View>
-            <View style={styles.separator} />
-            <TouchableOpacity
-              style={styles.actionRow}
-              activeOpacity={0.7}
-              onPress={() => { Haptics.selectionAsync(); setFlow('onboarding'); }}
-            >
-              <Ionicons name="refresh-outline" size={15} color={C.error} />
-              <Text style={[styles.actionTxt, { fontSize: fs(14), fontFamily: F.medium, color: C.error }]}>
-                Restart Onboarding
+              <Text
+                style={[
+                  styles.rowLabel,
+                  { fontSize: fs(14), fontFamily: F.medium, color: C.sub },
+                ]}
+              >
+                Version
               </Text>
-              <Ionicons name="chevron-forward" size={14} color={C.error} />
-            </TouchableOpacity>
+              <Text
+                style={[
+                  styles.rowValue,
+                  { fontSize: fs(14), fontFamily: F.semiBold, color: C.text },
+                ]}
+              >
+                1.0.0
+              </Text>
+            </View>
           </View>
         </Animated.View>
 
-        <Text style={[styles.footer, { fontSize: fs(12), fontFamily: F.regular, color: C.muted }]}>
+        <Text
+          style={[
+            styles.footer,
+            { fontSize: fs(12), fontFamily: F.regular, color: C.muted },
+          ]}
+        >
           Made with 💛 for seekers of knowledge
         </Text>
       </ScrollView>

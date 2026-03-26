@@ -127,24 +127,24 @@ function CTAButton({
 }
 
 const ctaStyles = StyleSheet.create({
-  wrap: { marginHorizontal: 24, marginBottom: 8 },
+  wrap: { marginBottom: 8 },
   shadow: {
     position: "absolute",
-    bottom: -4,
+    bottom: -5,
     left: 0,
     right: 0,
-    height: 56,
-    borderRadius: 16,
+    height: 62,
+    borderRadius: 18,
     backgroundColor: C.ctaShadow,
   },
   btn: {
     backgroundColor: C.cta,
-    borderRadius: 16,
-    height: 56,
+    borderRadius: 18,
+    height: 62,
     justifyContent: "center",
     alignItems: "center",
   },
-  label: { color: C.white, fontSize: 17, fontFamily: F.bold },
+  label: { color: C.white, fontSize: 18, fontFamily: F.bold },
 });
 
 // ── OptionCard ─────────────────────────────────────────────────────────────────
