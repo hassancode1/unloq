@@ -1,44 +1,29 @@
-// ─── Accent color ─────────────────────────────────────────────────────────────
-// Change these 3 lines to retheme the entire app.
-const ACCENT       = '#6366F1'; // primary action color
-const ACCENT_DEEP  = '#4338CA'; // darker shade — used for button shadows
-const ACCENT_LIGHT = '#EEF2FF'; // light tint — used for card backgrounds
-
-// ─── Surface tints (loosely paired with accent) ───────────────────────────────
-// Update these when switching to a very different hue.
-const SURFACE        = '#F8F8FF'; // near-white with a hint of the accent
-const SURFACE_BORDER = '#E0E7FF'; // soft border / inactive dots
-
-// ─────────────────────────────────────────────────────────────────────────────
-
-export const Colors = {
-  primary:       ACCENT,
-  primaryDeep:   ACCENT_DEEP,
-  primaryLight:  ACCENT_LIGHT,
-
-  surface:       SURFACE,
-  surfaceBorder: SURFACE_BORDER,
-
-  text:     '#1A1A2E',
-  textMuted:'#6B7280',
-  textSoft: '#9CA3AF',
-
-  white:   '#FFFFFF',
-  black:   '#000000',
-
-  success: '#10B981',
-  error:   '#EF4444',
-  warning: '#F59E0B',
-
-  bg:   '#FFFFFF',
-  card: '#F8F8FF',
+// Font families — Inter (loaded in App.tsx via expo-google-fonts)
+export const FontFamily = {
+  regular:   'Inter-Regular',
+  medium:    'Inter-Medium',
+  semiBold:  'Inter-SemiBold',
+  bold:      'Inter-Bold',
+  extraBold: 'Inter-ExtraBold',
 };
 
-export const FontFamily = {
-  regular:   'Nunito-Regular',
-  semiBold:  'Nunito-SemiBold',
-  bold:      'Nunito-Bold',
-  extraBold: 'Nunito-ExtraBold',
+// Legacy flat color set — used by onboarding/goal-setup (kept for compatibility)
+export const Colors = {
+  primary:       '#6366F1',
+  primaryDeep:   '#4338CA',
+  primaryLight:  '#F0F0FF',
+  surface:       '#F4F4F8',
+  surfaceBorder: '#E8E8F0',
+  text:          '#09090E',
+  textMuted:     '#52525B',
+  textSoft:      '#A1A1AA',
+  white:         '#FFFFFF',
+  black:         '#000000',
+  success:       '#16A34A',
+  error:         '#DC2626',
+  warning:       '#D97706',
+  bg:            '#FAFAFA',
+  card:          '#FFFFFF',
 };
 
 export type ColorScheme = typeof Colors;

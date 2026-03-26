@@ -16,37 +16,26 @@ interface DailyProgress {
   count: number;
 }
 
-interface Course {
-  id: string;
-  title: string;
-  docName: string;
-  lessons: Lesson[];
-  createdAt: number;
-}
-
-interface Lesson {
-  id: string;
-  title: string;
-  content: string;
-  question: string;
-  options: string[];
-  correctIndex: number;
-  completed: boolean;
-}
+export const FONT_SCALE_MIN  = 0.85;
+export const FONT_SCALE_MAX  = 1.30;
+export const FONT_SCALE_STEP = 0.05;
 
 interface AppState {
   flow: AppFlow;
   goalConfig: GoalConfig | null;
   dailyProgress: DailyProgress;
-  courses: Course[];
   activeCourseId: string | null;
   activeLessonIndex: number;
+  darkMode: boolean;
+  fontScale: number;
 
   setFlow: (flow: AppFlow) => void;
   setGoalConfig: (config: GoalConfig) => void;
-  addCourse: (course: Course) => void;
   setActiveCourse: (id: string) => void;
-  completeLesson: (courseId: string, lessonId: string) => void;
+  incrementDailyProgress: () => void;
+  toggleDarkMode: () => void;
+  increaseFontScale: () => void;
+  decreaseFontScale: () => void;
 }
 
 function todayStr() {
@@ -59,36 +48,40 @@ export const useAppStore = create<AppState>()(
       flow: 'loading',
       goalConfig: { frequency: 'daily', customDays: [], lessonTarget: 1, lockTime: '08:00' },
       dailyProgress: { date: todayStr(), count: 0 },
-      courses: [],
       activeCourseId: null,
       activeLessonIndex: 0,
+      darkMode: false,
+      fontScale: 1.0,
 
       setFlow: (flow) => set({ flow }),
       setGoalConfig: (config) => set({ goalConfig: config }),
-      addCourse: (course) => set((s) => ({ courses: [...s.courses, course] })),
       setActiveCourse: (id) => set({ activeCourseId: id, activeLessonIndex: 0 }),
-      completeLesson: (courseId, lessonId) =>
+      incrementDailyProgress: () =>
         set((s) => {
           const today = todayStr();
           const prev = s.dailyProgress;
-          const dailyProgress: DailyProgress = {
-            date: today,
-            count: prev.date === today ? prev.count + 1 : 1,
-          };
           return {
-            dailyProgress,
-            courses: s.courses.map((c) =>
-              c.id !== courseId
-                ? c
-                : {
-                    ...c,
-                    lessons: c.lessons.map((l) =>
-                      l.id === lessonId ? { ...l, completed: true } : l
-                    ),
-                  }
-            ),
+            dailyProgress: {
+              date: today,
+              count: prev.date === today ? prev.count + 1 : 1,
+            },
           };
         }),
+      toggleDarkMode: () => set((s) => ({ darkMode: !s.darkMode })),
+      increaseFontScale: () =>
+        set((s) => ({
+          fontScale: Math.min(
+            FONT_SCALE_MAX,
+            parseFloat((s.fontScale + FONT_SCALE_STEP).toFixed(2)),
+          ),
+        })),
+      decreaseFontScale: () =>
+        set((s) => ({
+          fontScale: Math.max(
+            FONT_SCALE_MIN,
+            parseFloat((s.fontScale - FONT_SCALE_STEP).toFixed(2)),
+          ),
+        })),
     }),
     {
       name: 'unloq-store',
@@ -97,11 +90,11 @@ export const useAppStore = create<AppState>()(
         flow: s.flow,
         goalConfig: s.goalConfig,
         dailyProgress: s.dailyProgress,
-        courses: s.courses,
         activeCourseId: s.activeCourseId,
         activeLessonIndex: s.activeLessonIndex,
+        darkMode: s.darkMode,
+        fontScale: s.fontScale,
       }),
     },
   ),
 );
-

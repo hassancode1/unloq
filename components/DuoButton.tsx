@@ -6,7 +6,9 @@ import {
   Text,
   ViewStyle,
 } from 'react-native';
-import { Colors, FontFamily } from '../constants/theme';
+
+import { useTheme } from '../hooks/useTheme';
+import type { AppColors } from '../constants/Colors';
 
 interface Props {
   label: string;
@@ -16,6 +18,54 @@ interface Props {
   style?: ViewStyle;
 }
 
+function makeStyles(C: AppColors) {
+  return StyleSheet.create({
+    shadow: {
+      borderRadius: 16,
+      marginBottom: 4,
+    },
+    shadowPrimary: {
+      backgroundColor: C.primaryRing,
+    },
+    shadowOutline: {
+      backgroundColor: C.border,
+    },
+    btn: {
+      paddingVertical: 16,
+      paddingHorizontal: 32,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    btnPrimary: {
+      backgroundColor: C.primary,
+      transform: [{ translateY: -4 }],
+    },
+    btnOutline: {
+      backgroundColor: C.surface,
+      borderWidth: 2,
+      borderColor: C.border,
+      transform: [{ translateY: -4 }],
+    },
+    btnDisabled: {
+      backgroundColor: C.muted,
+    },
+    label: {
+      fontSize: 16,
+      fontFamily: 'Inter-Bold',
+    },
+    labelPrimary: {
+      color: '#ffffff',
+    },
+    labelOutline: {
+      color: C.text,
+    },
+    labelDisabled: {
+      color: '#ffffff',
+    },
+  });
+}
+
 export default function DuoButton({
   label,
   onPress,
@@ -23,6 +73,8 @@ export default function DuoButton({
   disabled = false,
   style,
 }: Props) {
+  const { C } = useTheme();
+  const styles = React.useMemo(() => makeStyles(C), [C]);
   const translateY = useRef(new Animated.Value(0)).current;
 
   const handlePressIn = () => {
@@ -76,49 +128,3 @@ export default function DuoButton({
     </Pressable>
   );
 }
-
-const styles = StyleSheet.create({
-  shadow: {
-    borderRadius: 16,
-    marginBottom: 4,
-  },
-  shadowPrimary: {
-    backgroundColor: Colors.primaryDeep,
-  },
-  shadowOutline: {
-    backgroundColor: Colors.surfaceBorder,
-  },
-  btn: {
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  btnPrimary: {
-    backgroundColor: Colors.primary,
-    transform: [{ translateY: -4 }],
-  },
-  btnOutline: {
-    backgroundColor: Colors.white,
-    borderWidth: 2,
-    borderColor: Colors.surfaceBorder,
-    transform: [{ translateY: -4 }],
-  },
-  btnDisabled: {
-    backgroundColor: Colors.textSoft,
-  },
-  label: {
-    fontSize: 16,
-    fontFamily: FontFamily.bold,
-  },
-  labelPrimary: {
-    color: Colors.white,
-  },
-  labelOutline: {
-    color: Colors.text,
-  },
-  labelDisabled: {
-    color: Colors.white,
-  },
-});

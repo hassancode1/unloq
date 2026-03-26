@@ -12,11 +12,10 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import DuoButton from '../components/DuoButton';
-import { Colors, FontFamily } from '../constants/theme';
 import { Spacing } from '../constants/spacing';
 import { useAppStore } from '../store/useAppStore';
-
-const P = Colors.primary;
+import { useTheme } from '../hooks/useTheme';
+import type { AppColors } from '../constants/Colors';
 
 const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -39,9 +38,227 @@ const LOCK_TIMES = [
 
 type Props = { onComplete: () => void };
 
+function makeStyles(C: AppColors) {
+  const P = C.primary;
+  return StyleSheet.create({
+    root: { flex: 1, backgroundColor: C.bg, paddingHorizontal: Spacing.lg },
+    scrollContent: {
+      paddingTop: Spacing.md,
+      paddingBottom: Spacing.xxl,
+      gap: Spacing.lg,
+    },
+
+    // Header
+    header: { gap: Spacing.sm },
+    badge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      alignSelf: 'flex-start',
+      backgroundColor: `${P}12`,
+      borderRadius: 20,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderWidth: 1.5,
+      borderColor: `${P}35`,
+    },
+    badgeEmoji: { fontSize: 13 },
+    badgeText: { fontSize: 12, fontFamily: 'Inter-Bold', color: P, letterSpacing: 0.3 },
+    title: { fontSize: 30, fontFamily: 'Inter-ExtraBold', color: C.text, lineHeight: 38 },
+    subtitle: { fontSize: 15, fontFamily: 'Inter-SemiBold', color: C.sub, lineHeight: 22 },
+
+    // Frequency chips
+    chipRow: { flexDirection: 'row', gap: Spacing.sm },
+    chip: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 12,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: C.border,
+      backgroundColor: C.surfaceAlt,
+      alignItems: 'center',
+    },
+    chipActive: { backgroundColor: P, borderColor: P },
+    chipText: { fontSize: 13, fontFamily: 'Inter-Bold', color: C.sub },
+    chipTextActive: { color: '#ffffff' },
+
+    // Description card
+    descCard: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: Spacing.sm,
+      backgroundColor: C.surfaceAlt,
+      borderRadius: 14,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: C.border,
+      padding: Spacing.md,
+    },
+    descText: { flex: 1, fontSize: 13, fontFamily: 'Inter-SemiBold', color: C.sub, lineHeight: 20 },
+
+    // Day picker
+    dayPickerCard: {
+      backgroundColor: C.surfaceAlt,
+      borderRadius: 16,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: C.border,
+      padding: Spacing.md,
+      gap: 12,
+      alignItems: 'center',
+    },
+    dayPickerLabel: { fontSize: 11, fontFamily: 'Inter-ExtraBold', color: C.sub, letterSpacing: 1.2, textTransform: 'uppercase' },
+    dayRow: { flexDirection: 'row', gap: 8 },
+    dayBtn: {
+      width: 38,
+      height: 38,
+      borderRadius: 10,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: C.border,
+      backgroundColor: C.surface,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    dayBtnActive: { backgroundColor: P, borderColor: P },
+    dayBtnText: { fontSize: 13, fontFamily: 'Inter-Bold', color: C.sub },
+    dayBtnTextActive: { color: '#ffffff' },
+    dayPickerSub: { fontSize: 12, fontFamily: 'Inter-SemiBold', color: P },
+
+    // Option cards
+    optionList: { gap: Spacing.sm },
+    optionCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.md,
+      backgroundColor: C.primaryBg,
+      borderRadius: 16,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: C.border,
+      padding: Spacing.md,
+    },
+    optionCardCompact: { paddingVertical: 12 },
+    optionCardActive: { backgroundColor: `${P}12`, borderColor: P },
+    optionEmoji: { fontSize: 26 },
+    optionText: { flex: 1, gap: 3 },
+    optionLabel: { fontSize: 15, fontFamily: 'Inter-Bold', color: C.text },
+    optionLabelActive: { color: P },
+    optionDesc: { fontSize: 13, fontFamily: 'Inter-Regular', color: C.sub },
+    optionDescActive: { color: `${P}CC` },
+    optionRadio: {
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      borderWidth: 2,
+      borderColor: C.border,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    optionRadioActive: { borderColor: P },
+    optionRadioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: P },
+
+    // Section label
+    sectionHeader: { gap: 4 },
+    sectionLabel: { fontSize: 11, fontFamily: 'Inter-ExtraBold', color: C.sub, letterSpacing: 1.2, textTransform: 'uppercase' },
+    sectionSub: { fontSize: 13, fontFamily: 'Inter-SemiBold', color: C.sub, lineHeight: 19 },
+
+    // Lesson tiles (3-col grid)
+    tileRow: { flexDirection: 'row', gap: Spacing.sm },
+    tile: {
+      flex: 1,
+      alignItems: 'center',
+      gap: 4,
+      paddingVertical: 14,
+      borderRadius: 14,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: C.border,
+      backgroundColor: C.primaryBg,
+    },
+    tileActive: { backgroundColor: `${P}12`, borderColor: P },
+    tileEmoji: { fontSize: 22 },
+    tileLabel: { fontSize: 13, fontFamily: 'Inter-Bold', color: C.text },
+    tileLabelActive: { color: P },
+    tileDesc: { fontSize: 11, fontFamily: 'Inter-SemiBold', color: C.sub },
+    tileDescActive: { color: `${P}BB` },
+
+    // Lock time chips (3-col)
+    timeChip: {
+      flex: 1,
+      alignItems: 'center',
+      gap: 3,
+      paddingVertical: 12,
+      borderRadius: 14,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: C.border,
+      backgroundColor: C.primaryBg,
+    },
+    timeChipActive: { backgroundColor: `${P}12`, borderColor: P },
+    timeChipEmoji: { fontSize: 18 },
+    timeChipLabel: { fontSize: 13, fontFamily: 'Inter-Bold', color: C.text },
+    timeChipLabelActive: { color: P },
+    timeChipSub: { fontSize: 11, fontFamily: 'Inter-SemiBold', color: C.sub },
+    timeChipSubActive: { color: `${P}BB` },
+
+    // How it works card
+    howCard: {
+      backgroundColor: C.surfaceAlt,
+      borderRadius: 16,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: C.border,
+      paddingHorizontal: Spacing.md,
+      overflow: 'hidden',
+    },
+    howRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: 14 },
+    howRowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border },
+    howIcon: {
+      width: 32,
+      height: 32,
+      borderRadius: 9,
+      backgroundColor: `${P}12`,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    howText: { flex: 1, fontSize: 13, fontFamily: 'Inter-SemiBold', color: C.sub, lineHeight: 19 },
+
+    // Summary card
+    summaryCard: {
+      backgroundColor: C.primaryBg,
+      borderRadius: 16,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: C.border,
+      padding: Spacing.md,
+      gap: 10,
+    },
+    summaryTitle: { fontSize: 11, fontFamily: 'Inter-ExtraBold', color: C.sub, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 2 },
+    summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    summaryKey: { fontSize: 13, fontFamily: 'Inter-SemiBold', color: C.sub },
+    summaryVal: { fontSize: 13, fontFamily: 'Inter-Bold', color: C.text },
+
+    // Info card
+    infoCard: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 8,
+      backgroundColor: `${P}08`,
+      borderRadius: 12,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: `${P}25`,
+      padding: Spacing.sm,
+    },
+    infoCardText: { flex: 1, fontSize: 12, fontFamily: 'Inter-SemiBold', color: C.sub, lineHeight: 18 },
+
+    // Navigation
+    stepDots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginBottom: 4 },
+    stepDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: C.border },
+    stepDotActive: { backgroundColor: P, width: 22 },
+    backBtn: { alignSelf: 'center', paddingVertical: 8, paddingHorizontal: 20 },
+    backBtnText: { fontSize: 14, fontFamily: 'Inter-SemiBold', color: C.sub },
+  });
+}
+
 export default function GoalSetupScreen({ onComplete }: Props) {
   const insets = useSafeAreaInsets();
   const setGoalConfig = useAppStore((s) => s.setGoalConfig);
+  const { C, fs, F } = useTheme();
+  const styles = React.useMemo(() => makeStyles(C), [C]);
+
   const [step, setStep] = useState<Step>('frequency');
 
   const [frequency, setFrequency] = useState<GoalFrequency>('daily');
@@ -131,7 +348,7 @@ export default function GoalSetupScreen({ onComplete }: Props) {
                   : 'calendar-outline'
               }
               size={20}
-              color={P}
+              color={C.primary}
             />
             <Text style={styles.descText}>
               {frequency === 'daily'
@@ -301,7 +518,7 @@ export default function GoalSetupScreen({ onComplete }: Props) {
           ].map((item, i) => (
             <View key={i} style={[styles.howRow, i > 0 && styles.howRowBorder]}>
               <View style={styles.howIcon}>
-                <Ionicons name={item.icon} size={17} color={P} />
+                <Ionicons name={item.icon} size={17} color={C.primary} />
               </View>
               <Text style={styles.howText}>{item.text}</Text>
             </View>
@@ -330,7 +547,7 @@ export default function GoalSetupScreen({ onComplete }: Props) {
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(220).duration(300)} style={styles.infoCard}>
-          <Ionicons name="information-circle-outline" size={16} color={P} />
+          <Ionicons name="information-circle-outline" size={16} color={C.primary} />
           <Text style={styles.infoCardText}>
             After setup, you'll be prompted to choose which apps to block in iOS Screen Time.
           </Text>
@@ -347,215 +564,3 @@ export default function GoalSetupScreen({ onComplete }: Props) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Colors.white, paddingHorizontal: Spacing.lg },
-  scrollContent: {
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.xxl,
-    gap: Spacing.lg,
-  },
-
-  // Header
-  header: { gap: Spacing.sm },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    alignSelf: 'flex-start',
-    backgroundColor: `${P}12`,
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderWidth: 1.5,
-    borderColor: `${P}35`,
-  },
-  badgeEmoji: { fontSize: 13 },
-  badgeText: { fontSize: 12, fontFamily: FontFamily.bold, color: P, letterSpacing: 0.3 },
-  title: { fontSize: 30, fontFamily: FontFamily.extraBold, color: Colors.text, lineHeight: 38 },
-  subtitle: { fontSize: 15, fontFamily: FontFamily.semiBold, color: Colors.textMuted, lineHeight: 22 },
-
-  // Frequency chips
-  chipRow: { flexDirection: 'row', gap: Spacing.sm },
-  chip: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: Colors.surfaceBorder,
-    backgroundColor: Colors.surface,
-    alignItems: 'center',
-  },
-  chipActive: { backgroundColor: P, borderColor: P },
-  chipText: { fontSize: 13, fontFamily: FontFamily.bold, color: Colors.textMuted },
-  chipTextActive: { color: Colors.white },
-
-  // Description card
-  descCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Spacing.sm,
-    backgroundColor: Colors.surface,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: Colors.surfaceBorder,
-    padding: Spacing.md,
-  },
-  descText: { flex: 1, fontSize: 13, fontFamily: FontFamily.semiBold, color: Colors.textMuted, lineHeight: 20 },
-
-  // Day picker
-  dayPickerCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: Colors.surfaceBorder,
-    padding: Spacing.md,
-    gap: 12,
-    alignItems: 'center',
-  },
-  dayPickerLabel: { fontSize: 11, fontFamily: FontFamily.extraBold, color: Colors.textMuted, letterSpacing: 1.2, textTransform: 'uppercase' },
-  dayRow: { flexDirection: 'row', gap: 8 },
-  dayBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: Colors.surfaceBorder,
-    backgroundColor: Colors.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  dayBtnActive: { backgroundColor: P, borderColor: P },
-  dayBtnText: { fontSize: 13, fontFamily: FontFamily.bold, color: Colors.textMuted },
-  dayBtnTextActive: { color: Colors.white },
-  dayPickerSub: { fontSize: 12, fontFamily: FontFamily.semiBold, color: P },
-
-  // Option cards
-  optionList: { gap: Spacing.sm },
-  optionCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-    backgroundColor: Colors.primaryLight,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: Colors.surfaceBorder,
-    padding: Spacing.md,
-  },
-  optionCardCompact: { paddingVertical: 12 },
-  optionCardActive: { backgroundColor: `${P}12`, borderColor: P },
-  optionEmoji: { fontSize: 26 },
-  optionText: { flex: 1, gap: 3 },
-  optionLabel: { fontSize: 15, fontFamily: FontFamily.bold, color: Colors.text },
-  optionLabelActive: { color: P },
-  optionDesc: { fontSize: 13, fontFamily: FontFamily.regular, color: Colors.textMuted },
-  optionDescActive: { color: `${P}CC` },
-  optionRadio: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: Colors.surfaceBorder,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  optionRadioActive: { borderColor: P },
-  optionRadioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: P },
-
-  // Section label
-  sectionHeader: { gap: 4 },
-  sectionLabel: { fontSize: 11, fontFamily: FontFamily.extraBold, color: Colors.textMuted, letterSpacing: 1.2, textTransform: 'uppercase' },
-  sectionSub: { fontSize: 13, fontFamily: FontFamily.semiBold, color: Colors.textMuted, lineHeight: 19 },
-
-  // Lesson tiles (3-col grid)
-  tileRow: { flexDirection: 'row', gap: Spacing.sm },
-  tile: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 14,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: Colors.surfaceBorder,
-    backgroundColor: Colors.primaryLight,
-  },
-  tileActive: { backgroundColor: `${P}12`, borderColor: P },
-  tileEmoji: { fontSize: 22 },
-  tileLabel: { fontSize: 13, fontFamily: FontFamily.bold, color: Colors.text },
-  tileLabelActive: { color: P },
-  tileDesc: { fontSize: 11, fontFamily: FontFamily.semiBold, color: Colors.textMuted },
-  tileDescActive: { color: `${P}BB` },
-
-  // Lock time chips (3-col)
-  timeChip: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 3,
-    paddingVertical: 12,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: Colors.surfaceBorder,
-    backgroundColor: Colors.primaryLight,
-  },
-  timeChipActive: { backgroundColor: `${P}12`, borderColor: P },
-  timeChipEmoji: { fontSize: 18 },
-  timeChipLabel: { fontSize: 13, fontFamily: FontFamily.bold, color: Colors.text },
-  timeChipLabelActive: { color: P },
-  timeChipSub: { fontSize: 11, fontFamily: FontFamily.semiBold, color: Colors.textMuted },
-  timeChipSubActive: { color: `${P}BB` },
-
-  // How it works card
-  howCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: Colors.surfaceBorder,
-    paddingHorizontal: Spacing.md,
-    overflow: 'hidden',
-  },
-  howRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: 14 },
-  howRowBorder: { borderTopWidth: 1, borderTopColor: Colors.surfaceBorder },
-  howIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 9,
-    backgroundColor: `${P}12`,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  howText: { flex: 1, fontSize: 13, fontFamily: FontFamily.semiBold, color: Colors.textMuted, lineHeight: 19 },
-
-  // Summary card
-  summaryCard: {
-    backgroundColor: Colors.primaryLight,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: Colors.surfaceBorder,
-    padding: Spacing.md,
-    gap: 10,
-  },
-  summaryTitle: { fontSize: 11, fontFamily: FontFamily.extraBold, color: Colors.textMuted, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 2 },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  summaryKey: { fontSize: 13, fontFamily: FontFamily.semiBold, color: Colors.textMuted },
-  summaryVal: { fontSize: 13, fontFamily: FontFamily.bold, color: Colors.text },
-
-  // Info card
-  infoCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    backgroundColor: `${P}08`,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: `${P}25`,
-    padding: Spacing.sm,
-  },
-  infoCardText: { flex: 1, fontSize: 12, fontFamily: FontFamily.semiBold, color: Colors.textMuted, lineHeight: 18 },
-
-  // Navigation
-  stepDots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginBottom: 4 },
-  stepDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.surfaceBorder },
-  stepDotActive: { backgroundColor: P, width: 22 },
-  backBtn: { alignSelf: 'center', paddingVertical: 8, paddingHorizontal: 20 },
-  backBtnText: { fontSize: 14, fontFamily: FontFamily.semiBold, color: Colors.textMuted },
-});
