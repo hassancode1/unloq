@@ -13,14 +13,15 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.unloq.app"
+      "bundleIdentifier": "com.unloq.readguard",
+      "buildNumber": "2"
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#6366F1",
         "foregroundImage": "./assets/android-icon-foreground.png"
       },
-      "package": "com.unloq.app"
+      "package": "com.unloq.readguard"
     },
     "web": {
       "favicon": "./assets/favicon.png"
