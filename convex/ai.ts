@@ -4,20 +4,20 @@ import { action } from "./_generated/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
 
-// ── Swap point ────────────────────────────────────────────────────────────────
-// Groq (temporary): set GROQ_API_KEY in Convex env vars
-// Gemini (permanent): set GEMINI_API_KEY in Convex env vars → auto-switches
+// ── Provider priority ─────────────────────────────────────────────────────────
+// GEMINI_API_KEY  → Gemini 2.0 Flash Lite (cheapest, native PDF)
+// CLAUDE_API_KEY  → Claude Haiku (native PDF, testing)
 // ─────────────────────────────────────────────────────────────────────────────
 
 function buildSystemPrompt(): string {
-  return `You are a document-to-course converter. Your only job is to reorganise and quote content that already exists in the document the user provides.
+  return `You are a text organiser, not a writer. Your job is to copy text from the document and arrange it into a course structure — nothing more.
 
-ABSOLUTE RULES — violating any of these is a failure:
-1. Every sentence you write must come word-for-word, or very nearly word-for-word, from the document. Do not rephrase, summarise, or simplify.
-2. Do not write a single explanatory sentence of your own. If the document says it, quote it. If the document does not say it, leave it out.
-3. Do not add examples, analogies, context, or background knowledge that is not explicitly stated in the document.
-4. Names, numbers, dates, technical terms, and definitions must appear exactly as written in the document.
-5. The article body sections must be direct excerpts — copy 2–4 consecutive or thematically close sentences from the document verbatim.`;
+RULES (non-negotiable):
+1. Every word in every article body, flashcard answer, and quiz option must come directly from the document text provided. Copy sentences as-is.
+2. The only editing allowed is fixing obvious PDF extraction artifacts: joining hyphenated line-breaks (e.g. "strat-\negy" → "strategy"), removing stray page numbers or headers, and normalising whitespace.
+3. Do not rephrase, simplify, explain, or add any sentence of your own. If the document uses a complex term, keep it. If the document is dense, keep it dense.
+4. Do not add examples, analogies, transitions, or context that are not in the document.
+5. If a section of the document doesn't have enough clean sentences to fill a body field, use whatever is there — even if it is only 1–2 sentences. Do not pad.`;
 }
 
 function buildUserPrompt(
@@ -36,11 +36,11 @@ function buildUserPrompt(
     ? `Focus area from the learner: "${userPrompt.trim()}". Prioritise sections of the document most relevant to this when selecting which passages to include.\n\n`
     : "";
 
-  return `${userContext}Structure the DOCUMENT TEXT below into exactly ${lessonCount} lessons. Each lesson covers a different section of the document in order.
+  return `${userContext}Structure the document into exactly ${lessonCount} lessons. Each lesson covers a different section of the document in order.
 
 For each lesson output:
 
-CONTENT (3–5 sections): Each section = one "heading" (3–6 words, can be taken from the document) + one "body" (copy 2–4 sentences verbatim or near-verbatim from that part of the document).
+CONTENT (3–5 sections): Each section = one "heading" (a phrase taken from the document, 3–6 words) + one "body" (copy 2–5 consecutive sentences from that part of the document verbatim, fixing only PDF artifacts like broken hyphenation).
 
 FLASHCARDS (exactly 4): "front" = a term, name, or short question lifted from the document. "back" = the answer copied verbatim from the document (1–3 sentences).
 
@@ -74,7 +74,6 @@ Output ONLY valid JSON:
 }`;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function callGemini(
   pdfBase64: string,
   lessonCount: number,
@@ -92,129 +91,89 @@ async function callGemini(
   return result.response.text().trim();
 }
 
-/** Extract readable text from a PDF buffer using only Node.js builtins (no pdfjs). */
-async function extractPdfText(buffer: Buffer): Promise<string> {
-  const { inflateRaw, inflate } = await import("zlib");
-  const { promisify } = await import("util");
-  const inflateRawAsync = promisify(inflateRaw);
-  const inflateAsync = promisify(inflate);
-
-  const raw = buffer.toString("binary");
-  const texts: string[] = [];
-
-  // Find all content streams (compressed or plain)
-  const streamRegex = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
-  let match: RegExpExecArray | null;
-
-  while ((match = streamRegex.exec(raw)) !== null) {
-    const chunk = Buffer.from(match[1], "binary");
-    let decoded = "";
-    try {
-      // Try zlib inflate (FlateDecode)
-      const out = await inflateAsync(chunk).catch(() => inflateRawAsync(chunk));
-      decoded = out.toString("latin1");
-    } catch {
-      decoded = chunk.toString("latin1");
-    }
-
-    // Tj  — single string: (text) Tj
-    const tjRe = /\(([^)]*)\)\s*Tj/g;
-    let m: RegExpExecArray | null;
-    while ((m = tjRe.exec(decoded)) !== null) texts.push(m[1]);
-
-    // TJ — array: [(text) -num (text)] TJ
-    const tjArrRe = /\[([^\]]+)\]\s*TJ/g;
-    while ((m = tjArrRe.exec(decoded)) !== null) {
-      const inner = m[1];
-      const strRe = /\(([^)]*)\)/g;
-      let sm: RegExpExecArray | null;
-      while ((sm = strRe.exec(inner)) !== null) if (sm[1].trim()) texts.push(sm[1]);
-    }
-  }
-
-  return texts
-    .map((t) =>
-      t
-        .replace(/\\n/g, " ")
-        .replace(/\\r/g, " ")
-        .replace(/\\(\d{3})/g, (_, o) => String.fromCharCode(parseInt(o, 8)))
-        .replace(/\\\\/g, "\\"),
-    )
-    .join(" ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-/**
- * Sample text evenly throughout the document so short lesson counts
- * still cover the full PDF rather than just the beginning.
- * Splits into equal-sized windows and takes a chunk from each.
- */
-function sampleDocument(text: string, charLimit: number): string {
-  if (text.length <= charLimit) return text;
-
-  // Use 6 evenly-spaced windows across the document
-  const windows = 6;
-  const chunkSize = Math.floor(charLimit / windows);
-  const step = Math.floor(text.length / windows);
-  const parts: string[] = [];
-
-  for (let i = 0; i < windows; i++) {
-    const start = i * step;
-    parts.push(text.slice(start, start + chunkSize));
-  }
-
-  const joined = parts.join("\n\n--- [continued] ---\n\n");
-  // Strip characters that would break JSON parsing when the model echoes them back
-  return joined.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\\]/g, " ").replace(/\s+/g, " ");
-}
-
-async function callGroq(
+async function callClaude(
   pdfBase64: string,
   lessonCount: number,
   difficulty: string,
   apiKey: string,
   userPrompt?: string,
 ): Promise<string> {
-  const Groq = (await import("groq-sdk")).default;
+  const Anthropic = (await import("@anthropic-ai/sdk")).default;
+  const client = new Anthropic({ apiKey });
 
-  const pdfBuffer = Buffer.from(pdfBase64, "base64");
-  const docText = await extractPdfText(pdfBuffer);
-  if (!docText) throw new Error("Could not extract text from PDF. Make sure it is a text-based PDF, not a scanned image.");
-
-  // Scale how much document text we send based on lesson count:
-  // fewer lessons → shorter response → more budget for document text.
-  // Each lesson costs roughly 600 output tokens; llama-3.3-70b has a 32k output limit.
-  const docCharLimit = Math.min(
-    30000,
-    Math.max(8000, Math.round(24000 / (lessonCount / 3))),
-  );
-  const maxOutputTokens = Math.min(32000, lessonCount * 800 + 1000);
-
-  // Sample throughout the whole document instead of just the start,
-  // so a 3-lesson course on a 200-page PDF still covers the full content.
-  const sampled = sampleDocument(docText, docCharLimit);
-
-  const groq = new Groq({ apiKey });
-  const completion = await groq.chat.completions.create({
-    model: "llama-3.3-70b-versatile",
+  const message = await client.messages.create({
+    model: "claude-3-5-haiku-20241022",
+    max_tokens: Math.min(8192, lessonCount * 1500 + 2000),
+    system: buildSystemPrompt(),
     messages: [
       {
-        role: "system",
-        content: buildSystemPrompt(),
-      },
-      {
         role: "user",
-        content:
-          buildUserPrompt(lessonCount, difficulty, userPrompt) +
-          "\n\nDOCUMENT TEXT:\n" +
-          sampled,
+        content: [
+          {
+            type: "document",
+            source: {
+              type: "base64",
+              media_type: "application/pdf",
+              data: pdfBase64,
+            },
+          } as any,
+          {
+            type: "text",
+            text: buildUserPrompt(lessonCount, difficulty, userPrompt),
+          },
+        ],
       },
     ],
-    temperature: 0.3,
-    max_tokens: maxOutputTokens,
   });
-  return completion.choices[0]?.message?.content?.trim() ?? "";
+
+  const block = message.content.find((b: any) => b.type === "text");
+  return (block as any)?.text?.trim() ?? "";
+}
+
+/**
+ * Try to parse JSON. If it's truncated, salvage whatever complete lessons
+ * were generated rather than failing entirely.
+ */
+function parseOrRepair(raw: string): any {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    const lessonsStart = raw.indexOf('"lessons"');
+    if (lessonsStart === -1)
+      throw new Error("AI response did not contain a lessons array.");
+
+    const arrayOpen = raw.indexOf("[", lessonsStart);
+    if (arrayOpen === -1)
+      throw new Error("AI response lessons array not found.");
+
+    let depth = 0;
+    let lastCompleteEnd = -1;
+    for (let i = arrayOpen + 1; i < raw.length; i++) {
+      const ch = raw[i];
+      if (ch === "{") depth++;
+      else if (ch === "}") {
+        depth--;
+        if (depth === 0) lastCompleteEnd = i;
+      }
+    }
+
+    if (lastCompleteEnd === -1)
+      throw new Error("No complete lessons found in AI response.");
+
+    const repaired =
+      raw.slice(0, arrayOpen + 1) +
+      raw.slice(arrayOpen + 1, lastCompleteEnd + 1) +
+      "]}";
+    try {
+      const result = JSON.parse(repaired);
+      console.warn(
+        `JSON was truncated — salvaged ${result.lessons?.length ?? 0} lessons.`,
+      );
+      return result;
+    } catch {
+      throw new Error("AI response was truncated and could not be repaired.");
+    }
+  }
 }
 
 export const generateCourse = action({
@@ -234,16 +193,19 @@ export const generateCourse = action({
     { courseId, pdfBase64, lessonCount, difficulty, userPrompt },
   ) => {
     try {
-      // const geminiKey = process.env.GEMINI_API_KEY; // TODO: re-enable when billing is resolved
-      const groqKey = process.env.GROQ_API_KEY;
+      const geminiKey = process.env.GEMINI_API_KEY;
+      // const claudeKey = process.env.CLAUDE_API_KEY;
 
-      if (!groqKey) throw new Error("GROQ_API_KEY not set in Convex env vars.");
+      if (!geminiKey)
+        throw new Error(
+          "No AI API key set. Add GEMINI_API_KEY in Convex env vars.",
+        );
 
-      let raw = await callGroq(
+      let raw = await callGemini(
         pdfBase64,
         lessonCount,
         difficulty,
-        groqKey,
+        geminiKey,
         userPrompt,
       );
 
@@ -254,7 +216,7 @@ export const generateCourse = action({
         .replace(/```\n?$/, "")
         .trim();
 
-      const courseData = JSON.parse(raw);
+      const courseData = parseOrRepair(raw);
 
       await ctx.runMutation(api.courses.patchTitleAndDescription, {
         courseId,
@@ -290,7 +252,10 @@ export const generateCourse = action({
         const content = Array.isArray(lesson.content)
           ? lesson.content
               .filter((s: any) => s?.heading && s?.body)
-              .map((s: any) => ({ heading: String(s.heading), body: String(s.body) }))
+              .map((s: any) => ({
+                heading: String(s.heading),
+                body: String(s.body),
+              }))
           : undefined;
 
         await ctx.runMutation(api.courses.insertLesson, {
@@ -310,9 +275,19 @@ export const generateCourse = action({
       });
     } catch (err) {
       console.error("generateCourse failed:", err);
-      // Delete the course entirely so it never shows in the UI
-      await ctx.runMutation(api.courses.remove, { courseId });
-      throw err; // re-throw so the client catch block fires
+      try {
+        await ctx.runMutation(api.courses.updateStatus, {
+          courseId,
+          status: "error",
+        });
+        await ctx.runMutation(api.courses.remove, { courseId });
+      } catch (cleanupErr) {
+        console.error(
+          "cleanup failed (course left as error status):",
+          cleanupErr,
+        );
+      }
+      throw err;
     }
   },
 });

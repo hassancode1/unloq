@@ -254,7 +254,8 @@ export default function UploadScreen({ onBack }: Props) {
   const toastError = (err: any) => {
     const raw: string = err?.message ?? '';
     let message = 'Something went wrong. Please try again.';
-    if (raw.includes('GROQ_API_KEY')) message = 'AI service not configured. Contact support.';
+    if (raw.includes('too large') || raw.includes('5 MiB') || raw.includes('size')) message = 'PDF is too large. Please use a file under 3.75 MB.';
+    else if (raw.includes('API key')) message = 'AI service not configured. Contact support.';
     else if (raw.includes('429') || raw.includes('quota') || raw.includes('rate limit')) message = 'AI is busy right now. Wait a moment and try again.';
     else if (raw.includes('parse') || raw.includes('JSON')) message = 'AI returned an unexpected response. Try again.';
     else if (raw.includes('network') || raw.includes('fetch')) message = 'Network error. Check your connection and try again.';
@@ -270,6 +271,21 @@ export default function UploadScreen({ onBack }: Props) {
     });
     setPhase('uploading');
     try {
+      const fileInfo = await FileSystem.getInfoAsync(docUri!);
+      // Base64 adds ~33% overhead. 3.75 MB raw → ~5 MB encoded, right at Convex's 5 MB Node action limit.
+      const MAX_BYTES = 3.75 * 1024 * 1024;
+      const fileSize = (fileInfo as any).size as number | undefined;
+      if (fileInfo.exists && fileSize !== undefined && fileSize > MAX_BYTES) {
+        setPhase('idle');
+        Toast.show({
+          type: 'error',
+          text1: 'PDF too large',
+          text2: `Maximum file size is 3.75 MB. Your file is ${(fileSize / 1024 / 1024).toFixed(1)} MB.`,
+          visibilityTime: 5000,
+        });
+        return;
+      }
+
       const pdfBase64 = await FileSystem.readAsStringAsync(docUri!, {
         encoding: FileSystem.EncodingType.Base64,
       });
