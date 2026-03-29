@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import React, { useState, useCallback } from 'react';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import {
   ScrollView,
   StyleSheet,
@@ -30,11 +31,19 @@ const LESSON_OPTIONS = [
   { count: 5, label: 'Intense', desc: '~25 min/day', emoji: '⚡' },
 ];
 
-const LOCK_TIMES = [
-  { label: 'Morning', time: '08:00', display: '8:00 AM', desc: 'Start your day right', emoji: '🌅' },
-  { label: 'Midday', time: '12:00', display: '12:00 PM', desc: 'Beat the afternoon slump', emoji: '☀️' },
-  { label: 'Evening', time: '18:00', display: '6:00 PM', desc: 'Wind down with learning', emoji: '🌙' },
-];
+function toTimeString(date: Date) {
+  const h = String(date.getHours()).padStart(2, '0');
+  const m = String(date.getMinutes()).padStart(2, '0');
+  return `${h}:${m}`;
+}
+
+function fmtTime(date: Date) {
+  const h = date.getHours();
+  const m = date.getMinutes();
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
+}
 
 type Props = { onComplete: () => void };
 
@@ -178,23 +187,31 @@ function makeStyles(C: AppColors) {
     tileDesc: { fontSize: 11, fontFamily: 'Inter-SemiBold', color: C.sub },
     tileDescActive: { color: `${P}BB` },
 
-    // Lock time chips (3-col)
-    timeChip: {
-      flex: 1,
-      alignItems: 'center',
-      gap: 3,
-      paddingVertical: 12,
-      borderRadius: 14,
+    // Time picker
+    pickerCard: {
+      backgroundColor: C.surfaceAlt,
+      borderRadius: 16,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: C.border,
-      backgroundColor: C.primaryBg,
+      overflow: 'hidden',
+      alignItems: 'center',
     },
-    timeChipActive: { backgroundColor: `${P}12`, borderColor: P },
-    timeChipEmoji: { fontSize: 18 },
-    timeChipLabel: { fontSize: 13, fontFamily: 'Inter-Bold', color: C.text },
-    timeChipLabelActive: { color: P },
-    timeChipSub: { fontSize: 11, fontFamily: 'Inter-SemiBold', color: C.sub },
-    timeChipSubActive: { color: `${P}BB` },
+    pickerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingTop: Spacing.md,
+      paddingHorizontal: Spacing.md,
+    },
+    pickerIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    pickerTime: { fontSize: 22 },
+    picker: { width: '100%', height: 150 },
 
     // How it works card
     howCard: {
@@ -264,7 +281,9 @@ export default function GoalSetupScreen({ onComplete }: Props) {
   const [frequency, setFrequency] = useState<GoalFrequency>('daily');
   const [customDays, setCustomDays] = useState<number[]>([1, 3, 5]);
   const [lessonTarget, setLessonTarget] = useState(1);
-  const [lockTime, setLockTime] = useState('08:00');
+  const defaultTime = new Date();
+  defaultTime.setHours(8, 0, 0, 0);
+  const [lockDate, setLockDate] = useState(defaultTime);
 
   const totalSteps = 3;
   const stepIndex = step === 'frequency' ? 0 : step === 'session' ? 1 : 2;
@@ -290,7 +309,7 @@ export default function GoalSetupScreen({ onComplete }: Props) {
 
   const handleStart = useCallback(() => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setGoalConfig({ frequency, customDays, lessonTarget, lockTime });
+    setGoalConfig({ frequency, customDays, lessonTarget, lockTime: toTimeString(lockDate) });
     onComplete();
   }, [frequency, customDays, lessonTarget, lockTime, setGoalConfig, onComplete]);
 
@@ -451,25 +470,34 @@ export default function GoalSetupScreen({ onComplete }: Props) {
             </View>
           </Animated.View>
 
-          {/* Lock time — chip row */}
+          {/* Lock time — custom time picker */}
           <Animated.View entering={FadeInDown.delay(160).duration(300)}>
-            <Text style={styles.sectionLabel}>LOCK TIME</Text>
-            <View style={[styles.chipRow, { marginTop: 10 }]}>
-              {LOCK_TIMES.map((opt) => {
-                const selected = lockTime === opt.time;
-                return (
-                  <TouchableOpacity
-                    key={opt.time}
-                    style={[styles.timeChip, selected && styles.timeChipActive]}
-                    onPress={() => { Haptics.selectionAsync(); setLockTime(opt.time); }}
-                    activeOpacity={0.75}
-                  >
-                    <Text style={styles.timeChipEmoji}>{opt.emoji}</Text>
-                    <Text style={[styles.timeChipLabel, selected && styles.timeChipLabelActive]}>{opt.display}</Text>
-                    <Text style={[styles.timeChipSub, selected && styles.timeChipSubActive]}>{opt.label}</Text>
-                  </TouchableOpacity>
-                );
-              })}
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionLabel}>LOCK TIME</Text>
+              <Text style={styles.sectionSub}>Apps block at this time and unlock once your lesson is done.</Text>
+            </View>
+            <View style={[styles.pickerCard, { marginTop: 10 }]}>
+              <View style={styles.pickerRow}>
+                <View style={[styles.pickerIcon, { backgroundColor: `${C.primary}14` }]}>
+                  <Text style={{ fontSize: 20 }}>🔒</Text>
+                </View>
+                <Text style={[styles.pickerTime, { fontFamily: F.bold, color: C.text }]}>
+                  {fmtTime(lockDate)}
+                </Text>
+              </View>
+              <DateTimePicker
+                value={lockDate}
+                mode="time"
+                display="spinner"
+                onChange={(_, selected) => {
+                  if (selected) {
+                    Haptics.selectionAsync();
+                    setLockDate(selected);
+                  }
+                }}
+                style={styles.picker}
+                textColor={C.text}
+              />
             </View>
           </Animated.View>
 
@@ -487,7 +515,6 @@ export default function GoalSetupScreen({ onComplete }: Props) {
 
   // ── Step 3: App blocker ────────────────────────────────────────────────────
   const selectedOption = LESSON_OPTIONS.find((o) => o.count === lessonTarget)!;
-  const selectedTime = LOCK_TIMES.find((t) => t.time === lockTime)!;
   const activeDays =
     frequency === 'daily'
       ? 'Every day'
@@ -540,9 +567,7 @@ export default function GoalSetupScreen({ onComplete }: Props) {
           </View>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryKey}>Lock time</Text>
-            <Text style={styles.summaryVal}>
-              {selectedTime.emoji} {selectedTime.display}
-            </Text>
+            <Text style={styles.summaryVal}>🔒 {fmtTime(lockDate)}</Text>
           </View>
         </Animated.View>
 

@@ -17,6 +17,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useConvexAuth } from 'convex/react';
+import { Image } from 'react-native';
 import { api } from '../convex/_generated/api';
 import { Id } from '../convex/_generated/dataModel';
 
@@ -132,6 +133,7 @@ const tabStyles = StyleSheet.create({
 function CoursesTab({ onUpload, onCourseSelect, C, fs, F }: { onUpload: () => void; onCourseSelect: (id: Id<'courses'>) => void; C: AppColors; fs: (n: number) => number; F: any }) {
   const styles = React.useMemo(() => makeCourseStyles(C), [C]);
   const { goalConfig, dailyProgress } = useAppStore();
+  const viewer = useQuery(api.users.currentUser);
   const courses = ((useQuery(api.courses.list) ?? []) as any[]).filter((c: any) => c.status !== 'error');
   const removeCourse = useMutation(api.courses.remove);
 
@@ -187,17 +189,30 @@ function CoursesTab({ onUpload, onCourseSelect, C, fs, F }: { onUpload: () => vo
     <>
       {/* Top bar */}
       <View style={styles.topBar}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={[styles.greeting, { fontSize: fs(11), fontFamily: F.regular }]}>Welcome back</Text>
-          <Text style={[styles.screenTitle, { fontSize: fs(22), fontFamily: F.bold }]}>Your Courses</Text>
+          <Text style={[styles.screenTitle, { fontSize: fs(22), fontFamily: F.bold }]} numberOfLines={1}>
+            {viewer?.name?.split(' ')[0] ?? 'Your Courses'}
+          </Text>
         </View>
-        {courses.length > 0 && (
-          <View style={styles.countPill}>
-            <Text style={[styles.countPillTxt, { fontSize: fs(11), fontFamily: F.semiBold }]}>
-              {courses.length} course{courses.length !== 1 ? 's' : ''}
-            </Text>
-          </View>
-        )}
+        <View style={styles.topBarRight}>
+          {courses.length > 0 && (
+            <View style={styles.countPill}>
+              <Text style={[styles.countPillTxt, { fontSize: fs(11), fontFamily: F.semiBold }]}>
+                {courses.length} course{courses.length !== 1 ? 's' : ''}
+              </Text>
+            </View>
+          )}
+          {viewer?.image ? (
+            <Image source={{ uri: viewer.image }} style={[styles.avatar, { borderColor: C.border }]} />
+          ) : viewer?.name ? (
+            <View style={[styles.avatarFallback, { backgroundColor: `${C.primary}20`, borderColor: C.border }]}>
+              <Text style={[styles.avatarInitial, { color: C.primary, fontFamily: F.bold, fontSize: fs(14) }]}>
+                {viewer.name[0].toUpperCase()}
+              </Text>
+            </View>
+          ) : null}
+        </View>
       </View>
 
       {/* Goal banner */}
@@ -435,6 +450,10 @@ function makeCourseStyles(C: AppColors) {
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: C.border,
     },
+    topBarRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    avatar: { width: 36, height: 36, borderRadius: 18, borderWidth: 1 },
+    avatarFallback: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
+    avatarInitial: {},
     greeting: { color: C.muted, letterSpacing: 0.8, marginBottom: 1 },
     screenTitle: { color: C.text },
     countPill: {

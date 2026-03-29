@@ -1,8 +1,18 @@
 import * as SplashScreen from "expo-splash-screen";
+import * as WebBrowser from "expo-web-browser";
+
+WebBrowser.maybeCompleteAuthSession();
 import { useEffect } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ConvexReactClient } from "convex/react";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
+import * as SecureStore from "expo-secure-store";
+
+const secureStorage = {
+  getItem: (key: string) => SecureStore.getItemAsync(key),
+  setItem: (key: string, value: string) => SecureStore.setItemAsync(key, value),
+  removeItem: (key: string) => SecureStore.deleteItemAsync(key),
+};
 import Toast from "react-native-toast-message";
 import {
   useFonts,
@@ -43,7 +53,7 @@ export default function App() {
   if (!fontsLoaded) return <AppSplashScreen />;
 
   return (
-    <ConvexAuthProvider client={convex}>
+    <ConvexAuthProvider client={convex} storage={secureStorage}>
       <SafeAreaProvider>
         {flow === "onboarding" && (
           <OnboardingScreen onComplete={() => setFlow("goalsetup")} />

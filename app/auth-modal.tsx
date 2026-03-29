@@ -9,13 +9,12 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import Svg, { Path, G, ClipPath, Defs, Rect } from 'react-native-svg';
 import { useAuthActions } from '@convex-dev/auth/react';
+import { useConvexAuth } from 'convex/react';
 import Toast from 'react-native-toast-message';
 import { useTheme } from '../hooks/useTheme';
 import { Spacing } from '../constants/spacing';
-
-// Required so the OAuth browser session can redirect back into the app
-WebBrowser.maybeCompleteAuthSession();
 
 type Props = {
   visible: boolean;
@@ -26,15 +25,42 @@ type Props = {
 export default function AuthModal({ visible, onDismiss, onAuthSuccess }: Props) {
   const { C, F, fs } = useTheme();
   const { signIn } = useAuthActions();
+  const { isAuthenticated } = useConvexAuth();
   const [loading, setLoading] = useState(false);
+
+  // When auth completes (isAuthenticated flips to true), trigger success
+  React.useEffect(() => {
+    if (visible && isAuthenticated) {
+      onAuthSuccess();
+    }
+  }, [isAuthenticated, visible]);
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
     try {
-      await signIn('google', { redirectTo: 'loqlearn://' });
-      onAuthSuccess();
-    } catch (e) {
-      Toast.show({ type: 'error', text1: 'Sign in failed', text2: 'Please try again.' });
+      // Step 1: Initiate — library returns redirect URL but does NOT open browser in RN
+      const result = await signIn('google', { redirectTo: 'loqlearn://' });
+
+      if (result && 'redirect' in result && result.redirect) {
+        // Step 2: Open the browser ourselves
+        const browserResult = await WebBrowser.openAuthSessionAsync(
+          result.redirect.toString(),
+          'loqlearn://'
+        );
+
+        if (browserResult.type === 'success') {
+          // Step 3: Extract the code from the redirect URL
+          const url = new URL(browserResult.url);
+          const code = url.searchParams.get('code');
+          if (code) {
+            // Step 4: Complete sign-in with the code (verifier auto-read from storage)
+            await (signIn as any)(undefined, { code });
+          }
+        }
+      }
+    } catch (e: any) {
+      console.log('[Auth] error:', e?.message);
+      Toast.show({ type: 'error', text1: 'Sign in failed', text2: e?.message ?? 'Please try again.' });
     } finally {
       setLoading(false);
     }
@@ -80,7 +106,19 @@ export default function AuthModal({ visible, onDismiss, onAuthSuccess }: Props) 
             <ActivityIndicator size="small" color="#4285F4" />
           ) : (
             <>
-              <Text style={styles.googleG}>G</Text>
+              <Svg width={20} height={20} viewBox="0 0 48 48">
+                <Defs>
+                  <ClipPath id="g">
+                    <Path d="M44.5 20H24v8.5h11.8C34.7 33.9 30.1 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2 11.8 2 2 11.8 2 24s9.8 22 22 22c11 0 21-8 21-22 0-1.3-.2-2.7-.5-4z" />
+                  </ClipPath>
+                </Defs>
+                <G clipPath="url(#g)">
+                  <Path d="M0 37V11l17 13z" fill="#FBBC05" />
+                  <Path d="M0 11l17 13 7-6.1L48 14V0H0z" fill="#EA4335" />
+                  <Path d="M0 37l30-23 7.9 1L48 0v48H0z" fill="#34A853" />
+                  <Path d="M48 48L17 24l-4-3 35-10z" fill="#4285F4" />
+                </G>
+              </Svg>
               <Text style={[styles.googleText, { fontSize: fs(15), fontFamily: F.semiBold }]}>
                 Continue with Google
               </Text>
@@ -161,12 +199,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 4,
     elevation: 2,
-  },
-  googleG: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#4285F4',
-    lineHeight: 22,
   },
   googleText: {
     color: '#1f1f1f',

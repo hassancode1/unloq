@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import React from 'react';
 import {
+  Image,
   ScrollView,
   StyleSheet,
   Switch,
@@ -9,6 +10,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useQuery } from 'convex/react';
+import { api } from '../convex/_generated/api';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../hooks/useTheme';
@@ -37,6 +40,7 @@ export default function SettingsScreen() {
   const { C, isDark, fs, fontScale, F } = useTheme();
   const { goalConfig, setFlow, toggleDarkMode, increaseFontScale, decreaseFontScale } = useAppStore();
   const styles = React.useMemo(() => makeStyles(C), [C]);
+  const viewer = useQuery(api.users.currentUser);
 
   return (
     <View style={[styles.root]}>
@@ -65,10 +69,20 @@ export default function SettingsScreen() {
           entering={FadeInDown.duration(280)}
           style={styles.identity}
         >
-          <View style={[styles.avatarRing, { borderColor: `${C.gold}55` }]}>
-            <View style={styles.avatar}>
-              <Text style={{ fontSize: fs(38) }}>🎓</Text>
-            </View>
+          <View style={[styles.avatarRing, { borderColor: `${C.primary}40` }]}>
+            {viewer?.image ? (
+              <Image source={{ uri: viewer.image }} style={styles.avatarImg} />
+            ) : (
+              <View style={[styles.avatar, { backgroundColor: `${C.primary}18` }]}>
+                {viewer?.name ? (
+                  <Text style={{ fontSize: fs(32), fontFamily: F.bold, color: C.primary }}>
+                    {viewer.name[0].toUpperCase()}
+                  </Text>
+                ) : (
+                  <Text style={{ fontSize: fs(38) }}>🎓</Text>
+                )}
+              </View>
+            )}
           </View>
           <Text
             style={[
@@ -76,7 +90,7 @@ export default function SettingsScreen() {
               { fontSize: fs(22), fontFamily: F.bold, color: C.text },
             ]}
           >
-            Learner
+            {viewer?.name ?? 'Learner'}
           </Text>
           <Text
             style={[
@@ -446,11 +460,13 @@ function makeStyles(C: AppColors) {
       width: 80,
       height: 80,
       borderRadius: 40,
-      backgroundColor: C.surfaceAlt,
-      borderWidth: 1,
-      borderColor: C.border,
       justifyContent: 'center',
       alignItems: 'center',
+    },
+    avatarImg: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
     },
     identityName: {},
     identitySub: { letterSpacing: 0.2 },
