@@ -16,7 +16,7 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useQuery, useMutation } from 'convex/react';
+import { useQuery, useMutation, useConvexAuth } from 'convex/react';
 import { api } from '../convex/_generated/api';
 import { Id } from '../convex/_generated/dataModel';
 
@@ -28,6 +28,7 @@ import UploadScreen from './upload';
 import StatsScreen from './stats';
 import SettingsScreen from './settings';
 import LessonPlayer from './lesson-player';
+import AuthModal from './auth-modal';
 
 type Tab = 'learn' | 'stats' | 'settings';
 
@@ -252,7 +253,7 @@ function CoursesTab({ onUpload, onCourseSelect, C, fs, F }: { onUpload: () => vo
           <TouchableOpacity
             style={styles.uploadCard}
             activeOpacity={0.8}
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onUpload(); }}
+            onPress={onUpload}
           >
             <View style={[styles.uploadIcon, { backgroundColor: `${C.primary}14`, borderColor: `${C.primary}28` }]}>
               <Text style={{ fontSize: 24 }}>📄</Text>
@@ -353,9 +354,20 @@ function CoursesTab({ onUpload, onCourseSelect, C, fs, F }: { onUpload: () => vo
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { C, fs, F } = useTheme();
+  const { isAuthenticated } = useConvexAuth();
   const [activeTab, setActiveTab] = useState<Tab>('learn');
   const [showUpload, setShowUpload] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const [activeCourse, setActiveCourse] = useState<Id<'courses'> | null>(null);
+
+  const handleUploadPress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (isAuthenticated) {
+      setShowUpload(true);
+    } else {
+      setShowAuthModal(true);
+    }
+  };
 
   if (showUpload) return <UploadScreen onBack={() => setShowUpload(false)} />;
   if (activeCourse) return <LessonPlayer courseId={activeCourse} onBack={() => setActiveCourse(null)} />;
@@ -364,7 +376,7 @@ export default function HomeScreen() {
     <View style={{ flex: 1, backgroundColor: C.bg, paddingTop: insets.top }}>
       {/* Screen content */}
       <View style={{ flex: 1 }}>
-        {activeTab === 'learn'    && <CoursesTab onUpload={() => setShowUpload(true)} onCourseSelect={setActiveCourse} C={C} fs={fs} F={F} />}
+        {activeTab === 'learn'    && <CoursesTab onUpload={handleUploadPress} onCourseSelect={setActiveCourse} C={C} fs={fs} F={F} />}
         {activeTab === 'stats'    && <StatsScreen />}
         {activeTab === 'settings' && <SettingsScreen />}
       </View>
@@ -390,6 +402,16 @@ export default function HomeScreen() {
           />
         ))}
       </View>
+
+      {/* Auth modal — shown when unauthenticated user taps upload */}
+      <AuthModal
+        visible={showAuthModal}
+        onDismiss={() => setShowAuthModal(false)}
+        onAuthSuccess={() => {
+          setShowAuthModal(false);
+          setShowUpload(true);
+        }}
+      />
     </View>
   );
 }

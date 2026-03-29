@@ -1,9 +1,16 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { getAuthUserId } from "@convex-dev/auth/server";
 
 export const list = query({
   handler: async (ctx) => {
-    return ctx.db.query("courses").order("desc").collect();
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+    return ctx.db
+      .query("courses")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .order("desc")
+      .collect();
   },
 });
 
@@ -54,8 +61,11 @@ export const create = mutation({
     ),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Must be signed in to create a course");
     return ctx.db.insert("courses", {
       ...args,
+      userId,
       status: "generating",
       createdAt: Date.now(),
     });
@@ -119,7 +129,9 @@ export const patchTitleAndDescription = mutation({
 export const remove = mutation({
   args: { courseId: v.id("courses") },
   handler: async (ctx, { courseId }) => {
-    // Delete all lessons first
+    const userId = await getAuthUserId(ctx);
+    const course = await ctx.db.get(courseId);
+    if (!course || course.userId !== userId) throw new Error("Not authorized");
     const lessons = await ctx.db
       .query("lessons")
       .withIndex("by_course", (q) => q.eq("courseId", courseId))

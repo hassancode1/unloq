@@ -26,8 +26,10 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "scheme": "loqlearn",
     "plugins": [
-      "expo-font"
+      "expo-font",
+      "expo-secure-store"
     ]
   }
 }

@@ -1,8 +1,12 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { authTables } from "@convex-dev/auth/server";
 
 export default defineSchema({
+  ...authTables,
+
   courses: defineTable({
+    userId: v.optional(v.id("users")),
     title: v.string(),
     description: v.string(),
     docName: v.string(),
@@ -18,7 +22,7 @@ export default defineSchema({
       v.literal("error")
     ),
     createdAt: v.number(),
-  }),
+  }).index("by_user", ["userId"]),
 
   lessons: defineTable({
     courseId: v.id("courses"),
