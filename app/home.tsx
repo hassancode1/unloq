@@ -134,7 +134,9 @@ function CoursesTab({ onUpload, onCourseSelect, C, fs, F }: { onUpload: () => vo
   const styles = React.useMemo(() => makeCourseStyles(C), [C]);
   const { goalConfig, dailyProgress } = useAppStore();
   const viewer = useQuery(api.users.currentUser);
-  const courses = ((useQuery(api.courses.list) ?? []) as any[]).filter((c: any) => c.status !== 'error');
+  const rawCourses = useQuery(api.courses.list);
+  const isLoading = rawCourses === undefined;
+  const courses = ((rawCourses ?? []) as any[]).filter((c: any) => c.status === 'ready');
   const removeCourse = useMutation(api.courses.remove);
 
   const handleCoursePress = async (course: any) => {
@@ -288,7 +290,19 @@ function CoursesTab({ onUpload, onCourseSelect, C, fs, F }: { onUpload: () => vo
         </Animated.View>
 
         {/* Course list or empty state */}
-        {courses.length === 0 ? (
+        {isLoading ? (
+          <Animated.View entering={FadeInDown.delay(80).duration(280)} style={{ gap: 10 }}>
+            {[1, 2].map((i) => (
+              <View key={i} style={[styles.skeletonCard, { backgroundColor: C.surfaceAlt, borderColor: C.border }]}>
+                <View style={[styles.skeletonIcon, { backgroundColor: C.border }]} />
+                <View style={{ flex: 1, gap: 8 }}>
+                  <View style={[styles.skeletonLine, { width: '60%', backgroundColor: C.border }]} />
+                  <View style={[styles.skeletonLine, { width: '40%', backgroundColor: C.border }]} />
+                </View>
+              </View>
+            ))}
+          </Animated.View>
+        ) : courses.length === 0 ? (
           <Animated.View entering={FadeInDown.delay(80).duration(280)} style={styles.empty}>
             <View style={[styles.emptyIcon, { backgroundColor: C.primaryBg, borderColor: C.border }]}>
               <Text style={{ fontSize: 36 }}>🔒</Text>
@@ -308,8 +322,6 @@ function CoursesTab({ onUpload, onCourseSelect, C, fs, F }: { onUpload: () => vo
             <View style={styles.courseGroup}>
               {courses.map((course: any, idx: number) => {
                 const { emoji, color } = topicColor(course.title);
-                const isGenerating = course.status === 'generating';
-                const isError = course.status === 'error';
                 return (
                   <TouchableOpacity
                     key={course._id}
@@ -320,9 +332,7 @@ function CoursesTab({ onUpload, onCourseSelect, C, fs, F }: { onUpload: () => vo
                     delayLongPress={400}
                   >
                     <View style={[styles.courseIcon, { backgroundColor: `${color}18`, borderColor: `${color}30` }]}>
-                      <Text style={{ fontSize: 22 }}>
-                        {isGenerating ? '⏳' : isError ? '⚠️' : emoji}
-                      </Text>
+                      <Text style={{ fontSize: 22 }}>{emoji}</Text>
                     </View>
                     <View style={styles.courseInfo}>
                       <Text style={[styles.courseTitle, { fontSize: fs(14), fontFamily: F.semiBold, color: C.text }]} numberOfLines={2}>
@@ -339,16 +349,6 @@ function CoursesTab({ onUpload, onCourseSelect, C, fs, F }: { onUpload: () => vo
                           {course.docName}
                         </Text>
                       </View>
-                      {isGenerating && (
-                        <Text style={[{ fontSize: fs(11), fontFamily: F.regular, color: C.muted }]}>
-                          Generating with AI…
-                        </Text>
-                      )}
-                      {isError && (
-                        <Text style={[{ fontSize: fs(11), fontFamily: F.regular, color: C.error }]}>
-                          Failed — tap to re-upload
-                        </Text>
-                      )}
                     </View>
                     <View style={[styles.arrowBtn, { backgroundColor: `${color}18` }]}>
                       <Ionicons name="arrow-forward" size={14} color={color} />
@@ -506,6 +506,10 @@ function makeCourseStyles(C: AppColors) {
     uploadTitle: {},
     uploadSub: {},
     arrowBtn: { width: 32, height: 32, borderRadius: 9, justifyContent: 'center', alignItems: 'center' },
+
+    skeletonCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, padding: Spacing.md },
+    skeletonIcon: { width: 48, height: 48, borderRadius: 14 },
+    skeletonLine: { height: 12, borderRadius: 6 },
 
     empty: { alignItems: 'center', paddingVertical: Spacing.xxl, gap: Spacing.md },
     emptyIcon: { width: 80, height: 80, borderRadius: 22, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },

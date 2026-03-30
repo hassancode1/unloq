@@ -36,7 +36,7 @@ import Toast from 'react-native-toast-message';
 
 type Difficulty = 'beginner' | 'intermediate' | 'advanced';
 
-const LESSON_STEPS = [3, 5, 10, 15];
+const LESSON_STEPS = [7, 10, 12, 15];
 
 const DIFFICULTIES: { id: Difficulty; label: string; icon: string; color: string }[] = [
   { id: 'beginner',     label: 'Beginner',     icon: 'leaf',       color: '#16A34A' },
@@ -219,7 +219,7 @@ export default function UploadScreen({ onBack }: Props) {
   const [docUri, setDocUri]         = useState<string | null>(null);
   const [courseName, setCourseName] = useState('');
   const [prompt, setPrompt]         = useState('');
-  const [lessonIdx, setLessonIdx]   = useState(1);
+  const [lessonIdx, setLessonIdx]   = useState(0);
   const [diffIdx, setDiffIdx]       = useState(1);
   const [phase, setPhase] = useState<'idle' | 'uploading' | 'done'>('idle');
 
