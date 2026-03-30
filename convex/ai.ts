@@ -4,10 +4,7 @@ import { action } from "./_generated/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
 
-// ── Provider priority ─────────────────────────────────────────────────────────
-// GEMINI_API_KEY  → Gemini 2.0 Flash (native PDF)
-// CLAUDE_API_KEY  → Claude Haiku (native PDF, testing)
-// ─────────────────────────────────────────────────────────────────────────────
+
 
 function buildSystemPrompt(): string {
   return `You are a text organiser, not a writer. Your job is to copy text from the document and arrange it into a course structure — nothing more.
@@ -36,7 +33,7 @@ function buildUserPrompt(
     ? `Focus area from the learner: "${userPrompt.trim()}". Prioritise sections of the document most relevant to this when selecting which passages to include.\n\n`
     : "";
 
-  return `${userContext}Structure the document into exactly ${lessonCount} lessons. Divide the document into ${lessonCount} roughly equal portions from start to finish — every part of the document must be covered. Do not skip or compress later sections.
+  return `${userContext}Structure the document into exactly ${lessonCount} lessons. You MUST use the entire document — divide it into ${lessonCount} roughly equal portions from start to finish. Every portion of the document must be represented. Do not skip or compress later sections.
 
 For each lesson output:
 
@@ -83,13 +80,7 @@ async function callGemini(
 ): Promise<string> {
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",
-    generationConfig: {
-      maxOutputTokens: 65536,
-      temperature: 0.1,
-    },
-  });
+  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
   const result = await model.generateContent([
     { inlineData: { mimeType: "application/pdf", data: pdfBase64 } },
     { text: buildSystemPrompt() + "\n\n" + buildUserPrompt(lessonCount, difficulty, userPrompt) },

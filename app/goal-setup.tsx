@@ -311,7 +311,7 @@ export default function GoalSetupScreen({ onComplete }: Props) {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setGoalConfig({ frequency, customDays, lessonTarget, lockTime: toTimeString(lockDate) });
     onComplete();
-  }, [frequency, customDays, lessonTarget, lockTime, setGoalConfig, onComplete]);
+  }, [frequency, customDays, lessonTarget, lockDate, setGoalConfig, onComplete]);
 
   const StepDots = () => (
     <View style={styles.stepDots}>
