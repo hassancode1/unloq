@@ -10,6 +10,7 @@ export default defineSchema({
     title: v.string(),
     description: v.string(),
     docName: v.string(),
+    sourceType: v.optional(v.union(v.literal("pdf"), v.literal("youtube"))),
     totalLessons: v.number(),
     difficulty: v.union(
       v.literal("beginner"),

@@ -477,6 +477,15 @@ export default function LessonPlayer({ courseId, onBack }: Props) {
   const [activeLesson, setActiveLesson] = useState<any | null>(null);
   const [expandedId, setExpandedId]     = useState<string | null>(null);
 
+  // Auto-expand the current (next up) lesson
+  useEffect(() => {
+    if (!lessonsRaw) return;
+    const current = (lessonsRaw as any[]).find(
+      (l: any, i: number) => !l.completed && (i === 0 || (lessonsRaw as any[])[i - 1]?.completed)
+    );
+    if (current) setExpandedId(current._id);
+  }, [!!lessonsRaw]);
+
   const openArticle    = useCallback((l: any) => { Haptics.selectionAsync(); setActiveLesson(l); setScreenView('article'); },    []);
   const openFlashcards = useCallback((l: any) => { Haptics.selectionAsync(); setActiveLesson(l); setScreenView('flashcards'); }, []);
   const openQuiz       = useCallback((l: any) => { Haptics.selectionAsync(); setActiveLesson(l); setScreenView('quiz'); },       []);
@@ -633,51 +642,95 @@ export default function LessonPlayer({ courseId, onBack }: Props) {
                     <View style={S.lessonBody}>
                       <View style={[S.bodyDivider, { backgroundColor: C.border }]} />
 
-                      {/* Article */}
-                      <TouchableOpacity style={S.contentRow} onPress={() => openArticle(lesson)} activeOpacity={0.75}>
-                        <View style={[S.contentIcon, { backgroundColor: `${C.primary}10`, borderColor: `${C.primary}20` }]}>
-                          <Ionicons name="book-outline" size={16} color={C.primary} />
-                        </View>
-                        <View style={{ flex: 1, gap: 2 }}>
-                          <Text style={[S.contentLabel, { fontFamily: F.semiBold, fontSize: fs(13), color: C.text }]}>Article</Text>
-                          <Text style={[S.contentSub, { fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>Read the lesson content</Text>
-                        </View>
-                        <Ionicons name="arrow-forward" size={15} color={C.primary} />
-                      </TouchableOpacity>
+                      {isCompleted ? (
+                        // Completed lesson — all sections available for review
+                        <>
+                          <TouchableOpacity style={S.contentRow} onPress={() => openArticle(lesson)} activeOpacity={0.75}>
+                            <View style={[S.contentIcon, { backgroundColor: `${C.primary}10`, borderColor: `${C.primary}20` }]}>
+                              <Ionicons name="book-outline" size={16} color={C.primary} />
+                            </View>
+                            <View style={{ flex: 1, gap: 2 }}>
+                              <Text style={[S.contentLabel, { fontFamily: F.semiBold, fontSize: fs(13), color: C.text }]}>Article</Text>
+                              <Text style={[S.contentSub, { fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>Review lesson content</Text>
+                            </View>
+                            <Ionicons name="arrow-forward" size={15} color={C.primary} />
+                          </TouchableOpacity>
 
-                      <View style={[S.bodyDivider, { backgroundColor: C.border }]} />
+                          <View style={[S.bodyDivider, { backgroundColor: C.border }]} />
 
-                      {/* Flashcards */}
-                      <TouchableOpacity style={S.contentRow} onPress={() => openFlashcards(lesson)} activeOpacity={0.75}>
-                        <View style={[S.contentIcon, { backgroundColor: `${C.primary}10`, borderColor: `${C.primary}20` }]}>
-                          <Ionicons name="layers-outline" size={16} color={C.primary} />
-                        </View>
-                        <View style={{ flex: 1, gap: 2 }}>
-                          <Text style={[S.contentLabel, { fontFamily: F.semiBold, fontSize: fs(13), color: C.text }]}>Flashcards</Text>
-                          <Text style={[S.contentSub, { fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>
-                            {lesson.flashcards?.length ?? 0} cards to study
-                          </Text>
-                        </View>
-                        <Ionicons name="arrow-forward" size={15} color={C.primary} />
-                      </TouchableOpacity>
+                          <TouchableOpacity style={S.contentRow} onPress={() => openFlashcards(lesson)} activeOpacity={0.75}>
+                            <View style={[S.contentIcon, { backgroundColor: `${C.primary}10`, borderColor: `${C.primary}20` }]}>
+                              <Ionicons name="layers-outline" size={16} color={C.primary} />
+                            </View>
+                            <View style={{ flex: 1, gap: 2 }}>
+                              <Text style={[S.contentLabel, { fontFamily: F.semiBold, fontSize: fs(13), color: C.text }]}>Flashcards</Text>
+                              <Text style={[S.contentSub, { fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>
+                                {lesson.flashcards?.length ?? 0} cards
+                              </Text>
+                            </View>
+                            <Ionicons name="arrow-forward" size={15} color={C.primary} />
+                          </TouchableOpacity>
 
-                      <View style={[S.bodyDivider, { backgroundColor: C.border }]} />
+                          <View style={[S.bodyDivider, { backgroundColor: C.border }]} />
 
-                      {/* Quiz */}
-                      <TouchableOpacity style={S.contentRow} onPress={() => openQuiz(lesson)} activeOpacity={0.75}>
-                        <View style={[S.contentIcon, { backgroundColor: `${GREEN}10`, borderColor: `${GREEN}20` }]}>
-                          <Ionicons name="help-circle-outline" size={16} color={GREEN} />
-                        </View>
-                        <View style={{ flex: 1, gap: 2 }}>
-                          <Text style={[S.contentLabel, { fontFamily: F.semiBold, fontSize: fs(13), color: C.text }]}>Quiz</Text>
-                          <Text style={[S.contentSub, { fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>
-                            {lesson.quiz?.length ?? 0} questions{isCompleted ? ' · Completed' : ''}
-                          </Text>
-                        </View>
-                        {isCompleted
-                          ? <Ionicons name="checkmark-circle" size={16} color={GREEN} />
-                          : <Ionicons name="arrow-forward" size={15} color={GREEN} />}
-                      </TouchableOpacity>
+                          <TouchableOpacity style={S.contentRow} onPress={() => openQuiz(lesson)} activeOpacity={0.75}>
+                            <View style={[S.contentIcon, { backgroundColor: `${GREEN}10`, borderColor: `${GREEN}20` }]}>
+                              <Ionicons name="help-circle-outline" size={16} color={GREEN} />
+                            </View>
+                            <View style={{ flex: 1, gap: 2 }}>
+                              <Text style={[S.contentLabel, { fontFamily: F.semiBold, fontSize: fs(13), color: C.text }]}>Quiz</Text>
+                              <Text style={[S.contentSub, { fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>
+                                {lesson.quiz?.length ?? 0} questions · Completed
+                              </Text>
+                            </View>
+                            <Ionicons name="checkmark-circle" size={16} color={GREEN} />
+                          </TouchableOpacity>
+                        </>
+                      ) : (
+                        // Incomplete lesson — article is the entry point, rest is visible but locked
+                        <>
+                          <TouchableOpacity style={S.contentRow} onPress={() => openArticle(lesson)} activeOpacity={0.75}>
+                            <View style={[S.contentIcon, { backgroundColor: `${C.primary}15`, borderColor: `${C.primary}30` }]}>
+                              <Ionicons name="play" size={16} color={C.primary} />
+                            </View>
+                            <View style={{ flex: 1, gap: 2 }}>
+                              <Text style={[S.contentLabel, { fontFamily: F.semiBold, fontSize: fs(13), color: C.text }]}>Start Lesson</Text>
+                              <Text style={[S.contentSub, { fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>Read the lesson content</Text>
+                            </View>
+                            <Ionicons name="arrow-forward" size={15} color={C.primary} />
+                          </TouchableOpacity>
+
+                          <View style={[S.bodyDivider, { backgroundColor: C.border }]} />
+
+                          <View style={[S.contentRow, { opacity: 0.35 }]}>
+                            <View style={[S.contentIcon, { backgroundColor: C.surfaceAlt, borderColor: C.border }]}>
+                              <Ionicons name="layers-outline" size={16} color={C.muted} />
+                            </View>
+                            <View style={{ flex: 1, gap: 2 }}>
+                              <Text style={[S.contentLabel, { fontFamily: F.semiBold, fontSize: fs(13), color: C.text }]}>Flashcards</Text>
+                              <Text style={[S.contentSub, { fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>
+                                {lesson.flashcards?.length ?? 0} cards to study
+                              </Text>
+                            </View>
+                            <Ionicons name="lock-closed-outline" size={14} color={C.muted} />
+                          </View>
+
+                          <View style={[S.bodyDivider, { backgroundColor: C.border }]} />
+
+                          <View style={[S.contentRow, { opacity: 0.35 }]}>
+                            <View style={[S.contentIcon, { backgroundColor: C.surfaceAlt, borderColor: C.border }]}>
+                              <Ionicons name="help-circle-outline" size={16} color={C.muted} />
+                            </View>
+                            <View style={{ flex: 1, gap: 2 }}>
+                              <Text style={[S.contentLabel, { fontFamily: F.semiBold, fontSize: fs(13), color: C.text }]}>Quiz</Text>
+                              <Text style={[S.contentSub, { fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>
+                                {lesson.quiz?.length ?? 0} questions
+                              </Text>
+                            </View>
+                            <Ionicons name="lock-closed-outline" size={14} color={C.muted} />
+                          </View>
+                        </>
+                      )}
                     </View>
                   )}
                 </View>

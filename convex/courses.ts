@@ -16,7 +16,13 @@ export const list = query({
 
 export const listWithProgress = query({
   handler: async (ctx) => {
-    const courses = await ctx.db.query("courses").order("desc").collect();
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+    const courses = await ctx.db
+      .query("courses")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .order("desc")
+      .collect();
     return Promise.all(
       courses.map(async (course) => {
         const lessons = await ctx.db
@@ -53,6 +59,7 @@ export const create = mutation({
     title: v.string(),
     description: v.string(),
     docName: v.string(),
+    sourceType: v.optional(v.union(v.literal("pdf"), v.literal("youtube"))),
     totalLessons: v.number(),
     difficulty: v.union(
       v.literal("beginner"),
@@ -123,6 +130,17 @@ export const patchTitleAndDescription = mutation({
   },
   handler: async (ctx, { courseId, title, description, totalLessons }) => {
     await ctx.db.patch(courseId, { title, description, totalLessons });
+  },
+});
+
+export const clearLessons = mutation({
+  args: { courseId: v.id("courses") },
+  handler: async (ctx, { courseId }) => {
+    const lessons = await ctx.db
+      .query("lessons")
+      .withIndex("by_course", (q) => q.eq("courseId", courseId))
+      .collect();
+    await Promise.all(lessons.map((l) => ctx.db.delete(l._id)));
   },
 });
 

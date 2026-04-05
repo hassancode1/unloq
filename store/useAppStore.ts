@@ -8,7 +8,8 @@ export interface GoalConfig {
   frequency: 'daily' | 'weekdays' | 'custom';
   customDays: number[]; // JS day indices 0=Sun…6=Sat
   lessonTarget: number;
-  lockTime: string; // 'HH:MM'
+  lockTime: string; // 'HH:MM' — used as reminder time
+  examDate: string | null; // 'YYYY-MM-DD' or null
 }
 
 interface DailyProgress {
@@ -31,6 +32,7 @@ interface AppState {
 
   setFlow: (flow: AppFlow) => void;
   setGoalConfig: (config: GoalConfig) => void;
+  setExamDate: (date: string | null) => void;
   setActiveCourse: (id: string) => void;
   incrementDailyProgress: () => void;
   toggleDarkMode: () => void;
@@ -46,7 +48,7 @@ export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
       flow: 'loading',
-      goalConfig: { frequency: 'daily', customDays: [], lessonTarget: 1, lockTime: '08:00' },
+      goalConfig: { frequency: 'daily', customDays: [], lessonTarget: 1, lockTime: '08:00', examDate: null },
       dailyProgress: { date: todayStr(), count: 0 },
       activeCourseId: null,
       activeLessonIndex: 0,
@@ -55,6 +57,10 @@ export const useAppStore = create<AppState>()(
 
       setFlow: (flow) => set({ flow }),
       setGoalConfig: (config) => set({ goalConfig: config }),
+      setExamDate: (date) =>
+        set((s) => ({
+          goalConfig: s.goalConfig ? { ...s.goalConfig, examDate: date } : null,
+        })),
       setActiveCourse: (id) => set({ activeCourseId: id, activeLessonIndex: 0 }),
       incrementDailyProgress: () =>
         set((s) => {

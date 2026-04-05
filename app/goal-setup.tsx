@@ -16,6 +16,7 @@ import DuoButton from '../components/DuoButton';
 import { Spacing } from '../constants/spacing';
 import { useAppStore } from '../store/useAppStore';
 import { useTheme } from '../hooks/useTheme';
+import { scheduleStudyReminders, requestNotificationPermission } from '../lib/notifications';
 import type { AppColors } from '../constants/Colors';
 
 const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -307,9 +308,12 @@ export default function GoalSetupScreen({ onComplete }: Props) {
     setStep('apps');
   }, []);
 
-  const handleStart = useCallback(() => {
+  const handleStart = useCallback(async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setGoalConfig({ frequency, customDays, lessonTarget, lockTime: toTimeString(lockDate) });
+    const cfg = { frequency, customDays, lessonTarget, lockTime: toTimeString(lockDate), examDate: null };
+    setGoalConfig(cfg);
+    await requestNotificationPermission();
+    await scheduleStudyReminders(cfg);
     onComplete();
   }, [frequency, customDays, lessonTarget, lockDate, setGoalConfig, onComplete]);
 
@@ -333,7 +337,7 @@ export default function GoalSetupScreen({ onComplete }: Props) {
             </View>
             <Text style={styles.title}>How often do you{'\n'}want to learn?</Text>
             <Text style={styles.subtitle}>
-              Apps are only blocked on your goal days — so choose what you can commit to.
+              You'll get a reminder on your goal days — choose what you can commit to.
             </Text>
           </Animated.View>
 
@@ -371,9 +375,9 @@ export default function GoalSetupScreen({ onComplete }: Props) {
             />
             <Text style={styles.descText}>
               {frequency === 'daily'
-                ? 'Apps are blocked every day at your chosen time until your lesson is done.'
+                ? "You'll get a daily reminder at your chosen time to complete your lesson."
                 : frequency === 'weekdays'
-                ? 'Apps are blocked Mon–Fri. Weekends are free — no pressure.'
+                ? "Reminders Mon–Fri. Weekends are free — no pressure."
                 : 'Pick the specific days you want to commit to learning.'}
             </Text>
           </Animated.View>
@@ -470,16 +474,16 @@ export default function GoalSetupScreen({ onComplete }: Props) {
             </View>
           </Animated.View>
 
-          {/* Lock time — custom time picker */}
+          {/* Reminder time — custom time picker */}
           <Animated.View entering={FadeInDown.delay(160).duration(300)}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionLabel}>LOCK TIME</Text>
-              <Text style={styles.sectionSub}>Apps block at this time and unlock once your lesson is done.</Text>
+              <Text style={styles.sectionLabel}>REMINDER TIME</Text>
+              <Text style={styles.sectionSub}>You'll get a notification at this time on your goal days.</Text>
             </View>
             <View style={[styles.pickerCard, { marginTop: 10 }]}>
               <View style={styles.pickerRow}>
                 <View style={[styles.pickerIcon, { backgroundColor: `${C.primary}14` }]}>
-                  <Text style={{ fontSize: 20 }}>🔒</Text>
+                  <Text style={{ fontSize: 20 }}>🔔</Text>
                 </View>
                 <Text style={[styles.pickerTime, { fontFamily: F.bold, color: C.text }]}>
                   {fmtTime(lockDate)}
@@ -527,21 +531,21 @@ export default function GoalSetupScreen({ onComplete }: Props) {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Animated.View entering={FadeInDown.duration(300)} style={styles.header}>
           <View style={styles.badge}>
-            <Text style={styles.badgeEmoji}>📱</Text>
-            <Text style={styles.badgeText}>Screen Time</Text>
+            <Text style={styles.badgeEmoji}>🔔</Text>
+            <Text style={styles.badgeText}>Reminders</Text>
           </View>
-          <Text style={styles.title}>Which apps steal{'\n'}your time?</Text>
+          <Text style={styles.title}>Stay on track{'\n'}with reminders</Text>
           <Text style={styles.subtitle}>
-            Choose apps to block in iOS Screen Time — they'll unlock once your lesson is done.
+            We'll send you a nudge at your chosen time on your goal days.
           </Text>
         </Animated.View>
 
         {/* How it works */}
         <Animated.View entering={FadeInDown.delay(80).duration(300)} style={styles.howCard}>
           {[
-            { icon: 'lock-closed-outline' as const, text: 'Selected apps lock at your chosen time' },
-            { icon: 'book-outline' as const, text: 'Complete your lesson to unlock them instantly' },
-            { icon: 'shield-checkmark-outline' as const, text: "Apple's Screen Time keeps your data private" },
+            { icon: 'notifications-outline' as const, text: "Get a reminder at your set time on goal days" },
+            { icon: 'book-outline' as const, text: 'Complete your lesson to stay on streak' },
+            { icon: 'school-outline' as const, text: 'Exam Mode (coming soon) — locks apps until lessons are done' },
           ].map((item, i) => (
             <View key={i} style={[styles.howRow, i > 0 && styles.howRowBorder]}>
               <View style={styles.howIcon}>
@@ -566,21 +570,21 @@ export default function GoalSetupScreen({ onComplete }: Props) {
             </Text>
           </View>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryKey}>Lock time</Text>
-            <Text style={styles.summaryVal}>🔒 {fmtTime(lockDate)}</Text>
+            <Text style={styles.summaryKey}>Reminder time</Text>
+            <Text style={styles.summaryVal}>🔔 {fmtTime(lockDate)}</Text>
           </View>
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(220).duration(300)} style={styles.infoCard}>
           <Ionicons name="information-circle-outline" size={16} color={C.primary} />
           <Text style={styles.infoCardText}>
-            After setup, you'll be prompted to choose which apps to block in iOS Screen Time.
+            We'll ask for notification permission so we can remind you to complete your lessons.
           </Text>
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(280).duration(300)} style={{ gap: Spacing.sm }}>
           <StepDots />
-          <DuoButton label="Start Unloqing 🔓" onPress={handleStart} />
+          <DuoButton label="Start Unloqing 🔓" onPress={() => { handleStart(); }} />
           <TouchableOpacity onPress={() => setStep('session')} style={styles.backBtn}>
             <Text style={styles.backBtnText}>← Back</Text>
           </TouchableOpacity>

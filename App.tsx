@@ -3,6 +3,7 @@ import * as WebBrowser from "expo-web-browser";
 
 WebBrowser.maybeCompleteAuthSession();
 import { useEffect } from "react";
+import Purchases from "react-native-purchases";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ConvexReactClient } from "convex/react";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
@@ -31,6 +32,11 @@ import HomeScreen from "./app/home";
 const convex = new ConvexReactClient(process.env.EXPO_PUBLIC_CONVEX_URL!);
 
 SplashScreen.preventAutoHideAsync();
+
+const REVENUECAT_IOS_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY ?? '';
+if (REVENUECAT_IOS_KEY) {
+  Purchases.configure({ apiKey: REVENUECAT_IOS_KEY });
+}
 
 export default function App() {
   const { flow, setFlow } = useAppStore();

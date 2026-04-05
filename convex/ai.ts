@@ -71,6 +71,29 @@ Output ONLY valid JSON:
 }`;
 }
 
+async function callGeminiText(
+  transcript: string,
+  lessonCount: number,
+  difficulty: string,
+  apiKey: string,
+  userPrompt?: string,
+): Promise<string> {
+  const { GoogleGenerativeAI } = await import("@google/generative-ai");
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+  const result = await model.generateContent([
+    {
+      text:
+        buildSystemPrompt() +
+        "\n\n" +
+        buildUserPrompt(lessonCount, difficulty, userPrompt) +
+        "\n\n--- TRANSCRIPT ---\n" +
+        transcript,
+    },
+  ]);
+  return result.response.text().trim();
+}
+
 async function callGemini(
   pdfBase64: string,
   lessonCount: number,
@@ -173,10 +196,52 @@ function parseOrRepair(raw: string): any {
   }
 }
 
+export const fetchYoutubeTranscript = action({
+  args: { url: v.string() },
+  handler: async (_ctx, { url }): Promise<string> => {
+    const { YoutubeTranscript } = await import("youtube-transcript");
+
+    const match = url.match(
+      /(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|v\/))([A-Za-z0-9_-]{11})/,
+    );
+    if (!match) throw new Error("Invalid YouTube URL. Paste a full YouTube link.");
+
+    const videoId = match[1];
+
+    let segments: { text: string }[];
+    try {
+      segments = await YoutubeTranscript.fetchTranscript(videoId);
+    } catch (err: any) {
+      const msg: string = err?.message ?? "";
+      if (
+        msg.includes("disabled") ||
+        msg.includes("subtitles") ||
+        msg.includes("transcript") ||
+        msg.includes("not available")
+      ) {
+        throw new Error("This video has no transcript. Try a video with captions enabled.");
+      }
+      throw new Error(`Could not fetch transcript: ${msg}`);
+    }
+
+    if (!segments || segments.length === 0) {
+      throw new Error("This video has no transcript. Try a video with captions enabled.");
+    }
+
+    const text = segments.map((s) => s.text).join(" ").trim();
+    if (text.length < 200) {
+      throw new Error("Transcript is too short to generate a course from. Try a longer video.");
+    }
+
+    return text;
+  },
+});
+
 export const generateCourse = action({
   args: {
     courseId: v.id("courses"),
-    pdfBase64: v.string(),
+    pdfBase64: v.optional(v.string()),
+    transcript: v.optional(v.string()),
     lessonCount: v.number(),
     difficulty: v.union(
       v.literal("beginner"),
@@ -187,24 +252,25 @@ export const generateCourse = action({
   },
   handler: async (
     ctx,
-    { courseId, pdfBase64, lessonCount, difficulty, userPrompt },
+    { courseId, pdfBase64, transcript, lessonCount, difficulty, userPrompt },
   ) => {
     try {
       const geminiKey = process.env.GEMINI_API_KEY;
-      // const claudeKey = process.env.CLAUDE_API_KEY;
 
       if (!geminiKey)
         throw new Error(
           "No AI API key set. Add GEMINI_API_KEY in Convex env vars.",
         );
 
-      let raw = await callGemini(
-        pdfBase64,
-        lessonCount,
-        difficulty,
-        geminiKey,
-        userPrompt,
-      );
+      if (!pdfBase64 && !transcript)
+        throw new Error("Either pdfBase64 or transcript must be provided.");
+
+      let raw: string;
+      if (transcript) {
+        raw = await callGeminiText(transcript, lessonCount, difficulty, geminiKey, userPrompt);
+      } else {
+        raw = await callGemini(pdfBase64!, lessonCount, difficulty, geminiKey, userPrompt);
+      }
 
       // Strip markdown fences if present
       raw = raw
@@ -221,6 +287,9 @@ export const generateCourse = action({
         description: courseData.description ?? "",
         totalLessons: courseData.lessons?.length ?? lessonCount,
       });
+
+      // Clear any lessons from a previous attempt before inserting (handles action retries)
+      await ctx.runMutation(api.courses.clearLessons, { courseId });
 
       const lessons: any[] = Array.isArray(courseData.lessons)
         ? courseData.lessons
