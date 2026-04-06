@@ -1,5 +1,12 @@
 import { useState, useEffect } from 'react';
-import Purchases from 'react-native-purchases';
+import Purchases, { type CustomerInfo } from 'react-native-purchases';
+
+function checkPremium(info: CustomerInfo): boolean {
+  return (
+    !!info.entitlements.active['premium'] ||
+    info.activeSubscriptions.length > 0
+  );
+}
 
 export function useEntitlement() {
   const [isPremium, setIsPremium] = useState(false);
@@ -8,16 +15,19 @@ export function useEntitlement() {
   useEffect(() => {
     Purchases.getCustomerInfo()
       .then((info) => {
-        setIsPremium(!!info.entitlements.active['premium']);
+        setIsPremium(checkPremium(info));
       })
       .catch(() => {
         setIsPremium(false);
       })
       .finally(() => setLoading(false));
 
-    Purchases.addCustomerInfoUpdateListener((info) => {
-      setIsPremium(!!info.entitlements.active['premium']);
-    });
+    const handler = (info: CustomerInfo) => {
+      setIsPremium(checkPremium(info));
+    };
+    Purchases.addCustomerInfoUpdateListener(handler);
+
+    return () => { Purchases.removeCustomerInfoUpdateListener(handler); };
   }, []);
 
   return { isPremium, loading };

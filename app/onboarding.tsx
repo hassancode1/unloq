@@ -1,5 +1,5 @@
 import * as Haptics from "expo-haptics";
-import Purchases from "react-native-purchases";
+import RevenueCatUI, { PAYWALL_RESULT } from "react-native-purchases-ui";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Dimensions,
@@ -1074,20 +1074,15 @@ const cms = StyleSheet.create({
 
 // ── Pricing ────────────────────────────────────────────────────────────────────
 function PricingScreen({ onNext }: { onNext: () => void }) {
-  const [purchasing, setPurchasing] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handlePremium = async () => {
-    setPurchasing(true);
+  const handleGetPremium = async () => {
+    setLoading(true);
     try {
-      const offerings = await Purchases.getOfferings();
-      const pkg = offerings.current?.availablePackages[0];
-      if (pkg) await Purchases.purchasePackage(pkg);
-    } catch {
-      // User cancelled or purchase failed — proceed to free tier
-    } finally {
-      setPurchasing(false);
-      onNext();
-    }
+      await RevenueCatUI.presentPaywall();
+    } catch {}
+    setLoading(false);
+    onNext();
   };
 
   return (
@@ -1095,99 +1090,67 @@ function PricingScreen({ onNext }: { onNext: () => void }) {
       <Text style={pr.eyebrow}>Choose your plan</Text>
       <Text style={pr.title}>Start free,{'\n'}upgrade anytime</Text>
 
-      {/* Free card */}
       <View style={pr.card}>
-        <View style={pr.cardHeader}>
-          <Text style={pr.cardEmoji}>🌱</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={pr.cardName}>Free</Text>
-            <Text style={pr.cardPrice}>$0 forever</Text>
-          </View>
-        </View>
-        {['1 course', 'PDF upload', 'Lessons, flashcards & quiz'].map((f) => (
-          <View key={f} style={pr.featureRow}>
-            <Text style={[pr.featureDot, { color: C.green }]}>✓</Text>
-            <Text style={pr.featureText}>{f}</Text>
-          </View>
-        ))}
-      </View>
-
-      {/* Premium card */}
-      <View style={[pr.card, pr.cardPremium]}>
-        <View style={pr.premiumBadge}>
-          <Text style={pr.premiumBadgeTxt}>POPULAR</Text>
-        </View>
-        <View style={pr.cardHeader}>
-          <Text style={pr.cardEmoji}>⚡</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={[pr.cardName, { color: '#fff' }]}>Premium</Text>
-            <Text style={[pr.cardPrice, { color: 'rgba(255,255,255,0.7)' }]}>$9.99 / month</Text>
-          </View>
-        </View>
-        {['Unlimited courses', 'YouTube video import', 'PDF upload', 'Exam Mode (coming soon)'].map((f) => (
-          <View key={f} style={pr.featureRow}>
-            <Text style={[pr.featureDot, { color: '#fff' }]}>✓</Text>
-            <Text style={[pr.featureText, { color: 'rgba(255,255,255,0.9)' }]}>{f}</Text>
+        {[
+          { bold: 'Unlimited courses', sub: 'Upload as many PDFs and YouTube videos as you want' },
+          { bold: 'YouTube import', sub: 'Turn any lecture into a structured course instantly' },
+          { bold: 'App blocking', sub: 'Lock distracting apps until your lesson is done' },
+          { bold: 'Flashcards & quizzes', sub: 'Active recall tools built into every lesson' },
+        ].map((f) => (
+          <View key={f.bold} style={pr.featureRow}>
+            <Text style={pr.featureCheck}>✓</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={pr.featureBold}>{f.bold}</Text>
+              <Text style={pr.featureSub}>{f.sub}</Text>
+            </View>
           </View>
         ))}
       </View>
 
-      {/* CTAs */}
       <TouchableOpacity
-        style={[pr.btnPrimary, purchasing && { opacity: 0.7 }]}
-        onPress={handlePremium}
-        disabled={purchasing}
+        style={[pr.btnPrimary, loading && { opacity: 0.7 }]}
+        onPress={handleGetPremium}
+        disabled={loading}
         activeOpacity={0.85}
       >
-        <Text style={pr.btnPrimaryTxt}>{purchasing ? 'Processing…' : 'Get Premium — $9.99/mo'}</Text>
+        <Text style={pr.btnPrimaryTxt}>{loading ? 'Loading…' : 'Get Premium'}</Text>
       </TouchableOpacity>
 
       <TouchableOpacity onPress={onNext} activeOpacity={0.7} style={pr.btnSecondary}>
         <Text style={pr.btnSecondaryTxt}>Start with Free →</Text>
       </TouchableOpacity>
 
-      <Text style={pr.legal}>Cancel anytime · Billed monthly · Restore purchases in settings</Text>
+      <Text style={pr.legal}>Free plan includes 1 course · Cancel anytime</Text>
     </Animated.View>
   );
 }
 
 const pr = StyleSheet.create({
-  root: { flex: 1, paddingHorizontal: 24, paddingTop: 16, gap: 12 },
+  root: { flex: 1, paddingHorizontal: 24, paddingTop: 16, gap: 14 },
   eyebrow: { fontSize: 11, fontFamily: F.extraBold, color: C.cta, letterSpacing: 1.4, textTransform: 'uppercase' },
-  title: { fontSize: 28, fontFamily: F.extraBold, color: C.title, lineHeight: 36, marginBottom: 4 },
+  title: { fontSize: 28, fontFamily: F.extraBold, color: C.title, lineHeight: 36 },
   card: {
+    backgroundColor: '#F5F5FA',
     borderRadius: 20,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: C.cardBorder,
-    backgroundColor: C.card,
     padding: 16,
-    gap: 8,
+    gap: 14,
   },
-  cardPremium: { backgroundColor: C.cta, borderColor: C.cta },
-  premiumBadge: {
-    position: 'absolute', top: -10, right: 16,
-    backgroundColor: '#F59E0B', borderRadius: 6,
-    paddingHorizontal: 8, paddingVertical: 3,
-  },
-  premiumBadgeTxt: { fontSize: 10, fontFamily: F.extraBold, color: '#fff', letterSpacing: 0.8 },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 },
-  cardEmoji: { fontSize: 28 },
-  cardName: { fontSize: 17, fontFamily: F.extraBold, color: C.title },
-  cardPrice: { fontSize: 13, fontFamily: F.semi, color: C.sub },
-  featureRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  featureDot: { fontSize: 13, fontFamily: F.extraBold, width: 16 },
-  featureText: { fontSize: 13, fontFamily: F.semi, color: C.sub },
+  featureRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+  featureCheck: { fontSize: 15, color: C.cta, fontFamily: F.extraBold, width: 18, marginTop: 1 },
+  featureBold: { fontSize: 14, fontFamily: F.bold, color: C.title },
+  featureSub: { fontSize: 12, fontFamily: F.regular, color: C.sub, lineHeight: 17, marginTop: 1 },
   btnPrimary: {
     backgroundColor: C.cta, borderRadius: 16,
     paddingVertical: 16, alignItems: 'center',
-    marginTop: 4,
     shadowColor: C.ctaShadow, shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3, shadowRadius: 8,
+    shadowOpacity: 0.25, shadowRadius: 8,
   },
   btnPrimaryTxt: { fontSize: 16, fontFamily: F.extraBold, color: '#fff' },
-  btnSecondary: { alignItems: 'center', paddingVertical: 10 },
+  btnSecondary: { alignItems: 'center', paddingVertical: 8 },
   btnSecondaryTxt: { fontSize: 15, fontFamily: F.semi, color: C.sub },
-  legal: { fontSize: 11, fontFamily: F.regular, color: C.sub, textAlign: 'center', paddingBottom: 4 },
+  legal: { fontSize: 11, fontFamily: F.regular, color: C.sub, textAlign: 'center' },
 });
 
 // ── Main ───────────────────────────────────────────────────────────────────────

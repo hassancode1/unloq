@@ -3,6 +3,7 @@ import * as Haptics from 'expo-haptics';
 import React from 'react';
 import {
   Image,
+  Linking,
   ScrollView,
   StyleSheet,
   Switch,
@@ -442,6 +443,34 @@ export default function SettingsScreen() {
                 1.0.0
               </Text>
             </View>
+            <View style={styles.separator} />
+            <TouchableOpacity
+              style={styles.actionRow}
+              activeOpacity={0.7}
+              onPress={() => Linking.openURL('https://hassancode1.github.io/unloq/privacy-policy.html')}
+            >
+              <View style={[styles.iconBox, { backgroundColor: `${C.primary}12` }]}>
+                <Ionicons name="shield-checkmark-outline" size={15} color={C.primary} />
+              </View>
+              <Text style={[styles.rowLabel, { fontSize: fs(14), fontFamily: F.medium, color: C.sub }]}>
+                Privacy Policy
+              </Text>
+              <Ionicons name="open-outline" size={14} color={C.muted} />
+            </TouchableOpacity>
+            <View style={styles.separator} />
+            <TouchableOpacity
+              style={styles.actionRow}
+              activeOpacity={0.7}
+              onPress={() => Linking.openURL('https://hassancode1.github.io/unloq/terms-of-service.html')}
+            >
+              <View style={[styles.iconBox, { backgroundColor: `${C.primary}12` }]}>
+                <Ionicons name="document-text-outline" size={15} color={C.primary} />
+              </View>
+              <Text style={[styles.rowLabel, { fontSize: fs(14), fontFamily: F.medium, color: C.sub }]}>
+                Terms of Service
+              </Text>
+              <Ionicons name="open-outline" size={14} color={C.muted} />
+            </TouchableOpacity>
           </View>
         </Animated.View>
 

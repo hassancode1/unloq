@@ -94,6 +94,41 @@ async function callGeminiText(
   return result.response.text().trim();
 }
 
+async function callGeminiVideo(
+  youtubeUrl: string,
+  lessonCount: number,
+  difficulty: string,
+  apiKey: string,
+  userPrompt?: string,
+): Promise<string> {
+  const { GoogleGenerativeAI } = await import("@google/generative-ai");
+  const genAI = new GoogleGenerativeAI(apiKey);
+
+  // gemini-1.5-pro supports YouTube URL via fileData
+  try {
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+    const result = await model.generateContent([
+      { fileData: { mimeType: "video/mp4", fileUri: youtubeUrl } },
+      { text: buildSystemPrompt() + "\n\n" + buildUserPrompt(lessonCount, difficulty, userPrompt) },
+    ]);
+    return result.response.text().trim();
+  } catch {
+    // Fallback: ask Gemini to generate from its knowledge of the video URL
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const result = await model.generateContent([
+      {
+        text:
+          "You are given a YouTube video URL. Use your knowledge of the video's content to generate a structured course.\n\n" +
+          `YouTube URL: ${youtubeUrl}\n\n` +
+          buildSystemPrompt() +
+          "\n\n" +
+          buildUserPrompt(lessonCount, difficulty, userPrompt),
+      },
+    ]);
+    return result.response.text().trim();
+  }
+}
+
 async function callGemini(
   pdfBase64: string,
   lessonCount: number,
@@ -196,44 +231,133 @@ function parseOrRepair(raw: string): any {
   }
 }
 
+function decodeXmlEntities(s: string): string {
+  return s
+    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&apos;/g, "'")
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(parseInt(d, 10)));
+}
+
+function parseTranscriptXml(xml: string): string[] {
+  const texts: string[] = [];
+  // New format: <p t="..." d="..."><s>word</s></p>
+  for (const pm of xml.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/g)) {
+    let text = "";
+    for (const sm of pm[1].matchAll(/<s[^>]*>([^<]*)<\/s>/g)) text += sm[1];
+    if (!text) text = pm[1].replace(/<[^>]+>/g, "");
+    const clean = decodeXmlEntities(text).trim();
+    if (clean) texts.push(clean);
+  }
+  // Old format: <text start="..." dur="...">...</text>
+  if (texts.length === 0) {
+    for (const tm of xml.matchAll(/<text[^>]*>([^<]*)<\/text>/g)) {
+      const clean = decodeXmlEntities(tm[1]).trim();
+      if (clean) texts.push(clean);
+    }
+  }
+  return texts;
+}
+
+const YT_API_KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8";
+
+async function fetchCaptionTracks(videoId: string): Promise<any[]> {
+  const clients = [
+    {
+      name: "TVHTML5_SIMPLY_EMBEDDED_PLAYER",
+      version: "2.0",
+      ua: "Mozilla/5.0 (PlayStation 4 3.11) AppleWebKit/537.73 (KHTML, like Gecko)",
+    },
+    {
+      name: "WEB",
+      version: "2.20240101.00.00",
+      ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    },
+    {
+      name: "ANDROID",
+      version: "20.10.38",
+      ua: "com.google.android.youtube/20.10.38 (Linux; U; Android 14)",
+    },
+  ];
+
+  for (const client of clients) {
+    try {
+      const res = await fetch(
+        `https://www.youtube.com/youtubei/v1/player?key=${YT_API_KEY}&prettyPrint=false`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "User-Agent": client.ua },
+          body: JSON.stringify({
+            context: { client: { clientName: client.name, clientVersion: client.version } },
+            videoId,
+          }),
+        }
+      );
+      const data = await res.json();
+      const tracks: any[] = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks ?? [];
+      if (tracks.length > 0) return tracks;
+    } catch {
+      // try next client
+    }
+  }
+
+  // Final fallback: scrape the watch page
+  const pageRes = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+    headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+  });
+  const html = await pageRes.text();
+  const marker = '"captions":';
+  const idx = html.indexOf(marker);
+  if (idx !== -1) {
+    try {
+      // Extract the captions JSON object
+      let depth = 0, start = idx + marker.length, end = start;
+      for (; end < html.length; end++) {
+        if (html[end] === '{') depth++;
+        else if (html[end] === '}') { depth--; if (depth === 0) { end++; break; } }
+      }
+      const captionsObj = JSON.parse(html.slice(start, end));
+      const tracks = captionsObj?.playerCaptionsTracklistRenderer?.captionTracks ?? [];
+      if (tracks.length > 0) return tracks;
+    } catch { /* fall through */ }
+  }
+
+  return [];
+}
+
+async function getYouTubeTranscript(videoId: string): Promise<string> {
+  const tracks = await fetchCaptionTracks(videoId);
+
+  if (tracks.length === 0) {
+    throw new Error("This video has no transcript. Try a video with captions enabled.");
+  }
+
+  const track = tracks.find((t: any) => t.languageCode?.startsWith("en")) ?? tracks[0];
+  const captionRes = await fetch(track.baseUrl);
+  const xml = await captionRes.text();
+  const texts = parseTranscriptXml(xml);
+
+  if (texts.length === 0) {
+    throw new Error("This video has no transcript. Try a video with captions enabled.");
+  }
+
+  const result = texts.join(" ").trim();
+  if (result.length < 200) {
+    throw new Error("Transcript is too short to generate a course from. Try a longer video.");
+  }
+  return result;
+}
+
 export const fetchYoutubeTranscript = action({
   args: { url: v.string() },
   handler: async (_ctx, { url }): Promise<string> => {
-    const { YoutubeTranscript } = await import("youtube-transcript");
-
-    const match = url.match(
-      /(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|v\/))([A-Za-z0-9_-]{11})/,
+    const trimmed = url.trim();
+    const match = trimmed.match(
+      /(?:youtu\.be\/|(?:www\.|m\.)?youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|v\/|shorts\/))([A-Za-z0-9_-]{11})/,
     );
     if (!match) throw new Error("Invalid YouTube URL. Paste a full YouTube link.");
 
-    const videoId = match[1];
-
-    let segments: { text: string }[];
-    try {
-      segments = await YoutubeTranscript.fetchTranscript(videoId);
-    } catch (err: any) {
-      const msg: string = err?.message ?? "";
-      if (
-        msg.includes("disabled") ||
-        msg.includes("subtitles") ||
-        msg.includes("transcript") ||
-        msg.includes("not available")
-      ) {
-        throw new Error("This video has no transcript. Try a video with captions enabled.");
-      }
-      throw new Error(`Could not fetch transcript: ${msg}`);
-    }
-
-    if (!segments || segments.length === 0) {
-      throw new Error("This video has no transcript. Try a video with captions enabled.");
-    }
-
-    const text = segments.map((s) => s.text).join(" ").trim();
-    if (text.length < 200) {
-      throw new Error("Transcript is too short to generate a course from. Try a longer video.");
-    }
-
-    return text;
+    return getYouTubeTranscript(match[1]);
   },
 });
 
@@ -242,6 +366,7 @@ export const generateCourse = action({
     courseId: v.id("courses"),
     pdfBase64: v.optional(v.string()),
     transcript: v.optional(v.string()),
+    youtubeUrl: v.optional(v.string()),
     lessonCount: v.number(),
     difficulty: v.union(
       v.literal("beginner"),
@@ -252,7 +377,7 @@ export const generateCourse = action({
   },
   handler: async (
     ctx,
-    { courseId, pdfBase64, transcript, lessonCount, difficulty, userPrompt },
+    { courseId, pdfBase64, transcript, youtubeUrl, lessonCount, difficulty, userPrompt },
   ) => {
     try {
       const geminiKey = process.env.GEMINI_API_KEY;
@@ -262,12 +387,14 @@ export const generateCourse = action({
           "No AI API key set. Add GEMINI_API_KEY in Convex env vars.",
         );
 
-      if (!pdfBase64 && !transcript)
-        throw new Error("Either pdfBase64 or transcript must be provided.");
+      if (!pdfBase64 && !transcript && !youtubeUrl)
+        throw new Error("Either pdfBase64, transcript, or youtubeUrl must be provided.");
 
       let raw: string;
       if (transcript) {
         raw = await callGeminiText(transcript, lessonCount, difficulty, geminiKey, userPrompt);
+      } else if (youtubeUrl) {
+        raw = await callGeminiVideo(youtubeUrl, lessonCount, difficulty, geminiKey, userPrompt);
       } else {
         raw = await callGemini(pdfBase64!, lessonCount, difficulty, geminiKey, userPrompt);
       }

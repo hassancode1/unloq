@@ -4,9 +4,7 @@ import * as FileSystem from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
-  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -32,6 +30,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useAction, useQuery } from 'convex/react';
 import Purchases from 'react-native-purchases';
+import RevenueCatUI, { PAYWALL_RESULT } from 'react-native-purchases-ui';
 import { api } from '../convex/_generated/api';
 import { useTheme } from '../hooks/useTheme';
 import { useEntitlement } from '../hooks/useEntitlement';
@@ -41,7 +40,7 @@ import Toast from 'react-native-toast-message';
 type Difficulty = 'beginner' | 'intermediate' | 'advanced';
 type SourceTab = 'pdf' | 'youtube';
 
-const LESSON_STEPS = [7, 10, 12, 15];
+const LESSON_STEPS = [5, 7, 10, 12, 15];
 
 const DIFFICULTIES: { id: Difficulty; label: string; icon: string; color: string }[] = [
   { id: 'beginner',     label: 'Beginner',     icon: 'leaf',       color: '#16A34A' },
@@ -229,21 +228,17 @@ export default function UploadScreen({ onBack }: Props) {
   const [phase, setPhase] = useState<'idle' | 'uploading' | 'done'>('idle');
 
   const [sourceTab, setSourceTab]           = useState<SourceTab>('pdf');
-  const [youtubeUrl, setYoutubeUrl]         = useState('');
-  const [transcriptFetched, setTranscriptFetched] = useState<string | null>(null);
-  const [transcriptLoading, setTranscriptLoading] = useState(false);
-  const [showPaywall, setShowPaywall]       = useState(false);
+  const [youtubeUrl, setYoutubeUrl] = useState('');
 
   const lessonCount = LESSON_STEPS[lessonIdx];
   const difficulty  = DIFFICULTIES[diffIdx];
 
   const { isPremium } = useEntitlement();
   const existingCourses = useQuery(api.courses.list);
-  const hasReachedFreeLimit = !isPremium && (existingCourses?.length ?? 0) >= 1;
+  const hasReachedFreeLimit = !isPremium && (existingCourses?.filter(c => c.status !== 'error').length ?? 0) >= 1;
 
-  const createCourse    = useMutation(api.courses.create);
-  const generateCourse  = useAction(api.ai.generateCourse);
-  const fetchTranscript = useAction(api.ai.fetchYoutubeTranscript);
+  const createCourse   = useMutation(api.courses.create);
+  const generateCourse = useAction(api.ai.generateCourse);
 
   const btnScale = useSharedValue(1);
   const btnAnim  = useAnimatedStyle(() => ({ transform: [{ scale: btnScale.value }] }));
@@ -265,44 +260,49 @@ export default function UploadScreen({ onBack }: Props) {
     }
   };
 
+  const youtubeValid = /(?:youtu\.be\/|(?:www\.|m\.)?youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|v\/|shorts\/))([A-Za-z0-9_-]{11})/.test(youtubeUrl.trim());
+
   const canGenerate =
     phase === 'idle' &&
     courseName.trim().length > 0 &&
-    (sourceTab === 'pdf' ? !!docUri : !!transcriptFetched);
+    (sourceTab === 'pdf' ? !!docUri : youtubeValid);
 
   const toastError = (err: any) => {
-    const raw: string = err?.message ?? '';
+    // Convex wraps server errors — extract the real message
+    const raw: string = err?.data?.message ?? err?.message ?? String(err ?? '');
     let message = 'Something went wrong. Please try again.';
-    if (raw.includes('too large') || raw.includes('5 MiB') || raw.includes('size')) message = 'PDF is too large. Please use a file under 3.75 MB.';
+    if (raw.includes('transcript') || raw.includes('captions') || raw.includes('subtitles') || raw.includes('no transcript')) {
+      Toast.show({ type: 'error', text1: "Can't generate this video", text2: "This video has no captions. Try a video with subtitles enabled.", visibilityTime: 5000 });
+      return;
+    }
+    else if (raw.includes('too large') || raw.includes('5 MiB') || raw.includes('size')) message = 'PDF is too large. Please use a file under 3.75 MB.';
     else if (raw.includes('API key')) message = 'AI service not configured. Contact support.';
     else if (raw.includes('429') || raw.includes('quota') || raw.includes('rate limit')) message = 'AI is busy right now. Wait a moment and try again.';
     else if (raw.includes('parse') || raw.includes('JSON')) message = 'AI returned an unexpected response. Try again.';
-    else if (raw.includes('network') || raw.includes('fetch')) message = 'Network error. Check your connection and try again.';
     else if (raw.includes('PDF') || raw.includes('pdf')) message = 'Could not read the PDF. Make sure it\'s a valid text-based PDF.';
-    else if (raw.includes('transcript') || raw.includes('captions') || raw.includes('subtitles')) message = raw;
-    else if (raw.includes('YouTube') || raw.includes('youtube')) message = raw;
-    Toast.show({ type: 'error', text1: 'Failed', text2: message, visibilityTime: 4000 });
+    else if (raw.includes('network') || raw.includes('fetch')) message = 'Network error. Check your connection and try again.';
+    Toast.show({ type: 'error', text1: 'Failed', text2: message, visibilityTime: 5000 });
   };
 
-  const handleFetchTranscript = async () => {
-    if (!youtubeUrl.trim() || transcriptLoading) return;
-    setTranscriptLoading(true);
-    setTranscriptFetched(null);
-    try {
-      const text = await fetchTranscript({ url: youtubeUrl.trim() });
-      setTranscriptFetched(text);
-      if (!courseName.trim()) setCourseName('YouTube Course');
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Could not fetch transcript', text2: err?.message, visibilityTime: 5000 });
-    } finally {
-      setTranscriptLoading(false);
+  const presentPaywall = async (): Promise<boolean> => {
+    const result = await RevenueCatUI.presentPaywallIfNeeded({
+      requiredEntitlementIdentifier: 'premium',
+    });
+    const purchased = result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED;
+    if (purchased) {
+      // Force-refresh so isPremium updates before the next render
+      await Purchases.getCustomerInfo();
     }
+    return purchased;
   };
 
   const handleGenerate = async () => {
     if (!canGenerate) return;
-    if (hasReachedFreeLimit) { setShowPaywall(true); return; }
+    if (hasReachedFreeLimit) {
+      const purchased = await presentPaywall();
+      if (!purchased) return;
+      // fall through and generate after successful purchase
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     btnScale.value = withSpring(0.96, { damping: 12, stiffness: 500 }, () => {
       btnScale.value = withSpring(1);
@@ -334,15 +334,16 @@ export default function UploadScreen({ onBack }: Props) {
         });
         await generateCourse({ courseId, pdfBase64, lessonCount, difficulty: difficulty.id, userPrompt: prompt.trim() || undefined });
       } else {
+        if (!courseName.trim()) setCourseName('YouTube Course');
         const courseId = await createCourse({
-          title: courseName.trim(),
+          title: courseName.trim() || 'YouTube Course',
           description: prompt.trim(),
           docName: youtubeUrl.trim(),
           sourceType: 'youtube',
           totalLessons: lessonCount,
           difficulty: difficulty.id,
         });
-        await generateCourse({ courseId, transcript: transcriptFetched!, lessonCount, difficulty: difficulty.id, userPrompt: prompt.trim() || undefined });
+        await generateCourse({ courseId, youtubeUrl: youtubeUrl.trim(), lessonCount, difficulty: difficulty.id, userPrompt: prompt.trim() || undefined });
       }
       setPhase('done');
       setTimeout(onBack, 1600);
@@ -351,66 +352,6 @@ export default function UploadScreen({ onBack }: Props) {
       toastError(err);
     }
   };
-
-  // ── Paywall modal ───────────────────────────────────────────────────────────
-  const PaywallModal = () => (
-    <Modal visible={showPaywall} transparent animationType="slide" onRequestClose={() => setShowPaywall(false)}>
-      <View style={S.paywallOverlay}>
-        <View style={[S.paywallSheet, { backgroundColor: C.bg, borderColor: C.border }]}>
-          <Text style={{ fontSize: 44, textAlign: 'center' }}>⚡</Text>
-          <Text style={[S.paywallTitle, { fontFamily: F.bold, fontSize: fs(22), color: C.text }]}>
-            Upgrade to Premium
-          </Text>
-          <Text style={[S.paywallSub, { fontFamily: F.regular, fontSize: fs(14), color: C.sub }]}>
-            Free plan includes 1 course. Go Premium for unlimited.
-          </Text>
-          <View style={[S.paywallFeatures, { borderColor: C.border }]}>
-            {[
-              '✓  Unlimited course generation',
-              '✓  YouTube video import',
-              '✓  Priority AI processing',
-              '✓  Exam Mode (coming soon)',
-            ].map((f) => (
-              <Text key={f} style={[{ fontFamily: F.semiBold, fontSize: fs(14), color: C.text, paddingVertical: 6 }]}>{f}</Text>
-            ))}
-          </View>
-          <TouchableOpacity
-            style={[S.paywallBtn, { backgroundColor: C.primary }]}
-            onPress={async () => {
-              try {
-                const offerings = await Purchases.getOfferings();
-                const pkg = offerings.current?.availablePackages[0];
-                if (pkg) {
-                  await Purchases.purchasePackage(pkg);
-                  setShowPaywall(false);
-                }
-              } catch (e: any) {
-                if (!e.userCancelled) Toast.show({ type: 'error', text1: 'Purchase failed', text2: e?.message });
-              }
-            }}
-            activeOpacity={0.85}
-          >
-            <Text style={[{ fontFamily: F.bold, fontSize: fs(16), color: '#fff' }]}>Upgrade — $9.99/mo</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={async () => {
-              await Purchases.restorePurchases();
-              setShowPaywall(false);
-            }}
-          >
-            <Text style={[{ fontFamily: F.regular, fontSize: fs(13), color: C.muted, textAlign: 'center', paddingVertical: 8 }]}>
-              Restore Purchases
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => setShowPaywall(false)}>
-            <Text style={[{ fontFamily: F.regular, fontSize: fs(13), color: C.muted, textAlign: 'center', paddingVertical: 4 }]}>
-              Maybe later
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
-  );
 
   // ── Generating state ────────────────────────────────────────────────────────
   if (phase === 'uploading') {
@@ -441,7 +382,6 @@ export default function UploadScreen({ onBack }: Props) {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <View style={[S.root, { backgroundColor: C.bg, paddingTop: insets.top }]}>
-        <PaywallModal />
 
         {/* Header */}
         <View style={[S.header, { borderBottomColor: C.border }]}>
@@ -473,12 +413,16 @@ export default function UploadScreen({ onBack }: Props) {
                   <TouchableOpacity
                     key={tab}
                     style={[S.tabBtn, active && { backgroundColor: C.primary }]}
-                    onPress={() => {
-                      if (isYoutubeLocked) { setShowPaywall(true); return; }
+                    onPress={async () => {
+                      if (isYoutubeLocked) {
+                        const purchased = await presentPaywall();
+                        if (!purchased) return;
+                        // purchased — fall through to switch tab
+                      }
                       Haptics.selectionAsync();
                       setSourceTab(tab);
                       setDocUri(null); setDocName(null);
-                      setYoutubeUrl(''); setTranscriptFetched(null);
+                      setYoutubeUrl('');
                     }}
                     activeOpacity={0.8}
                   >
@@ -497,6 +441,13 @@ export default function UploadScreen({ onBack }: Props) {
                 );
               })}
             </View>
+
+            {/* YouTube Pro caption */}
+            {!isPremium && (
+              <Text style={[S.proCaptionTxt, { fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>
+                🔒 YouTube import is a Pro feature — upgrade to unlock
+              </Text>
+            )}
 
             {/* PDF upload zone */}
             {sourceTab === 'pdf' && (
@@ -543,8 +494,11 @@ export default function UploadScreen({ onBack }: Props) {
 
             {/* YouTube URL input */}
             {sourceTab === 'youtube' && (
-              <View style={{ marginTop: 10, gap: 10 }}>
-                <View style={[S.inputCard, { backgroundColor: C.surface, borderColor: transcriptFetched ? C.primary : C.border }]}>
+              <View style={{ marginTop: 10 }}>
+                <View style={[S.inputCard, {
+                  backgroundColor: C.surface,
+                  borderColor: youtubeUrl.trim().length === 0 ? C.border : youtubeValid ? C.primary : C.error,
+                }]}>
                   <View style={S.inputRow}>
                     <Ionicons name="logo-youtube" size={16} color="#FF0000" />
                     <TextInput
@@ -552,38 +506,24 @@ export default function UploadScreen({ onBack }: Props) {
                       placeholder="Paste YouTube URL…"
                       placeholderTextColor={C.muted}
                       value={youtubeUrl}
-                      onChangeText={(v) => { setYoutubeUrl(v); setTranscriptFetched(null); }}
+                      onChangeText={setYoutubeUrl}
                       autoCapitalize="none"
                       keyboardType="url"
-                      returnKeyType="go"
-                      onSubmitEditing={handleFetchTranscript}
+                      returnKeyType="done"
                     />
-                    {transcriptFetched && <Ionicons name="checkmark-circle" size={18} color="#16A34A" />}
+                    {youtubeUrl.trim().length > 0 && (
+                      <Ionicons
+                        name={youtubeValid ? 'checkmark-circle' : 'close-circle'}
+                        size={18}
+                        color={youtubeValid ? C.primary : C.error}
+                      />
+                    )}
                   </View>
                 </View>
-
-                {transcriptFetched ? (
-                  <View style={[S.transcriptBadge, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}>
-                    <Ionicons name="document-text-outline" size={14} color="#16A34A" />
-                    <Text style={[{ fontFamily: F.semiBold, fontSize: fs(12), color: '#16A34A' }]}>
-                      Transcript ready · ~{Math.round(transcriptFetched.split(' ').length / 100) * 100} words
-                    </Text>
-                  </View>
-                ) : (
-                  <TouchableOpacity
-                    style={[S.fetchBtn, { backgroundColor: youtubeUrl.trim() ? C.primary : C.surfaceAlt, borderColor: youtubeUrl.trim() ? C.primary : C.border }]}
-                    onPress={handleFetchTranscript}
-                    disabled={!youtubeUrl.trim() || transcriptLoading}
-                    activeOpacity={0.85}
-                  >
-                    {transcriptLoading
-                      ? <ActivityIndicator size="small" color="#fff" />
-                      : <Ionicons name="download-outline" size={16} color={youtubeUrl.trim() ? '#fff' : C.muted} />
-                    }
-                    <Text style={[{ fontFamily: F.semiBold, fontSize: fs(14), color: youtubeUrl.trim() ? '#fff' : C.muted }]}>
-                      {transcriptLoading ? 'Fetching…' : 'Fetch Transcript'}
-                    </Text>
-                  </TouchableOpacity>
+                {youtubeUrl.trim().length > 0 && !youtubeValid && (
+                  <Text style={{ fontFamily: F.regular, fontSize: fs(12), color: C.error, marginTop: 4, paddingHorizontal: 2 }}>
+                    Not a valid YouTube URL
+                  </Text>
                 )}
               </View>
             )}
@@ -663,6 +603,7 @@ export default function UploadScreen({ onBack }: Props) {
             <View style={S.chipRow}>
               {LESSON_STEPS.map((n, i) => {
                 const active = lessonIdx === i;
+                const locked = !isPremium && i > 0;
                 return (
                   <TouchableOpacity
                     key={n}
@@ -672,16 +613,28 @@ export default function UploadScreen({ onBack }: Props) {
                         backgroundColor: active ? C.primaryBg : C.surface,
                         borderColor: active ? C.primary : C.border,
                         flex: 1,
+                        opacity: locked ? 0.45 : 1,
                       },
                     ]}
-                    onPress={() => { Haptics.selectionAsync(); setLessonIdx(i); }}
+                    onPress={async () => {
+                      if (locked) {
+                        const purchased = await presentPaywall();
+                        if (!purchased) return;
+                      }
+                      Haptics.selectionAsync();
+                      setLessonIdx(i);
+                    }}
                     activeOpacity={0.75}
                   >
-                    <Text style={[S.lessonChipNum, { fontFamily: F.bold, fontSize: fs(18), color: active ? C.primary : C.text }]}>
-                      {n}
-                    </Text>
+                    {locked ? (
+                      <Ionicons name="lock-closed" size={13} color={C.muted} />
+                    ) : (
+                      <Text style={[S.lessonChipNum, { fontFamily: F.bold, fontSize: fs(18), color: active ? C.primary : C.text }]}>
+                        {n}
+                      </Text>
+                    )}
                     <Text style={[S.lessonChipSub, { fontFamily: F.regular, fontSize: fs(11), color: active ? C.primary : C.muted }]}>
-                      lessons
+                      {locked ? 'pro' : 'lessons'}
                     </Text>
                   </TouchableOpacity>
                 );
@@ -710,12 +663,12 @@ export default function UploadScreen({ onBack }: Props) {
                 Upload a PDF to get started
               </Text>
             )}
-            {sourceTab === 'youtube' && !transcriptFetched && (
+            {sourceTab === 'youtube' && !youtubeValid && !youtubeUrl.trim() && (
               <Text style={[S.generateHint, { fontFamily: F.regular, fontSize: fs(12), color: C.muted }]}>
-                Fetch a transcript to get started
+                Paste a YouTube URL to get started
               </Text>
             )}
-            {(sourceTab === 'pdf' ? !!docUri : !!transcriptFetched) && !courseName.trim() && (
+            {(sourceTab === 'pdf' ? !!docUri : youtubeValid) && !courseName.trim() && (
               <Text style={[S.generateHint, { fontFamily: F.regular, fontSize: fs(12), color: C.muted }]}>
                 Enter a course name to continue
               </Text>
@@ -839,6 +792,7 @@ const S = StyleSheet.create({
   },
   lessonChipNum: {},
   lessonChipSub: {},
+  proCaptionTxt: { textAlign: 'center', marginTop: 6 },
 
   // Error
   errorBanner: {
@@ -905,36 +859,6 @@ const S = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 14,
     borderWidth: 1.5,
-  },
-
-  // Paywall
-  paywallOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  paywallSheet: {
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    borderTopWidth: 1,
-    padding: Spacing.xl,
-    gap: Spacing.md,
-    alignItems: 'center',
-  },
-  paywallTitle: { textAlign: 'center' },
-  paywallSub: { textAlign: 'center', lineHeight: 20 },
-  paywallFeatures: {
-    width: '100%',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    paddingVertical: Spacing.sm,
-    gap: 2,
-  },
-  paywallBtn: {
-    width: '100%',
-    paddingVertical: 16,
-    borderRadius: 16,
-    alignItems: 'center',
   },
 
   // States (generating / done)

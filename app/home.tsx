@@ -1,5 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import Purchases from 'react-native-purchases';
+import RevenueCatUI, { PAYWALL_RESULT } from 'react-native-purchases-ui';
 import React, { useState } from 'react';
 import {
   Alert,
@@ -22,6 +24,7 @@ import { api } from '../convex/_generated/api';
 import { Id } from '../convex/_generated/dataModel';
 
 import { useTheme } from '../hooks/useTheme';
+import { useEntitlement } from '../hooks/useEntitlement';
 import { useAppStore, type GoalConfig } from '../store/useAppStore';
 import { Spacing } from '../constants/spacing';
 import type { AppColors } from '../constants/Colors';
@@ -134,9 +137,11 @@ function CoursesTab({ onUpload, onCourseSelect, C, fs, F }: { onUpload: () => vo
   const styles = React.useMemo(() => makeCourseStyles(C), [C]);
   const { goalConfig, dailyProgress } = useAppStore();
   const viewer = useQuery(api.users.currentUser);
+  const { isPremium } = useEntitlement();
   const rawCourses = useQuery(api.courses.list);
   const isLoading = rawCourses === undefined;
   const courses = ((rawCourses ?? []) as any[]).filter((c: any) => c.status === 'ready');
+  const atFreeLimit = !isPremium && ((rawCourses ?? []) as any[]).filter((c: any) => c.status !== 'error').length >= 1;
   const removeCourse = useMutation(api.courses.remove);
 
   const handleCoursePress = async (course: any) => {
@@ -204,6 +209,31 @@ function CoursesTab({ onUpload, onCourseSelect, C, fs, F }: { onUpload: () => vo
                 {courses.length} course{courses.length !== 1 ? 's' : ''}
               </Text>
             </View>
+          )}
+          {isPremium ? (
+            <View style={[styles.proBadge, { backgroundColor: `${C.primary}18`, borderColor: `${C.primary}35` }]}>
+              <Ionicons name="star" size={10} color={C.primary} />
+              <Text style={[styles.proBadgeTxt, { fontFamily: F.extraBold, fontSize: fs(10), color: C.primary }]}>
+                PRO
+              </Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              onPress={async () => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                const result = await RevenueCatUI.presentPaywall();
+                if (result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED) {
+                  await Purchases.getCustomerInfo();
+                }
+              }}
+              activeOpacity={0.8}
+              style={[styles.proBadge, { backgroundColor: `${C.primary}10`, borderColor: `${C.primary}25` }]}
+            >
+              <Ionicons name="flash-outline" size={10} color={C.primary} />
+              <Text style={[styles.proBadgeTxt, { fontFamily: F.bold, fontSize: fs(10), color: C.primary }]}>
+                Upgrade
+              </Text>
+            </TouchableOpacity>
           )}
           {viewer?.image ? (
             <Image source={{ uri: viewer.image }} style={[styles.avatar, { borderColor: C.border }]} />
@@ -280,11 +310,11 @@ function CoursesTab({ onUpload, onCourseSelect, C, fs, F }: { onUpload: () => vo
                 Upload a document
               </Text>
               <Text style={[styles.uploadSub, { fontSize: fs(12), fontFamily: F.regular, color: C.sub }]}>
-                PDF · AI generates flashcards + quiz
+                {atFreeLimit ? 'Upgrade to add more courses' : 'PDF · AI generates flashcards + quiz'}
               </Text>
             </View>
             <View style={[styles.arrowBtn, { backgroundColor: `${C.primary}18` }]}>
-              <Ionicons name="arrow-forward" size={15} color={C.primary} />
+              <Ionicons name={atFreeLimit ? 'lock-closed-outline' : 'arrow-forward'} size={15} color={C.primary} />
             </View>
           </TouchableOpacity>
         </Animated.View>
@@ -465,6 +495,17 @@ function makeCourseStyles(C: AppColors) {
       borderColor: C.border,
     },
     countPillTxt: { color: C.sub },
+
+    proBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      borderRadius: 20,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderWidth: StyleSheet.hairlineWidth,
+    },
+    proBadgeTxt: {},
 
     goalBanner: {
       flexDirection: 'row',

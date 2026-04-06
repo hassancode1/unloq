@@ -4,8 +4,9 @@ import * as WebBrowser from "expo-web-browser";
 WebBrowser.maybeCompleteAuthSession();
 import { useEffect } from "react";
 import Purchases from "react-native-purchases";
+import { useConvexAuth, useQuery, ConvexReactClient } from "convex/react";
+import { api } from "./convex/_generated/api";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { ConvexReactClient } from "convex/react";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import * as SecureStore from "expo-secure-store";
 
@@ -30,6 +31,21 @@ import GoalSetupScreen from "./app/goal-setup";
 import HomeScreen from "./app/home";
 
 const convex = new ConvexReactClient(process.env.EXPO_PUBLIC_CONVEX_URL!);
+
+function RevenueCatSync() {
+  const { isAuthenticated } = useConvexAuth();
+  const user = useQuery(api.users.currentUser);
+
+  useEffect(() => {
+    if (isAuthenticated && user?._id) {
+      Purchases.logIn(user._id).catch(() => {});
+    } else if (!isAuthenticated) {
+      Purchases.logOut().catch(() => {});
+    }
+  }, [isAuthenticated, user?._id]);
+
+  return null;
+}
 
 SplashScreen.preventAutoHideAsync();
 
@@ -60,6 +76,7 @@ export default function App() {
 
   return (
     <ConvexAuthProvider client={convex} storage={secureStorage}>
+      <RevenueCatSync />
       <SafeAreaProvider>
         {flow === "onboarding" && (
           <OnboardingScreen onComplete={() => setFlow("goalsetup")} />
