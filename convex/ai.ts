@@ -81,16 +81,16 @@ async function callGeminiText(
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-  const result = await model.generateContent([
-    {
-      text:
-        buildSystemPrompt() +
-        "\n\n" +
-        buildUserPrompt(lessonCount, difficulty, userPrompt) +
-        "\n\n--- TRANSCRIPT ---\n" +
-        transcript,
-    },
-  ]);
+  const result = await model.generateContent({
+    contents: [{ role: "user", parts: [{ text:
+      buildSystemPrompt() +
+      "\n\n" +
+      buildUserPrompt(lessonCount, difficulty, userPrompt) +
+      "\n\n--- TRANSCRIPT ---\n" +
+      transcript,
+    }] }],
+    generationConfig: { responseMimeType: "application/json" },
+  });
   return result.response.text().trim();
 }
 
@@ -107,24 +107,27 @@ async function callGeminiVideo(
   // gemini-1.5-pro supports YouTube URL via fileData
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
-    const result = await model.generateContent([
-      { fileData: { mimeType: "video/mp4", fileUri: youtubeUrl } },
-      { text: buildSystemPrompt() + "\n\n" + buildUserPrompt(lessonCount, difficulty, userPrompt) },
-    ]);
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [
+        { fileData: { mimeType: "video/mp4", fileUri: youtubeUrl } },
+        { text: buildSystemPrompt() + "\n\n" + buildUserPrompt(lessonCount, difficulty, userPrompt) },
+      ]}],
+      generationConfig: { responseMimeType: "application/json" },
+    });
     return result.response.text().trim();
   } catch {
     // Fallback: ask Gemini to generate from its knowledge of the video URL
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-    const result = await model.generateContent([
-      {
-        text:
-          "You are given a YouTube video URL. Use your knowledge of the video's content to generate a structured course.\n\n" +
-          `YouTube URL: ${youtubeUrl}\n\n` +
-          buildSystemPrompt() +
-          "\n\n" +
-          buildUserPrompt(lessonCount, difficulty, userPrompt),
-      },
-    ]);
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text:
+        "You are given a YouTube video URL. Use your knowledge of the video's content to generate a structured course.\n\n" +
+        `YouTube URL: ${youtubeUrl}\n\n` +
+        buildSystemPrompt() +
+        "\n\n" +
+        buildUserPrompt(lessonCount, difficulty, userPrompt),
+      }] }],
+      generationConfig: { responseMimeType: "application/json" },
+    });
     return result.response.text().trim();
   }
 }
@@ -139,10 +142,13 @@ async function callGemini(
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-  const result = await model.generateContent([
-    { inlineData: { mimeType: "application/pdf", data: pdfBase64 } },
-    { text: buildSystemPrompt() + "\n\n" + buildUserPrompt(lessonCount, difficulty, userPrompt) },
-  ]);
+  const result = await model.generateContent({
+    contents: [{ role: "user", parts: [
+      { inlineData: { mimeType: "application/pdf", data: pdfBase64 } },
+      { text: buildSystemPrompt() + "\n\n" + buildUserPrompt(lessonCount, difficulty, userPrompt) },
+    ]}],
+    generationConfig: { responseMimeType: "application/json" },
+  });
   return result.response.text().trim();
 }
 
