@@ -220,25 +220,24 @@ function SplashScreen({ onNext }: { onNext: () => void }) {
         <View style={ss.phone}>
           <View style={ss.phoneLockBar} />
           <View style={ss.phoneContent}>
-            <Text style={ss.lockIcon}>🔒</Text>
-            <Text style={ss.phoneQ}>What is the Feynman{"\n"}Technique?</Text>
+            <Text style={ss.lockIcon}>⚖️</Text>
+            <Text style={ss.phoneQ}>MBE: Offer + Acceptance{"\n"}requires what element?</Text>
             <View style={ss.phoneOpt}>
-              <Text style={ss.phoneOptTxt}>Memorisation</Text>
+              <Text style={ss.phoneOptTxt}>Consideration</Text>
             </View>
             <View style={ss.phoneOpt}>
-              <Text style={ss.phoneOptTxt}>Teaching to learn</Text>
+              <Text style={ss.phoneOptTxt}>Meeting of the minds</Text>
             </View>
             <View style={ss.phoneOpt}>
-              <Text style={ss.phoneOptTxt}>Speed reading</Text>
+              <Text style={ss.phoneOptTxt}>Capacity</Text>
             </View>
           </View>
         </View>
       </View>
 
-      <Text style={ss.title}>Turn screen time{"\n"}into learn time.</Text>
+      <Text style={ss.title}>Pass your exam.{"\n"}Block distractions.</Text>
       <Text style={ss.sub}>
-        Upload your docs. Unloq generates daily lessons.{"\n"}Apps stay locked
-        until you answer.
+        Daily exam prep lessons — your apps stay{"\n"}locked until you're done studying.
       </Text>
 
       <View style={{ width: "100%", marginTop: 8 }}>
@@ -333,19 +332,17 @@ const ss = StyleSheet.create({
 
 // ── Q: Role ────────────────────────────────────────────────────────────────────
 const ROLES = [
-  { emoji: "🎓", label: "Student" },
-  { emoji: "💼", label: "Professional" },
-  { emoji: "🚀", label: "Founder / Entrepreneur" },
-  { emoji: "🔬", label: "Researcher" },
-  { emoji: "📚", label: "Self-learner" },
-  { emoji: "👥", label: "Just trying to grow" },
+  { emoji: "⚖️", label: "Bar Exam candidate" },
+  { emoji: "🩺", label: "Medical student (boards)" },
+  { emoji: "🎓", label: "Other professional exam" },
+  { emoji: "📚", label: "General learner" },
 ];
 
 function QRoleScreen({ onNext }: { onNext: () => void }) {
   const [sel, setSel] = useState<string | null>(null);
   return (
     <Animated.View entering={FadeInDown.duration(300)} style={qs.root}>
-      <Text style={qs.title}>Which best{"\n"}describes you?</Text>
+      <Text style={qs.title}>What are you{"\n"}studying for?</Text>
       {ROLES.map((r) => (
         <OptionCard
           key={r.label}
@@ -903,11 +900,11 @@ function WhyUnloqScreen({ onNext }: { onNext: () => void }) {
       ))}
 
       <View style={wus.feynman}>
-        <Text style={wus.feynmanTitle}>The Feynman Method</Text>
+        <Text style={wus.feynmanTitle}>The Unloq Method</Text>
         <Text style={wus.feynmanSub}>
-          Teaching a concept back in your own words is the single most effective
-          way to truly learn it. Unloq generates lessons from YOUR documents —
-          you prove you understand before your apps unlock.
+          Daily exam prep lessons — curated for Bar Exam, Medical Boards, and more.
+          You prove you understand today's material before your apps unlock. Consistent
+          study beats last-minute cramming every time.
         </Text>
       </View>
 

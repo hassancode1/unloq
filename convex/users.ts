@@ -8,3 +8,19 @@ export const currentUser = query({
     return ctx.db.get(userId);
   },
 });
+
+// Admin access: allow any authenticated user for now.
+// Restrict by email whitelist by setting ADMIN_EMAILS env var (comma-separated).
+export const isAdmin = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return false;
+    const user = await ctx.db.get(userId);
+    if (!user) return false;
+    const adminEmails = process.env.ADMIN_EMAILS;
+    if (!adminEmails) return true; // open access if no whitelist set
+    const list = adminEmails.split(",").map((e) => e.trim().toLowerCase());
+    return list.includes((user.email as string)?.toLowerCase() ?? "");
+  },
+});

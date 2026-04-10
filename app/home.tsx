@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Purchases from 'react-native-purchases';
 import RevenueCatUI, { PAYWALL_RESULT } from 'react-native-purchases-ui';
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Alert,
   ScrollView,
@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import Animated, {
+  FadeIn,
   FadeInDown,
   useAnimatedStyle,
   useSharedValue,
@@ -32,14 +33,16 @@ import UploadScreen from './upload';
 import StatsScreen from './stats';
 import SettingsScreen from './settings';
 import LessonPlayer from './lesson-player';
+import CourseDetailScreen from './course-detail';
 import AuthModal from './auth-modal';
 
 type Tab = 'learn' | 'stats' | 'settings';
+type ContentTab = 'exam' | 'mine';
 
 const TABS: { id: Tab; label: string; icon: string; iconFilled: string }[] = [
-  { id: 'learn',    label: 'Learn',    icon: 'book-outline',     iconFilled: 'book' },
-  { id: 'stats',    label: 'Progress', icon: 'bar-chart-outline', iconFilled: 'bar-chart' },
-  { id: 'settings', label: 'Profile',  icon: 'person-outline',   iconFilled: 'person' },
+  { id: 'learn',    label: 'Learn',    icon: 'book-outline',      iconFilled: 'book' },
+  { id: 'stats',    label: 'Progress', icon: 'bar-chart-outline',  iconFilled: 'bar-chart' },
+  { id: 'settings', label: 'Profile',  icon: 'person-outline',    iconFilled: 'person' },
 ];
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -58,11 +61,11 @@ function topicColor(title: string): { emoji: string; color: string } {
     return { emoji: '✍️', color: '#EA580C' };
   if (t.includes('code') || t.includes('program'))
     return { emoji: '💻', color: '#6366F1' };
-  if (t.includes('law') || t.includes('legal'))
+  if (t.includes('law') || t.includes('legal') || t.includes('bar') || t.includes('mbe') || t.includes('mee'))
     return { emoji: '⚖️', color: '#0EA5E9' };
   if (t.includes('finance') || t.includes('econ'))
     return { emoji: '📈', color: '#16A34A' };
-  return { emoji: '📚', color: '#D97706' };
+  return { emoji: '📚', color: '#6366F1' };
 }
 
 function isTodayGoalDay(cfg: GoalConfig): boolean {
@@ -79,44 +82,35 @@ function fmtLockTime(t: string) {
   return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
 }
 
-// ── Tab bar item ─────────────────────────────────────────────────────────────
+// ── Bottom tab item ───────────────────────────────────────────────────────────
 
 function TabItem({
-  tab,
-  active,
-  onPress,
-  C,
-  F,
+  tab, active, onPress, C, F,
 }: {
-  tab: typeof TABS[number];
-  active: boolean;
-  onPress: () => void;
-  C: AppColors;
-  F: any;
+  tab: typeof TABS[number]; active: boolean; onPress: () => void; C: AppColors; F: any;
 }) {
   const scale = useSharedValue(1);
   const anim = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
-  const handlePress = () => {
-    scale.value = withSpring(0.84, { damping: 12, stiffness: 500 }, () => {
-      scale.value = withSpring(1, { damping: 14, stiffness: 300 });
-    });
-    onPress();
-  };
-
   return (
-    <TouchableOpacity style={tabStyles.item} onPress={handlePress} activeOpacity={0.8}>
+    <TouchableOpacity
+      style={tabStyles.item}
+      onPress={() => {
+        scale.value = withSpring(0.82, { damping: 12, stiffness: 500 }, () => {
+          scale.value = withSpring(1, { damping: 14, stiffness: 300 });
+        });
+        onPress();
+      }}
+      activeOpacity={0.8}
+    >
       <Animated.View style={[tabStyles.inner, anim]}>
-        {active && <View style={[tabStyles.indicator, { backgroundColor: C.primary }]} />}
+        {active && <View style={[tabStyles.pill, { backgroundColor: `${C.primary}14` }]} />}
         <Ionicons
           name={(active ? tab.iconFilled : tab.icon) as any}
-          size={22}
+          size={21}
           color={active ? C.primary : C.muted}
         />
-        <Text style={[
-          tabStyles.label,
-          { fontFamily: active ? F.semiBold : F.regular, color: active ? C.primary : C.muted },
-        ]}>
+        <Text style={[tabStyles.label, { fontFamily: active ? F.semiBold : F.regular, color: active ? C.primary : C.muted }]}>
           {tab.label}
         </Text>
       </Animated.View>
@@ -125,97 +119,450 @@ function TabItem({
 }
 
 const tabStyles = StyleSheet.create({
-  item:      { flex: 1, alignItems: 'center' },
-  inner:     { alignItems: 'center', gap: 3, paddingVertical: 6, paddingHorizontal: 14 },
-  indicator: { position: 'absolute', top: -1, width: 28, height: 3, borderRadius: 2 },
-  label:     { fontSize: 10 },
+  item:  { flex: 1, alignItems: 'center' },
+  inner: { alignItems: 'center', gap: 3, paddingVertical: 7, paddingHorizontal: 18, position: 'relative' },
+  pill:  { position: 'absolute', inset: 0, borderRadius: 14 },
+  label: { fontSize: 10, letterSpacing: 0.2 },
 });
 
-// ── Courses tab ──────────────────────────────────────────────────────────────
+// ── Daily mission card ────────────────────────────────────────────────────────
 
-function CoursesTab({ onUpload, onCourseSelect, C, fs, F }: { onUpload: () => void; onCourseSelect: (id: Id<'courses'>) => void; C: AppColors; fs: (n: number) => number; F: any }) {
-  const styles = React.useMemo(() => makeCourseStyles(C), [C]);
-  const { goalConfig, dailyProgress } = useAppStore();
-  const viewer = useQuery(api.users.currentUser);
+function MissionCard({ goalConfig, todayDone, C, fs, F }: {
+  goalConfig: GoalConfig; todayDone: number; C: AppColors; fs: (n: number) => number; F: any;
+}) {
+  const goalDay = isTodayGoalDay(goalConfig);
+  const goalMet = todayDone >= goalConfig.lessonTarget;
+  const pct     = goalConfig.lessonTarget > 0
+    ? Math.min(1, todayDone / goalConfig.lessonTarget) : 0;
+
+  if (!goalDay) {
+    return (
+      <Animated.View entering={FadeInDown.duration(280)} style={[missionStyles.card, { backgroundColor: C.surfaceAlt, borderColor: C.border }]}>
+        <Text style={{ fontSize: 26 }}>😌</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={[missionStyles.title, { fontFamily: F.semiBold, fontSize: fs(15), color: C.text }]}>Rest day</Text>
+          <Text style={[missionStyles.sub, { fontFamily: F.regular, fontSize: fs(12), color: C.muted }]}>No lessons required today</Text>
+        </View>
+      </Animated.View>
+    );
+  }
+
+  return (
+    <Animated.View
+      entering={FadeInDown.duration(280)}
+      style={[missionStyles.card, {
+        backgroundColor: goalMet ? `${C.success}0F` : `${C.primary}0C`,
+        borderColor: goalMet ? `${C.success}30` : `${C.primary}28`,
+      }]}
+    >
+      <View style={[missionStyles.iconWrap, { backgroundColor: goalMet ? `${C.success}18` : `${C.primary}18` }]}>
+        <Ionicons
+          name={goalMet ? 'lock-open-outline' : 'lock-closed-outline'}
+          size={20}
+          color={goalMet ? C.success : C.primary}
+        />
+      </View>
+      <View style={{ flex: 1, gap: 6 }}>
+        <View style={missionStyles.row}>
+          <Text style={[missionStyles.title, { fontFamily: F.semiBold, fontSize: fs(15), color: C.text }]}>
+            {goalMet ? 'Apps unlocked' : 'Apps locked'}
+          </Text>
+          <Text style={[{ fontFamily: F.bold, fontSize: fs(13), color: goalMet ? C.success : C.primary }]}>
+            {todayDone}/{goalConfig.lessonTarget}
+          </Text>
+        </View>
+        <View style={[missionStyles.trackBg, { backgroundColor: goalMet ? `${C.success}25` : `${C.primary}20` }]}>
+          <View style={[missionStyles.trackFill, { width: `${Math.round(pct * 100)}%` as any, backgroundColor: goalMet ? C.success : C.primary }]} />
+        </View>
+        <Text style={[missionStyles.sub, { fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>
+          {goalMet
+            ? 'Daily goal complete · great work'
+            : `${goalConfig.lessonTarget - todayDone} more lesson${goalConfig.lessonTarget - todayDone !== 1 ? 's' : ''} · locks at ${fmtLockTime(goalConfig.lockTime)}`}
+        </Text>
+      </View>
+    </Animated.View>
+  );
+}
+
+const missionStyles = StyleSheet.create({
+  card: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    marginHorizontal: Spacing.lg, marginVertical: 10,
+    paddingHorizontal: Spacing.md, paddingVertical: 14,
+    borderRadius: 16, borderWidth: StyleSheet.hairlineWidth,
+  },
+  iconWrap: { width: 42, height: 42, borderRadius: 13, justifyContent: 'center', alignItems: 'center' },
+  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  title: { lineHeight: 20 },
+  sub: { lineHeight: 16 },
+  trackBg: { height: 5, borderRadius: 3, overflow: 'hidden' },
+  trackFill: { height: '100%', borderRadius: 3 },
+});
+
+// ── Content tab pills ─────────────────────────────────────────────────────────
+
+function ContentTabPills({ active, onChange, C, fs, F }: {
+  active: ContentTab; onChange: (t: ContentTab) => void; C: AppColors; fs: (n: number) => number; F: any;
+}) {
+  return (
+    <View style={[pillStyles.row, { backgroundColor: C.surfaceAlt, borderColor: C.border }]}>
+      {(['exam', 'mine'] as ContentTab[]).map((id) => {
+        const isActive = active === id;
+        const label = id === 'exam' ? 'Exam Prep' : 'My Courses';
+        return (
+          <TouchableOpacity
+            key={id}
+            style={[pillStyles.pill, isActive && { backgroundColor: C.surface, borderColor: C.border, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.07, shadowRadius: 3, elevation: 1 }]}
+            onPress={() => { Haptics.selectionAsync(); onChange(id); }}
+            activeOpacity={0.8}
+          >
+            <Text style={[pillStyles.label, { fontFamily: isActive ? F.semiBold : F.regular, fontSize: fs(13), color: isActive ? C.text : C.muted }]}>
+              {label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
+const pillStyles = StyleSheet.create({
+  row: { flexDirection: 'row', marginHorizontal: Spacing.lg, marginBottom: 4, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, padding: 3, gap: 2 },
+  pill: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 9, borderWidth: StyleSheet.hairlineWidth, borderColor: 'transparent' },
+  label: {},
+});
+
+// ── Exam Prep tab content ─────────────────────────────────────────────────────
+
+function ExamPrepContent({ onCourseSelect, C, fs, F }: {
+  onCourseSelect: (id: Id<'courses'>) => void; C: AppColors; fs: (n: number) => number; F: any;
+}) {
+  const styles = React.useMemo(() => makeSharedStyles(C), [C]);
+  const rawCourses = useQuery(api.courses.listPublishedAdminCourses);
+  const isLoading  = rawCourses === undefined;
+  const ready      = ((rawCourses ?? []) as any[]).filter((c: any) => c.status === 'ready');
+
+  // Group courses by group_id, preserving order; ungrouped at the end
+  const { groups, ungrouped } = useMemo(() => {
+    const map = new Map<string, { name: string; courses: any[] }>();
+    const none: any[] = [];
+    for (const c of ready) {
+      if (c.group_id) {
+        if (!map.has(c.group_id)) map.set(c.group_id, { name: c.group_name ?? 'Group', courses: [] });
+        map.get(c.group_id)!.courses.push(c);
+      } else {
+        none.push(c);
+      }
+    }
+    return { groups: Array.from(map.values()), ungrouped: none };
+  }, [ready]);
+
+  if (isLoading) {
+    return (
+      <Animated.View entering={FadeInDown.duration(260)} style={{ gap: 10 }}>
+        {[1, 2, 3].map((i) => (
+          <View key={i} style={[styles.skeletonCard, { backgroundColor: C.surface, borderColor: C.border }]}>
+            <View style={[styles.skeletonIcon, { backgroundColor: C.surfaceAlt }]} />
+            <View style={{ flex: 1, gap: 8 }}>
+              <View style={[styles.skeletonLine, { width: '55%', backgroundColor: C.surfaceAlt }]} />
+              <View style={[styles.skeletonLine, { width: '35%', backgroundColor: C.surfaceAlt }]} />
+            </View>
+          </View>
+        ))}
+      </Animated.View>
+    );
+  }
+
+  if (groups.length === 0 && ungrouped.length === 0) {
+    return (
+      <Animated.View entering={FadeInDown.duration(280)} style={styles.empty}>
+        <View style={[styles.emptyIcon, { backgroundColor: C.primaryBg, borderColor: C.border }]}>
+          <Text style={{ fontSize: 34 }}>⚖️</Text>
+        </View>
+        <Text style={[styles.emptyTitle, { fontSize: fs(17), fontFamily: F.semiBold, color: C.text }]}>
+          Coming soon
+        </Text>
+        <Text style={[styles.emptySub, { fontSize: fs(13), fontFamily: F.regular, color: C.sub }]}>
+          Curated exam prep courses will appear here.
+        </Text>
+      </Animated.View>
+    );
+  }
+
+  return (
+    <Animated.View entering={FadeInDown.delay(60).duration(260)} style={{ gap: 10 }}>
+      {groups.map((group, gi) => {
+        const totalLessons = group.courses.reduce((s: number, c: any) => s + (c.totalLessons ?? 0), 0);
+        const { emoji, color } = topicColor(group.name);
+        const singleCourse    = group.courses.length === 1 ? group.courses[0] : null;
+
+        return (
+          <Animated.View key={gi} entering={FadeInDown.delay(gi * 40).duration(260)}>
+            <TouchableOpacity
+              style={[groupCardStyles.card, { backgroundColor: C.surface, borderColor: C.border }]}
+              activeOpacity={singleCourse ? 0.72 : 1}
+              onPress={singleCourse ? () => { Haptics.selectionAsync(); onCourseSelect(singleCourse._id); } : undefined}
+            >
+              {/* Card header */}
+              <View style={groupCardStyles.header}>
+                <View style={[groupCardStyles.iconWrap, { backgroundColor: `${color}14`, borderColor: `${color}28` }]}>
+                  <Text style={{ fontSize: 22 }}>{emoji}</Text>
+                </View>
+                <View style={{ flex: 1, gap: 3 }}>
+                  <Text style={[groupCardStyles.name, { fontFamily: F.semiBold, fontSize: fs(15), color: C.text }]} numberOfLines={2}>
+                    {group.name}
+                  </Text>
+                  <Text style={[groupCardStyles.meta, { fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>
+                    {totalLessons} lesson{totalLessons !== 1 ? 's' : ''}
+                    {group.courses.length > 1 ? ` · ${group.courses.length} courses` : ''}
+                  </Text>
+                </View>
+                {singleCourse && (
+                  <View style={[groupCardStyles.arrowBtn, { backgroundColor: `${color}14` }]}>
+                    <Ionicons name="arrow-forward" size={15} color={color} />
+                  </View>
+                )}
+              </View>
+
+              {/* Multiple courses — show as rows */}
+              {group.courses.length > 1 && (
+                <View style={[groupCardStyles.courseList, { borderTopColor: C.border }]}>
+                  {group.courses.map((course: any, ci: number) => {
+                    return (
+                      <TouchableOpacity
+                        key={course._id}
+                        style={[
+                          groupCardStyles.courseRow,
+                          ci < group.courses.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
+                        ]}
+                        activeOpacity={0.72}
+                        onPress={() => { Haptics.selectionAsync(); onCourseSelect(course._id); }}
+                      >
+                        <Text style={[{ fontFamily: F.medium, fontSize: fs(13), color: C.text, flex: 1 }]} numberOfLines={1}>
+                          {course.title}
+                        </Text>
+                        <Text style={[{ fontFamily: F.regular, fontSize: fs(11), color: C.muted, marginRight: 8 }]}>
+                          {course.totalLessons} lessons
+                        </Text>
+                        <Ionicons name="chevron-forward" size={14} color={C.muted} />
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+            </TouchableOpacity>
+          </Animated.View>
+        );
+      })}
+
+      {/* Ungrouped admin courses */}
+      {ungrouped.length > 0 && (
+        <View style={{ gap: 10 }}>
+          {ungrouped.map((course: any) => {
+            const { emoji, color } = topicColor(course.title);
+            return (
+              <TouchableOpacity
+                key={course._id}
+                style={[groupCardStyles.card, groupCardStyles.header, { backgroundColor: C.surface, borderColor: C.border }]}
+                activeOpacity={0.72}
+                onPress={() => { Haptics.selectionAsync(); onCourseSelect(course._id); }}
+              >
+                <View style={[groupCardStyles.iconWrap, { backgroundColor: `${color}14`, borderColor: `${color}28` }]}>
+                  <Text style={{ fontSize: 22 }}>{emoji}</Text>
+                </View>
+                <View style={{ flex: 1, gap: 3 }}>
+                  <Text style={[groupCardStyles.name, { fontFamily: F.semiBold, fontSize: fs(15), color: C.text }]} numberOfLines={2}>
+                    {course.title}
+                  </Text>
+                  <Text style={[groupCardStyles.meta, { fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>
+                    {course.totalLessons} lessons
+                  </Text>
+                </View>
+                <View style={[groupCardStyles.arrowBtn, { backgroundColor: `${color}14` }]}>
+                  <Ionicons name="arrow-forward" size={15} color={color} />
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
+    </Animated.View>
+  );
+}
+
+const groupCardStyles = StyleSheet.create({
+  card: {
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: Spacing.md,
+  },
+  iconWrap: { width: 50, height: 50, borderRadius: 14, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
+  name: { lineHeight: 20 },
+  meta: {},
+  arrowBtn: { width: 34, height: 34, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+  courseList: { borderTopWidth: StyleSheet.hairlineWidth },
+  courseRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.md, paddingVertical: 12 },
+});
+
+// ── My Courses tab content ────────────────────────────────────────────────────
+
+function MyCoursesContent({ onUpload, onCourseSelect, C, fs, F }: {
+  onUpload: () => void; onCourseSelect: (id: Id<'courses'>) => void; C: AppColors; fs: (n: number) => number; F: any;
+}) {
+  const styles = React.useMemo(() => makeSharedStyles(C), [C]);
   const { isPremium } = useEntitlement();
   const rawCourses = useQuery(api.courses.list);
-  const isLoading = rawCourses === undefined;
-  const courses = ((rawCourses ?? []) as any[]).filter((c: any) => c.status === 'ready');
-  const atFreeLimit = !isPremium && ((rawCourses ?? []) as any[]).filter((c: any) => c.status !== 'error').length >= 1;
   const removeCourse = useMutation(api.courses.remove);
+
+  const personalCourses = ((rawCourses ?? []) as any[]).filter((c: any) => !c.adminCreated && c.status === 'ready');
+  const atFreeLimit = !isPremium && ((rawCourses ?? []) as any[]).filter((c: any) => c.status !== 'error' && !c.adminCreated).length >= 1;
 
   const handleCoursePress = async (course: any) => {
     if (course.status === 'error') {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       await removeCourse({ courseId: course._id as Id<'courses'> });
       onUpload();
-    } else if (course.status === 'ready') {
+    } else {
       Haptics.selectionAsync();
       onCourseSelect(course._id as Id<'courses'>);
     }
   };
 
-  const handleCourseLongPress = (course: any) => {
+  const handleLongPress = (course: any) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    Alert.alert(
-      course.title,
-      'What would you like to do?',
-      [
-        {
-          text: 'Delete Course',
-          style: 'destructive',
-          onPress: () => {
-            Alert.alert(
-              'Delete Course',
-              'This will permanently delete the course and all its lessons.',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Delete',
-                  style: 'destructive',
-                  onPress: async () => {
-                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                    await removeCourse({ courseId: course._id as Id<'courses'> });
-                  },
-                },
-              ],
-            );
+    Alert.alert(course.title, 'What would you like to do?', [
+      {
+        text: 'Delete Course', style: 'destructive',
+        onPress: () => Alert.alert('Delete Course', 'This will permanently delete the course and all its lessons.', [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete', style: 'destructive',
+            onPress: async () => {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+              await removeCourse({ courseId: course._id as Id<'courses'> });
+            },
           },
-        },
-        { text: 'Cancel', style: 'cancel' },
-      ],
-    );
+        ]),
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
   };
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  return (
+    <Animated.View entering={FadeInDown.duration(260)} style={{ gap: 12 }}>
+      {/* Upload card */}
+      <TouchableOpacity
+        style={[styles.uploadCard, { backgroundColor: C.surface, borderColor: C.border }]}
+        activeOpacity={0.78}
+        onPress={onUpload}
+      >
+        <View style={[styles.uploadIcon, { backgroundColor: `${C.primary}12`, borderColor: `${C.primary}22` }]}>
+          <Text style={{ fontSize: 22 }}>📄</Text>
+        </View>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={[{ fontFamily: F.semiBold, fontSize: fs(14), color: C.text }]}>
+            Add study material
+          </Text>
+          <Text style={[{ fontFamily: F.regular, fontSize: fs(12), color: C.sub }]}>
+            {atFreeLimit ? 'Upgrade to add more courses' : 'PDF · AI generates your lessons'}
+          </Text>
+        </View>
+        <View style={[styles.arrowBtn, { backgroundColor: atFreeLimit ? `${C.warning}14` : `${C.primary}14` }]}>
+          <Ionicons name={atFreeLimit ? 'lock-closed-outline' : 'add'} size={16} color={atFreeLimit ? C.warning : C.primary} />
+        </View>
+      </TouchableOpacity>
+
+      {/* Course list */}
+      {personalCourses.length === 0 ? (
+        <Animated.View entering={FadeInDown.delay(60).duration(260)} style={styles.empty}>
+          <View style={[styles.emptyIcon, { backgroundColor: C.primaryBg, borderColor: C.border }]}>
+            <Text style={{ fontSize: 34 }}>📄</Text>
+          </View>
+          <Text style={[styles.emptyTitle, { fontSize: fs(17), fontFamily: F.semiBold, color: C.text }]}>
+            No courses yet
+          </Text>
+          <Text style={[styles.emptySub, { fontSize: fs(13), fontFamily: F.regular, color: C.sub }]}>
+            Upload a PDF or YouTube link and AI will generate lessons for you.
+          </Text>
+        </Animated.View>
+      ) : (
+        <View style={[{ backgroundColor: C.surface, borderColor: C.border, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' }]}>
+          {personalCourses.map((course: any, idx: number) => {
+            const { emoji, color } = topicColor(course.title);
+            return (
+              <TouchableOpacity
+                key={course._id}
+                style={[
+                  styles.courseRow,
+                  idx < personalCourses.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
+                ]}
+                activeOpacity={0.72}
+                onPress={() => handleCoursePress(course)}
+                onLongPress={() => handleLongPress(course)}
+                delayLongPress={400}
+              >
+                <View style={[styles.courseIcon, { backgroundColor: `${color}14`, borderColor: `${color}28` }]}>
+                  <Text style={{ fontSize: 20 }}>{emoji}</Text>
+                </View>
+                <View style={styles.courseInfo}>
+                  <Text style={[{ fontFamily: F.semiBold, fontSize: fs(14), color: C.text, lineHeight: 19 }]} numberOfLines={2}>
+                    {course.title}
+                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={[{ borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2, backgroundColor: `${color}14` }]}>
+                      <Text style={[{ fontSize: fs(10), fontFamily: F.semiBold, color }]}>{course.totalLessons} lessons</Text>
+                    </View>
+                    <Text style={[{ fontSize: fs(11), fontFamily: F.regular, color: C.muted, flex: 1 }]} numberOfLines={1}>
+                      {course.docName}
+                    </Text>
+                  </View>
+                </View>
+                <Ionicons name="chevron-forward" size={15} color={C.muted} />
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
+    </Animated.View>
+  );
+}
+
+// ── Courses tab ──────────────────────────────────────────────────────────────
+
+function CoursesTab({ onUpload, onCourseSelect, C, fs, F }: {
+  onUpload: () => void; onCourseSelect: (id: Id<'courses'>) => void; C: AppColors; fs: (n: number) => number; F: any;
+}) {
+  const { goalConfig, dailyProgress } = useAppStore();
+  const { isPremium } = useEntitlement();
+  const viewer = useQuery(api.users.currentUser);
+  const [contentTab, setContentTab] = useState<ContentTab>('exam');
+
+  const todayStr  = new Date().toISOString().slice(0, 10);
   const todayDone = dailyProgress.date === todayStr ? dailyProgress.count : 0;
-  const goalDay   = goalConfig ? isTodayGoalDay(goalConfig) : false;
-  const goalMet   = goalConfig ? todayDone >= goalConfig.lessonTarget : false;
 
   return (
     <>
-      {/* Top bar */}
-      <View style={styles.topBar}>
+      {/* ── Top bar ── */}
+      <View style={[headerStyles.bar, { borderBottomColor: C.border }]}>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.greeting, { fontSize: fs(11), fontFamily: F.regular }]}>Welcome back</Text>
-          <Text style={[styles.screenTitle, { fontSize: fs(22), fontFamily: F.bold }]} numberOfLines={1}>
+          <Text style={[headerStyles.greeting, { fontSize: fs(11), fontFamily: F.regular, color: C.muted }]}>
+            Welcome back
+          </Text>
+          <Text style={[headerStyles.title, { fontSize: fs(22), fontFamily: F.bold, color: C.text }]} numberOfLines={1}>
             {viewer?.name?.split(' ')[0] ?? 'Your Courses'}
           </Text>
         </View>
-        <View style={styles.topBarRight}>
-          {courses.length > 0 && (
-            <View style={styles.countPill}>
-              <Text style={[styles.countPillTxt, { fontSize: fs(11), fontFamily: F.semiBold }]}>
-                {courses.length} course{courses.length !== 1 ? 's' : ''}
-              </Text>
-            </View>
-          )}
+        <View style={headerStyles.right}>
           {isPremium ? (
-            <View style={[styles.proBadge, { backgroundColor: `${C.primary}18`, borderColor: `${C.primary}35` }]}>
+            <View style={[headerStyles.badge, { backgroundColor: `${C.primary}14`, borderColor: `${C.primary}30` }]}>
               <Ionicons name="star" size={10} color={C.primary} />
-              <Text style={[styles.proBadgeTxt, { fontFamily: F.extraBold, fontSize: fs(10), color: C.primary }]}>
-                PRO
-              </Text>
+              <Text style={[{ fontFamily: F.extraBold, fontSize: fs(10), color: C.primary }]}>PRO</Text>
             </View>
           ) : (
             <TouchableOpacity
@@ -227,172 +574,52 @@ function CoursesTab({ onUpload, onCourseSelect, C, fs, F }: { onUpload: () => vo
                 }
               }}
               activeOpacity={0.8}
-              style={[styles.proBadge, { backgroundColor: `${C.primary}10`, borderColor: `${C.primary}25` }]}
+              style={[headerStyles.badge, { backgroundColor: `${C.primary}10`, borderColor: `${C.primary}22` }]}
             >
               <Ionicons name="flash-outline" size={10} color={C.primary} />
-              <Text style={[styles.proBadgeTxt, { fontFamily: F.bold, fontSize: fs(10), color: C.primary }]}>
-                Upgrade
-              </Text>
+              <Text style={[{ fontFamily: F.bold, fontSize: fs(10), color: C.primary }]}>Upgrade</Text>
             </TouchableOpacity>
           )}
           {viewer?.image ? (
-            <Image source={{ uri: viewer.image }} style={[styles.avatar, { borderColor: C.border }]} />
+            <Image source={{ uri: viewer.image }} style={[headerStyles.avatar, { borderColor: C.border }]} />
           ) : viewer?.name ? (
-            <View style={[styles.avatarFallback, { backgroundColor: `${C.primary}20`, borderColor: C.border }]}>
-              <Text style={[styles.avatarInitial, { color: C.primary, fontFamily: F.bold, fontSize: fs(14) }]}>
-                {viewer.name[0].toUpperCase()}
-              </Text>
+            <View style={[headerStyles.avatarFallback, { backgroundColor: `${C.primary}18`, borderColor: C.border }]}>
+              <Text style={[{ color: C.primary, fontFamily: F.bold, fontSize: fs(14) }]}>{viewer.name[0].toUpperCase()}</Text>
             </View>
           ) : null}
         </View>
       </View>
 
-      {/* Goal banner */}
-      {goalConfig && (
-        <Animated.View
-          entering={FadeInDown.duration(260)}
-          style={[
-            styles.goalBanner,
-            goalMet && { backgroundColor: `${C.success}12`, borderColor: `${C.success}35` },
-            !goalDay && { backgroundColor: C.surfaceAlt, borderColor: C.border },
-          ]}
-        >
-          <View style={styles.goalLeft}>
-            <Text style={{ fontSize: fs(22) }}>
-              {!goalDay ? '😌' : goalMet ? '🎯' : '📖'}
-            </Text>
-            <View style={{ flex: 1, gap: 2 }}>
-              <Text style={[styles.goalTitle, { fontSize: fs(13), fontFamily: F.semiBold, color: goalMet ? C.success : !goalDay ? C.sub : C.primary }]}>
-                {!goalDay ? 'Rest day' : goalMet ? 'Goal complete!' : `Today's goal`}
-              </Text>
-              <Text style={[styles.goalSub, { fontSize: fs(11), fontFamily: F.regular, color: C.muted }]}>
-                {!goalDay
-                  ? 'No lesson required today'
-                  : goalMet
-                  ? 'Apps are unlocked'
-                  : `${todayDone}/${goalConfig.lessonTarget} lessons · locks at ${fmtLockTime(goalConfig.lockTime)}`}
-              </Text>
-            </View>
-          </View>
-          {goalDay && (
-            <View style={styles.pipRow}>
-              {Array.from({ length: goalConfig.lessonTarget }, (_, i) => (
-                <View
-                  key={i}
-                  style={[
-                    styles.pip,
-                    { backgroundColor: `${C.primary}28`, borderColor: `${C.primary}45` },
-                    i < todayDone && { backgroundColor: C.primary, borderColor: C.primary },
-                  ]}
-                />
-              ))}
-            </View>
-          )}
-        </Animated.View>
-      )}
+      {/* ── Daily mission ── */}
+      {goalConfig && <MissionCard goalConfig={goalConfig} todayDone={todayDone} C={C} fs={fs} F={F} />}
 
+      {/* ── Content tab pills ── */}
+      <ContentTabPills active={contentTab} onChange={setContentTab} C={C} fs={fs} F={F} />
+
+      {/* ── Tab content ── */}
       <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingBottom: Spacing.xl }]}
+        contentContainerStyle={{ paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, paddingBottom: Spacing.xl, gap: Spacing.md }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Upload CTA */}
-        <Animated.View entering={FadeInDown.duration(260)}>
-          <TouchableOpacity
-            style={styles.uploadCard}
-            activeOpacity={0.8}
-            onPress={onUpload}
-          >
-            <View style={[styles.uploadIcon, { backgroundColor: `${C.primary}14`, borderColor: `${C.primary}28` }]}>
-              <Text style={{ fontSize: 24 }}>📄</Text>
-            </View>
-            <View style={{ flex: 1, gap: 3 }}>
-              <Text style={[styles.uploadTitle, { fontSize: fs(15), fontFamily: F.semiBold, color: C.text }]}>
-                Upload a document
-              </Text>
-              <Text style={[styles.uploadSub, { fontSize: fs(12), fontFamily: F.regular, color: C.sub }]}>
-                {atFreeLimit ? 'Upgrade to add more courses' : 'PDF · AI generates flashcards + quiz'}
-              </Text>
-            </View>
-            <View style={[styles.arrowBtn, { backgroundColor: `${C.primary}18` }]}>
-              <Ionicons name={atFreeLimit ? 'lock-closed-outline' : 'arrow-forward'} size={15} color={C.primary} />
-            </View>
-          </TouchableOpacity>
-        </Animated.View>
-
-        {/* Course list or empty state */}
-        {isLoading ? (
-          <Animated.View entering={FadeInDown.delay(80).duration(280)} style={{ gap: 10 }}>
-            {[1, 2].map((i) => (
-              <View key={i} style={[styles.skeletonCard, { backgroundColor: C.surfaceAlt, borderColor: C.border }]}>
-                <View style={[styles.skeletonIcon, { backgroundColor: C.border }]} />
-                <View style={{ flex: 1, gap: 8 }}>
-                  <View style={[styles.skeletonLine, { width: '60%', backgroundColor: C.border }]} />
-                  <View style={[styles.skeletonLine, { width: '40%', backgroundColor: C.border }]} />
-                </View>
-              </View>
-            ))}
-          </Animated.View>
-        ) : courses.length === 0 ? (
-          <Animated.View entering={FadeInDown.delay(80).duration(280)} style={styles.empty}>
-            <View style={[styles.emptyIcon, { backgroundColor: C.primaryBg, borderColor: C.border }]}>
-              <Text style={{ fontSize: 36 }}>🔒</Text>
-            </View>
-            <Text style={[styles.emptyTitle, { fontSize: fs(18), fontFamily: F.semiBold, color: C.text }]}>
-              No courses yet
-            </Text>
-            <Text style={[styles.emptySub, { fontSize: fs(13), fontFamily: F.regular, color: C.sub }]}>
-              Upload a document and Unloq turns it into flashcards and quizzes you must complete before using your apps.
-            </Text>
-          </Animated.View>
+        {contentTab === 'exam' ? (
+          <ExamPrepContent onCourseSelect={onCourseSelect} C={C} fs={fs} F={F} />
         ) : (
-          <Animated.View entering={FadeInDown.delay(80).duration(280)} style={styles.courseSection}>
-            <Text style={[styles.sectionCap, { fontSize: fs(10), fontFamily: F.extraBold, color: C.muted }]}>
-              MY COURSES
-            </Text>
-            <View style={styles.courseGroup}>
-              {courses.map((course: any, idx: number) => {
-                const { emoji, color } = topicColor(course.title);
-                return (
-                  <TouchableOpacity
-                    key={course._id}
-                    style={[styles.courseRow, idx < courses.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border }]}
-                    activeOpacity={0.75}
-                    onPress={() => handleCoursePress(course)}
-                    onLongPress={() => handleCourseLongPress(course)}
-                    delayLongPress={400}
-                  >
-                    <View style={[styles.courseIcon, { backgroundColor: `${color}18`, borderColor: `${color}30` }]}>
-                      <Text style={{ fontSize: 22 }}>{emoji}</Text>
-                    </View>
-                    <View style={styles.courseInfo}>
-                      <Text style={[styles.courseTitle, { fontSize: fs(14), fontFamily: F.semiBold, color: C.text }]} numberOfLines={2}>
-                        {course.title}
-                      </Text>
-                      <View style={styles.courseTags}>
-                        <View style={[styles.lessonBadge, { backgroundColor: `${color}18` }]}>
-                          <Text style={[styles.lessonBadgeTxt, { fontSize: fs(10), fontFamily: F.semiBold, color }]}>
-                            {course.totalLessons} lessons
-                          </Text>
-                        </View>
-                        <Text style={[{ fontSize: 10, color: C.muted }]}>·</Text>
-                        <Text style={[styles.docName, { fontSize: fs(11), fontFamily: F.regular, color: C.muted }]} numberOfLines={1}>
-                          {course.docName}
-                        </Text>
-                      </View>
-                    </View>
-                    <View style={[styles.arrowBtn, { backgroundColor: `${color}18` }]}>
-                      <Ionicons name="arrow-forward" size={14} color={color} />
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </Animated.View>
+          <MyCoursesContent onUpload={onUpload} onCourseSelect={onCourseSelect} C={C} fs={fs} F={F} />
         )}
       </ScrollView>
     </>
   );
 }
+
+const headerStyles = StyleSheet.create({
+  bar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md, borderBottomWidth: StyleSheet.hairlineWidth },
+  greeting: { letterSpacing: 0.6, marginBottom: 1 },
+  title: {},
+  right: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  badge: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5, borderWidth: StyleSheet.hairlineWidth },
+  avatar: { width: 34, height: 34, borderRadius: 17, borderWidth: 1 },
+  avatarFallback: { width: 34, height: 34, borderRadius: 17, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
+});
 
 // ── Root ─────────────────────────────────────────────────────────────────────
 
@@ -403,187 +630,79 @@ export default function HomeScreen() {
   const [activeTab, setActiveTab] = useState<Tab>('learn');
   const [showUpload, setShowUpload] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [detailCourse, setDetailCourse] = useState<Id<'courses'> | null>(null);
   const [activeCourse, setActiveCourse] = useState<Id<'courses'> | null>(null);
 
   const handleUploadPress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (isAuthenticated) {
-      setShowUpload(true);
-    } else {
-      setShowAuthModal(true);
-    }
+    if (isAuthenticated) { setShowUpload(true); } else { setShowAuthModal(true); }
   };
 
   if (showUpload) return <UploadScreen onBack={() => setShowUpload(false)} />;
-  if (activeCourse) return <LessonPlayer courseId={activeCourse} onBack={() => setActiveCourse(null)} />;
+  if (activeCourse) return (
+    <LessonPlayer
+      courseId={activeCourse}
+      onBack={() => { setActiveCourse(null); }}
+    />
+  );
+  if (detailCourse) return (
+    <CourseDetailScreen
+      courseId={detailCourse}
+      onBack={() => setDetailCourse(null)}
+      onStartLesson={() => setActiveCourse(detailCourse)}
+    />
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg, paddingTop: insets.top }}>
-      {/* Screen content */}
       <View style={{ flex: 1 }}>
-        {activeTab === 'learn'    && <CoursesTab onUpload={handleUploadPress} onCourseSelect={setActiveCourse} C={C} fs={fs} F={F} />}
+        {activeTab === 'learn'    && <CoursesTab onUpload={handleUploadPress} onCourseSelect={setDetailCourse} C={C} fs={fs} F={F} />}
         {activeTab === 'stats'    && <StatsScreen />}
         {activeTab === 'settings' && <SettingsScreen />}
       </View>
 
-      {/* Tab bar */}
-      <View style={[
-        tabBarStyles.bar,
-        { backgroundColor: C.surface, borderTopColor: C.border, paddingBottom: insets.bottom + 4 },
-      ]}>
+      <Animated.View
+        entering={FadeIn.duration(300)}
+        style={[rootStyles.tabBar, { backgroundColor: C.surface, borderTopColor: C.border, paddingBottom: insets.bottom + 2 }]}
+      >
         {TABS.map((tab) => (
           <TabItem
-            key={tab.id}
-            tab={tab}
-            active={activeTab === tab.id}
-            onPress={() => {
-              if (activeTab !== tab.id) {
-                Haptics.selectionAsync();
-                setActiveTab(tab.id);
-              }
-            }}
-            C={C}
-            F={F}
+            key={tab.id} tab={tab} active={activeTab === tab.id}
+            onPress={() => { if (activeTab !== tab.id) { Haptics.selectionAsync(); setActiveTab(tab.id); } }}
+            C={C} F={F}
           />
         ))}
-      </View>
+      </Animated.View>
 
-      {/* Auth modal — shown when unauthenticated user taps upload */}
       <AuthModal
         visible={showAuthModal}
         onDismiss={() => setShowAuthModal(false)}
-        onAuthSuccess={() => {
-          setShowAuthModal(false);
-          setShowUpload(true);
-        }}
+        onAuthSuccess={() => { setShowAuthModal(false); setShowUpload(true); }}
       />
     </View>
   );
 }
 
-const tabBarStyles = StyleSheet.create({
-  bar: {
-    flexDirection: 'row',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: 8,
-  },
+const rootStyles = StyleSheet.create({
+  tabBar: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 8 },
 });
 
-function makeCourseStyles(C: AppColors) {
+// ── Shared styles ─────────────────────────────────────────────────────────────
+
+function makeSharedStyles(_C: AppColors) {
   return StyleSheet.create({
-    topBar: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: Spacing.lg,
-      paddingVertical: Spacing.md,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: C.border,
-    },
-    topBarRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-    avatar: { width: 36, height: 36, borderRadius: 18, borderWidth: 1 },
-    avatarFallback: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
-    avatarInitial: {},
-    greeting: { color: C.muted, letterSpacing: 0.8, marginBottom: 1 },
-    screenTitle: { color: C.text },
-    countPill: {
-      backgroundColor: C.surfaceAlt,
-      borderRadius: 20,
-      paddingHorizontal: 12,
-      paddingVertical: 5,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: C.border,
-    },
-    countPillTxt: { color: C.sub },
-
-    proBadge: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 4,
-      borderRadius: 20,
-      paddingHorizontal: 10,
-      paddingVertical: 5,
-      borderWidth: StyleSheet.hairlineWidth,
-    },
-    proBadgeTxt: {},
-
-    goalBanner: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      marginHorizontal: Spacing.lg,
-      marginVertical: 10,
-      paddingHorizontal: Spacing.md,
-      paddingVertical: 11,
-      backgroundColor: `${C.primary}0E`,
-      borderRadius: 14,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: `${C.primary}30`,
-    },
-    goalLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
-    goalTitle: {},
-    goalSub: {},
-    pipRow: { flexDirection: 'row', gap: 5, marginLeft: 10 },
-    pip: { width: 10, height: 10, borderRadius: 5, borderWidth: 1 },
-
-    scroll: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, gap: Spacing.lg },
-
-    uploadCard: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-      backgroundColor: C.surface,
-      borderRadius: 18,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: C.border,
-      padding: Spacing.md,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.05,
-      shadowRadius: 6,
-      elevation: 1,
-    },
-    uploadIcon: { width: 48, height: 48, borderRadius: 14, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
-    uploadTitle: {},
-    uploadSub: {},
-    arrowBtn: { width: 32, height: 32, borderRadius: 9, justifyContent: 'center', alignItems: 'center' },
-
-    skeletonCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, padding: Spacing.md },
-    skeletonIcon: { width: 48, height: 48, borderRadius: 14 },
-    skeletonLine: { height: 12, borderRadius: 6 },
-
+    skeletonCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: Spacing.md },
+    skeletonIcon: { width: 50, height: 50, borderRadius: 14 },
+    skeletonLine: { height: 11, borderRadius: 6 },
     empty: { alignItems: 'center', paddingVertical: Spacing.xxl, gap: Spacing.md },
-    emptyIcon: { width: 80, height: 80, borderRadius: 22, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
+    emptyIcon: { width: 72, height: 72, borderRadius: 20, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
     emptyTitle: {},
-    emptySub: { textAlign: 'center', lineHeight: 21, paddingHorizontal: Spacing.md },
-
-    courseSection: { gap: 8 },
-    sectionCap: { letterSpacing: 1.5, paddingHorizontal: 2 },
-    courseGroup: {
-      backgroundColor: C.surface,
-      borderRadius: 18,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: C.border,
-      overflow: 'hidden',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.05,
-      shadowRadius: 6,
-      elevation: 1,
-    },
-    courseRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: Spacing.md,
-      paddingVertical: Spacing.md,
-      gap: 12,
-    },
-    courseIcon: { width: 48, height: 48, borderRadius: 13, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
-    courseInfo: { flex: 1, gap: 4 },
-    courseTitle: { lineHeight: 20 },
-    courseTags: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-    lessonBadge: { borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
-    lessonBadgeTxt: {},
-    docName: { flex: 1 },
+    emptySub: { textAlign: 'center', lineHeight: 20, paddingHorizontal: Spacing.md },
+    uploadCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: Spacing.md },
+    uploadIcon: { width: 44, height: 44, borderRadius: 12, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
+    arrowBtn: { width: 34, height: 34, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+    courseRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.md, paddingVertical: 13, gap: 12 },
+    courseIcon: { width: 44, height: 44, borderRadius: 12, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
+    courseInfo: { flex: 1, gap: 5 },
   });
 }

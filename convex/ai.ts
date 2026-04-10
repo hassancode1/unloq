@@ -3,8 +3,11 @@
 import { action } from "./_generated/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
+import { type Id } from "./_generated/dataModel";
 
 
+
+// ── Generic (user-uploaded document) prompts ─────────────────────────────────
 
 function buildSystemPrompt(): string {
   return `You are a text organiser, not a writer. Your job is to copy text from the document and arrange it into a course structure — nothing more.
@@ -69,6 +72,153 @@ Output ONLY valid JSON:
     }
   ]
 }`;
+}
+
+// ── Exam prep prompts (admin-generated courses) ───────────────────────────────
+
+function buildExamSystemPrompt(difficulty: string): string {
+  const depthNote = {
+    beginner:     "Focus on defining rules clearly and testing straightforward recall. Avoid edge cases.",
+    intermediate: "Cover the rule, its elements, key exceptions, and common exam traps. Questions should require applying the rule to a simple fact pattern.",
+    advanced:     "Emphasise nuanced distinctions, split-jurisdiction rules, minority vs. majority positions, and complex fact patterns that turn on a single element.",
+  }[difficulty] ?? "";
+
+  return `You are an expert bar exam and professional licensing exam instructor with 20+ years of experience writing MBE, MEE, USMLE, and similar standardised exam prep content.
+
+Your job is to create a structured, exam-focused course on the given topic. You write authoritative, precise content — not generic summaries.
+
+CONTENT RULES:
+- State rules as black-letter law: clear, testable sentences a student can memorise and apply.
+- Each content section must teach ONE concept: the rule, its elements, how it applies, and one illustrative scenario.
+- Do NOT pad with obvious filler. Every sentence must add testable information.
+- ${depthNote}
+
+FLASHCARD RULES:
+- Front: a one-sentence prompt that forces rule recall (e.g. "What are the elements of common law battery?", "Rule: Promissory estoppel requires...")
+- Back: the complete black-letter rule or definition, stated precisely enough to earn points on an exam.
+- Include at least one flashcard per key rule in the lesson.
+
+QUIZ RULES:
+- Every question MUST be a fact-pattern scenario (2–4 sentences), not a bare "what is X?" question.
+- Write in the style of an actual MBE/USMLE question: a concrete client situation that requires applying the rule.
+- Four answer choices: one clearly correct, three plausible but wrong (based on common misconceptions or similar rules).
+- The correct answer must be unambiguously correct under the majority rule / controlling standard unless the topic specifically concerns minority positions.
+- Do NOT reveal the correct answer in the question wording.`;
+}
+
+function buildExamUserPrompt(
+  topic: string,
+  lessonCount: number,
+  difficulty: string,
+  userPrompt?: string,
+): string {
+  const extra = userPrompt?.trim()
+    ? `\n\nAdditional focus from the course creator: "${userPrompt.trim()}". Prioritise sub-topics most relevant to this instruction.`
+    : "";
+
+  return `Create an exam prep course on: "${topic}"${extra}
+
+Divide the topic into exactly ${lessonCount} lessons that together give comprehensive coverage. Progress logically — foundational rules first, then applications, then exceptions and edge cases.
+
+For each lesson:
+
+CONTENT (3–5 sections): Each section = one "heading" (the specific rule or sub-topic, 3–7 words) + one "body" (3–5 sentences: state the rule precisely, explain when it applies, give a one-sentence illustrative scenario).
+
+FLASHCARDS (4–6): Front = rule-recall prompt. Back = the complete black-letter rule, stated precisely.
+
+QUIZ (4 questions): Each question = a fact-pattern scenario. One correct answer, three plausible distractors based on common exam mistakes.
+
+Output ONLY valid JSON — no markdown fences, no explanation:
+{
+  "title": "Concise course title (max 8 words)",
+  "description": "2–3 sentences describing what this course covers and what the student will be able to do on exam day.",
+  "learningObjectives": [
+    "Identify and apply the rule of...",
+    "Distinguish between X and Y in a fact pattern...",
+    "Recognise the exception to... and when it controls"
+  ],
+  "lessons": [
+    {
+      "lessonNumber": 1,
+      "title": "Specific rule or sub-topic title",
+      "keyConcept": "The single most important sentence a student must remember from this lesson.",
+      "content": [
+        { "heading": "Rule name or sub-topic", "body": "Black-letter rule stated precisely. Explanation of when it applies. One-sentence scenario illustrating the rule." }
+      ],
+      "flashcards": [
+        { "front": "What are the elements of [rule]?", "back": "Complete black-letter rule: element 1; element 2; element 3." }
+      ],
+      "quiz": [
+        {
+          "question": "Paula was walking on a public sidewalk when David, intending to frighten her, swung his fist within inches of her face. Paula saw the fist coming and flinched. Which of the following best describes David's liability?",
+          "options": [
+            "David is liable for assault because Paula experienced a reasonable apprehension of immediate harmful contact.",
+            "David is not liable because he did not intend to make contact.",
+            "David is liable for battery because his act was intentional.",
+            "David is not liable because no contact occurred."
+          ],
+          "correctAnswer": "David is liable for assault because Paula experienced a reasonable apprehension of immediate harmful contact."
+        }
+      ]
+    }
+  ]
+}`;
+}
+
+// ── Exam prep generation from topic knowledge (no document) ───────────────────
+
+async function callGeminiExamTopic(
+  topic: string,
+  lessonCount: number,
+  difficulty: string,
+  apiKey: string,
+  userPrompt?: string,
+): Promise<string> {
+  const { GoogleGenerativeAI } = await import("@google/generative-ai");
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+  const result = await model.generateContent({
+    contents: [{
+      role: "user",
+      parts: [{ text:
+        buildExamSystemPrompt(difficulty) +
+        "\n\n" +
+        buildExamUserPrompt(topic, lessonCount, difficulty, userPrompt),
+      }],
+    }],
+    generationConfig: { responseMimeType: "application/json" },
+  });
+  return result.response.text().trim();
+}
+
+// ── Exam prep generation from a PDF document ──────────────────────────────────
+
+async function callGeminiExamPdf(
+  pdfBase64: string,
+  topic: string,
+  lessonCount: number,
+  difficulty: string,
+  apiKey: string,
+  userPrompt?: string,
+): Promise<string> {
+  const { GoogleGenerativeAI } = await import("@google/generative-ai");
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+  const result = await model.generateContent({
+    contents: [{
+      role: "user",
+      parts: [
+        { inlineData: { mimeType: "application/pdf", data: pdfBase64 } },
+        { text:
+          buildExamSystemPrompt(difficulty) +
+          "\n\nThe document above is the source material for this course. Base ALL content strictly on this document — do not add rules or cases not present in it.\n\n" +
+          buildExamUserPrompt(topic, lessonCount, difficulty, userPrompt),
+        },
+      ],
+    }],
+    generationConfig: { responseMimeType: "application/json" },
+  });
+  return result.response.text().trim();
 }
 
 async function callGeminiText(
@@ -366,6 +516,123 @@ export const fetchYoutubeTranscript = action({
     return getYouTubeTranscript(match[1]);
   },
 });
+
+// ── Admin-facing course generation (called from the admin dashboard) ──────────
+
+export const adminGenerateCourse = action({
+  args: {
+    course_topic: v.string(),
+    lesson_count: v.number(),
+    difficulty: v.union(
+      v.literal("Beginner"),
+      v.literal("Intermediate"),
+      v.literal("Advanced"),
+    ),
+    prompt: v.optional(v.string()),
+    group_id: v.optional(v.id("groups")),
+    pdfStorageId: v.optional(v.id("_storage")),
+  },
+  handler: async (ctx, args) => {
+    const difficultyLower = args.difficulty.toLowerCase() as "beginner" | "intermediate" | "advanced";
+
+    // Create the course record
+    const courseId: Id<"courses"> = await ctx.runMutation(api.courses.create, {
+      title: args.course_topic,
+      description: "",
+      docName: args.course_topic,
+      totalLessons: args.lesson_count,
+      difficulty: difficultyLower,
+      sourceType: args.pdfStorageId ? "pdf" : undefined,
+    });
+
+    // Patch admin-specific fields
+    await ctx.runMutation(api.courses.updateCourse, {
+      id: courseId,
+      adminCreated: true,
+      published: false,
+      group_id: args.group_id ?? null,
+      course_topic: args.course_topic,
+    } as any);
+
+    const geminiKey = process.env.GEMINI_API_KEY;
+    if (!geminiKey) throw new Error("No AI API key set. Add GEMINI_API_KEY in Convex env vars.");
+
+    try {
+      let raw: string;
+
+      if (args.pdfStorageId) {
+        // PDF uploaded: extract and generate exam content from it
+        const blob = await ctx.storage.get(args.pdfStorageId);
+        if (!blob) throw new Error("PDF not found in storage.");
+        const arrayBuffer = await blob.arrayBuffer();
+        const bytes = new Uint8Array(arrayBuffer);
+        let binary = "";
+        bytes.forEach((b) => (binary += String.fromCharCode(b)));
+        const pdfBase64 = btoa(binary);
+        raw = await callGeminiExamPdf(pdfBase64, args.course_topic, args.lesson_count, difficultyLower, geminiKey, args.prompt);
+      } else {
+        // No PDF: generate exam prep content from AI knowledge on the topic
+        raw = await callGeminiExamTopic(args.course_topic, args.lesson_count, difficultyLower, geminiKey, args.prompt);
+      }
+
+      raw = raw.replace(/^```json\n?/, "").replace(/^```\n?/, "").replace(/```\n?$/, "").trim();
+      const courseData = parseOrRepair(raw);
+
+      await ctx.runMutation(api.courses.patchTitleAndDescription, {
+        courseId,
+        title: courseData.title ?? args.course_topic,
+        description: courseData.description ?? "",
+        totalLessons: courseData.lessons?.length ?? args.lesson_count,
+      });
+
+      await ctx.runMutation(api.courses.clearLessons, { courseId });
+
+      const lessons: any[] = Array.isArray(courseData.lessons) ? courseData.lessons : [];
+      for (const lesson of lessons) {
+        const flashcards = (lesson.flashcards ?? [])
+          .filter((f: any) => f?.front && f?.back)
+          .map((f: any) => ({ front: String(f.front), back: String(f.back) }));
+
+        const quiz = (lesson.quiz ?? [])
+          .filter((q: any) =>
+            q?.question && Array.isArray(q.options) && q.options.length === 4 &&
+            q.correctAnswer && q.options.includes(q.correctAnswer),
+          )
+          .map((q: any) => ({
+            question: String(q.question),
+            options: q.options.map(String),
+            correctAnswer: String(q.correctAnswer),
+          }));
+
+        const content = Array.isArray(lesson.content)
+          ? lesson.content
+              .filter((s: any) => s?.heading && s?.body)
+              .map((s: any) => ({ heading: String(s.heading), body: String(s.body) }))
+          : undefined;
+
+        await ctx.runMutation(api.courses.insertLesson, {
+          courseId,
+          lessonNumber: Number(lesson.lessonNumber) || 1,
+          title: lesson.title ?? `Lesson ${lesson.lessonNumber}`,
+          keyConcept: lesson.keyConcept ?? "",
+          content,
+          flashcards,
+          quiz,
+        });
+      }
+
+      await ctx.runMutation(api.courses.updateStatus, { courseId, status: "ready" });
+    } catch (err) {
+      console.error("adminGenerateCourse failed:", err);
+      await ctx.runMutation(api.courses.updateStatus, { courseId, status: "error" }).catch(() => {});
+      throw err;
+    }
+
+    return courseId;
+  },
+});
+
+// ── Mobile/user course generation ─────────────────────────────────────────────
 
 export const generateCourse = action({
   args: {

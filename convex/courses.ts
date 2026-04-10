@@ -2,29 +2,170 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 
+// ── Admin queries/mutations ───────────────────────────────────────────────────
+
+export const listCourses = query({
+  handler: async (ctx) => {
+    const all = await ctx.db.query("courses").order("desc").collect();
+    const courses = all.filter((c) => c.adminCreated === true);
+    return Promise.all(
+      courses.map(async (course) => {
+        const lessons = await ctx.db
+          .query("lessons")
+          .withIndex("by_course", (q) => q.eq("courseId", course._id))
+          .collect();
+        const group = course.group_id ? await ctx.db.get(course.group_id) : null;
+        return {
+          ...course,
+          total_lessons: lessons.length || course.totalLessons,
+          course_topic: course.course_topic ?? course.docName,
+          group_name: group?.name ?? null,
+        };
+      }),
+    );
+  },
+});
+
+export const getCourse = query({
+  args: { id: v.id("courses") },
+  handler: async (ctx, { id }) => {
+    const course = await ctx.db.get(id);
+    if (!course) return null;
+    const lessons = await ctx.db
+      .query("lessons")
+      .withIndex("by_course", (q) => q.eq("courseId", id))
+      .order("asc")
+      .collect();
+    const group = course.group_id ? await ctx.db.get(course.group_id) : null;
+    return {
+      ...course,
+      total_lessons: lessons.length || course.totalLessons,
+      course_topic: course.course_topic ?? course.docName,
+      lesson_groups: lessons,
+      group_name: group?.name ?? null,
+    };
+  },
+});
+
+export const deleteCourse = mutation({
+  args: { id: v.id("courses") },
+  handler: async (ctx, { id }) => {
+    const lessons = await ctx.db
+      .query("lessons")
+      .withIndex("by_course", (q) => q.eq("courseId", id))
+      .collect();
+    await Promise.all(lessons.map((l) => ctx.db.delete(l._id)));
+    await ctx.db.delete(id);
+  },
+});
+
+export const updateCourse = mutation({
+  args: {
+    id: v.id("courses"),
+    title: v.optional(v.string()),
+    description: v.optional(v.string()),
+    difficulty: v.optional(v.union(
+      v.literal("beginner"), v.literal("intermediate"), v.literal("advanced"),
+      v.literal("Beginner"), v.literal("Intermediate"), v.literal("Advanced"),
+    )),
+    published: v.optional(v.boolean()),
+    group_id: v.optional(v.union(v.id("groups"), v.null())),
+    sort_order: v.optional(v.number()),
+    course_topic: v.optional(v.string()),
+    tags: v.optional(v.array(v.string())),
+    adminCreated: v.optional(v.boolean()),
+  },
+  handler: async (ctx, { id, group_id, difficulty, adminCreated, ...rest }) => {
+    const patch: Record<string, unknown> = { ...rest };
+    if (group_id !== undefined) patch.group_id = group_id ?? undefined;
+    if (difficulty !== undefined) {
+      patch.difficulty = difficulty.toLowerCase() as "beginner" | "intermediate" | "advanced";
+    }
+    if (adminCreated !== undefined) patch.adminCreated = adminCreated;
+    await ctx.db.patch(id, patch);
+  },
+});
+
+export const reorderCourses = mutation({
+  args: {
+    items: v.array(v.object({ id: v.id("courses"), sort_order: v.number() })),
+  },
+  handler: async (ctx, { items }) => {
+    await Promise.all(items.map(({ id, sort_order }) => ctx.db.patch(id, { sort_order })));
+  },
+});
+
+export const generateUploadUrl = mutation({
+  handler: async (ctx) => {
+    return ctx.storage.generateUploadUrl();
+  },
+});
+
+export const listPublishedAdminCourses = query({
+  handler: async (ctx) => {
+    const courses = await ctx.db
+      .query("courses")
+      .withIndex("by_published", (q) => q.eq("published", true))
+      .collect();
+    return Promise.all(
+      courses.map(async (course) => {
+        const lessons = await ctx.db
+          .query("lessons")
+          .withIndex("by_course", (q) => q.eq("courseId", course._id))
+          .collect();
+        const group = course.group_id ? await ctx.db.get(course.group_id) : null;
+        const completedCount = lessons.filter((l) => l.completed).length;
+        return {
+          ...course,
+          completedCount,
+          lessonCount: lessons.length,
+          group_name: group?.name ?? null,
+        };
+      }),
+    );
+  },
+});
+
 export const list = query({
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) return [];
-    return ctx.db
+    const userCourses = userId
+      ? await ctx.db
+          .query("courses")
+          .withIndex("by_user", (q) => q.eq("userId", userId))
+          .order("desc")
+          .collect()
+      : [];
+    // Also include published admin-created courses
+    const adminCourses = await ctx.db
       .query("courses")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .order("desc")
+      .withIndex("by_published", (q) => q.eq("published", true))
       .collect();
+    // Merge, deduplicate by _id
+    const seen = new Set(userCourses.map((c) => c._id));
+    const merged = [...userCourses, ...adminCourses.filter((c) => !seen.has(c._id))];
+    return merged;
   },
 });
 
 export const listWithProgress = query({
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) return [];
-    const courses = await ctx.db
+    const userCourses = userId
+      ? await ctx.db
+          .query("courses")
+          .withIndex("by_user", (q) => q.eq("userId", userId))
+          .order("desc")
+          .collect()
+      : [];
+    const adminCourses = await ctx.db
       .query("courses")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .order("desc")
+      .withIndex("by_published", (q) => q.eq("published", true))
       .collect();
+    const seen = new Set(userCourses.map((c) => c._id));
+    const allCourses = [...userCourses, ...adminCourses.filter((c) => !seen.has(c._id))];
     return Promise.all(
-      courses.map(async (course) => {
+      allCourses.map(async (course) => {
         const lessons = await ctx.db
           .query("lessons")
           .withIndex("by_course", (q) => q.eq("courseId", course._id))
@@ -149,7 +290,9 @@ export const remove = mutation({
   handler: async (ctx, { courseId }) => {
     const userId = await getAuthUserId(ctx);
     const course = await ctx.db.get(courseId);
-    if (!course || course.userId !== userId) throw new Error("Not authorized");
+    // Allow deletion if: user owns it, or it's an admin-created course
+    if (!course) throw new Error("Course not found");
+    if (!course.adminCreated && course.userId !== userId) throw new Error("Not authorized");
     const lessons = await ctx.db
       .query("lessons")
       .withIndex("by_course", (q) => q.eq("courseId", courseId))

@@ -5,7 +5,15 @@ import { authTables } from "@convex-dev/auth/server";
 export default defineSchema({
   ...authTables,
 
+  // Exam groups (e.g. "Bar Exam — MBE", "USMLE Step 1")
+  groups: defineTable({
+    name: v.string(),
+    description: v.optional(v.string()),
+    sort_order: v.optional(v.number()),
+  }).index("by_sort_order", ["sort_order"]),
+
   courses: defineTable({
+    // User-uploaded courses
     userId: v.optional(v.id("users")),
     title: v.string(),
     description: v.string(),
@@ -23,7 +31,17 @@ export default defineSchema({
       v.literal("error")
     ),
     createdAt: v.number(),
-  }).index("by_user", ["userId"]),
+    // Admin-managed fields
+    adminCreated: v.optional(v.boolean()),
+    published: v.optional(v.boolean()),
+    group_id: v.optional(v.id("groups")),
+    course_topic: v.optional(v.string()),
+    sort_order: v.optional(v.number()),
+    tags: v.optional(v.array(v.string())),
+  })
+    .index("by_user", ["userId"])
+    .index("by_published", ["published"])
+    .index("by_group", ["group_id"]),
 
   lessons: defineTable({
     courseId: v.id("courses"),
