@@ -28,6 +28,7 @@ import {
 import { useAppStore, type GoalConfig } from "./store/useAppStore";
 import { blockApps, unblockApps } from "./lib/familyControls";
 import ScreenBlocking from "./lib/screenBlocking";
+import { setupNotificationHandler } from "./lib/notifications";
 import AppSplashScreen from "./app/splash";
 import OnboardingScreen from "./app/onboarding";
 import GoalSetupScreen from "./app/goal-setup";
@@ -129,6 +130,7 @@ function RevenueCatSync() {
 }
 
 SplashScreen.preventAutoHideAsync();
+setupNotificationHandler();
 
 const REVENUECAT_IOS_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY ?? '';
 if (REVENUECAT_IOS_KEY) {

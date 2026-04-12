@@ -19,7 +19,7 @@ export const isAdmin = query({
     const user = await ctx.db.get(userId);
     if (!user) return false;
     const adminEmails = process.env.ADMIN_EMAILS;
-    if (!adminEmails) return true; // open access if no whitelist set
+    if (!adminEmails) return false; // deny by default if whitelist not configured
     const list = adminEmails.split(",").map((e) => e.trim().toLowerCase());
     return list.includes((user.email as string)?.toLowerCase() ?? "");
   },

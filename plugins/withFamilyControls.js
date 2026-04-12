@@ -363,6 +363,12 @@ const withFamilyControls = (config) => {
     const projectName = mod.modRequest.projectName;
     const targetUUID = project.getFirstTarget().uuid;
 
+    // The xcode package crashes in getPBXVariantGroupByKey when this section
+    // doesn't exist (projects with no localized files). Ensure it exists first.
+    if (!project.hash.project.objects['PBXVariantGroup']) {
+      project.hash.project.objects['PBXVariantGroup'] = {};
+    }
+
     // Find the PBXGroup UUID for the main app target (by path or name)
     const pbxGroups = project.hash.project.objects['PBXGroup'] || {};
     let groupKey = null;
@@ -380,20 +386,19 @@ const withFamilyControls = (config) => {
     }
 
     const sourceFiles = [
-      { file: 'FamilyControlsModule.swift', type: 'sourcecode.swift' },
-      { file: 'FamilyControlsModule.mm',    type: 'sourcecode.cpp.objcpp' },
-      { file: 'ScreenBlockingModule.swift',  type: 'sourcecode.swift' },
-      { file: 'ScreenBlockingModule.mm',     type: 'sourcecode.cpp.objcpp' },
+      'FamilyControlsModule.swift',
+      'FamilyControlsModule.mm',
+      'ScreenBlockingModule.swift',
+      'ScreenBlockingModule.mm',
     ];
 
-    for (const { file, type } of sourceFiles) {
+    for (const file of sourceFiles) {
+      // Use the full relative path (e.g. "Loqlearn/FamilyControlsModule.swift") so Xcode
+      // resolves the file correctly under ios/Loqlearn/ rather than the bare ios/ root.
       const fullPath = `${projectName}/${file}`;
       if (!project.hasFile(fullPath)) {
-        project.addFile(file, groupKey, {
-          target: targetUUID,
-          lastKnownFileType: type,
-          sourceTree: '"<group>"',
-        });
+        // addSourceFile adds to both file references and Sources build phase
+        project.addSourceFile(fullPath, { target: targetUUID }, groupKey);
       }
     }
 

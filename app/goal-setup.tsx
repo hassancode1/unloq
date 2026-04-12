@@ -18,7 +18,7 @@ import DuoButton from '../components/DuoButton';
 import { Spacing } from '../constants/spacing';
 import { useAppStore } from '../store/useAppStore';
 import { useTheme } from '../hooks/useTheme';
-import { scheduleStudyReminders, requestNotificationPermission } from '../lib/notifications';
+import { scheduleStudyReminders, showNotificationPermissionAlert } from '../lib/notifications';
 import type { AppColors } from '../constants/Colors';
 import {
   getAuthorizationStatus,
@@ -261,8 +261,12 @@ export default function GoalSetupScreen({ onComplete }: Props) {
       examDate: null,
     };
     setGoalConfig(cfg);
-    await requestNotificationPermission();
-    await scheduleStudyReminders(cfg);
+    try {
+      const scheduled = await scheduleStudyReminders(cfg);
+      if (!scheduled) showNotificationPermissionAlert();
+    } catch (e) {
+      console.error('[Notifications] Failed to schedule reminders:', e);
+    }
     onComplete();
   }, [frequency, customDays, lessonTarget, lockDate, setGoalConfig, onComplete]);
 

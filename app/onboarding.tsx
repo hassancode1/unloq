@@ -235,9 +235,9 @@ function SplashScreen({ onNext }: { onNext: () => void }) {
         </View>
       </View>
 
-      <Text style={ss.title}>Pass your exam.{"\n"}Block distractions.</Text>
+      <Text style={ss.title}>Ace your exam.{"\n"}Block distractions.</Text>
       <Text style={ss.sub}>
-        Daily exam prep lessons — your apps stay{"\n"}locked until you're done studying.
+        Complete daily lessons and quizzes — your{"\n"}apps stay locked until you're done.
       </Text>
 
       <View style={{ width: "100%", marginTop: 8 }}>
@@ -342,7 +342,7 @@ function QRoleScreen({ onNext }: { onNext: () => void }) {
   const [sel, setSel] = useState<string | null>(null);
   return (
     <Animated.View entering={FadeInDown.duration(300)} style={qs.root}>
-      <Text style={qs.title}>What are you{"\n"}studying for?</Text>
+      <Text style={qs.title}>What exam are{"\n"}you preparing for?</Text>
       {ROLES.map((r) => (
         <OptionCard
           key={r.label}
@@ -442,19 +442,19 @@ function QHoursScreen({
   const pct = hours / 12;
   const comment =
     hours <= 2
-      ? "That's pretty disciplined!"
+      ? "Better than most — but exams still demand more."
       : hours <= 4
-        ? "This is a significant chunk of your day"
+        ? "That's study time you're giving to an algorithm."
         : hours <= 7
-          ? "This is a significant percentage of your life"
-          : "That's almost half your waking hours";
+          ? "Most students fail because of this."
+          : "No wonder exam prep feels impossible.";
 
   return (
     <Animated.View entering={FadeInDown.duration(300)} style={qs.root}>
       <Text style={qs.title}>
         How much time do you{"\n"}lose to apps daily?
       </Text>
-      <Text style={hrs.sub}>You can tell the truth</Text>
+      <Text style={hrs.sub}>Honest answers build a better study plan</Text>
 
       <Text style={hrs.big}>
         {hours === 12 ? "12+ hours" : `${hours} hour${hours !== 1 ? "s" : ""}`}
@@ -574,21 +574,21 @@ const lds = StyleSheet.create({
 function ResultScreen({ onNext }: { onNext: () => void }) {
   return (
     <Animated.View entering={FadeInDown.duration(350)} style={rs.root}>
-      <Text style={rs.eyebrow}>Your learning profile is</Text>
-      <Text style={rs.profile}>The Distracted{"\n"}Scholar</Text>
+      <Text style={rs.eyebrow}>Your exam prep profile is</Text>
+      <Text style={rs.profile}>The Capable{"\n"}Procrastinator</Text>
 
       <View style={rs.iconWrap}>
         <Text style={rs.icon}>🧠</Text>
       </View>
 
       <Text style={rs.desc}>
-        You have the drive to learn, but constant distractions keep pulling you
-        off course.
+        You know the material matters. But when it's time to study, your phone
+        always wins — for now.
       </Text>
 
       <View style={rs.bars}>
         <View style={rs.barRow}>
-          <Text style={rs.barLabel}>Knowledge potential</Text>
+          <Text style={rs.barLabel}>Exam pass potential</Text>
           <View style={rs.barTrack}>
             <View
               style={[rs.barFill, { width: "82%", backgroundColor: C.green }]}
@@ -596,7 +596,7 @@ function ResultScreen({ onNext }: { onNext: () => void }) {
           </View>
         </View>
         <View style={rs.barRow}>
-          <Text style={rs.barLabel}>Focus interruptions</Text>
+          <Text style={rs.barLabel}>Daily distraction score</Text>
           <View style={rs.barTrack}>
             <View
               style={[rs.barFill, { width: "75%", backgroundColor: C.cta }]}
@@ -605,7 +605,7 @@ function ResultScreen({ onNext }: { onNext: () => void }) {
         </View>
       </View>
 
-      <CTAButton label="Makes sense" onPress={onNext} />
+      <CTAButton label="That's exactly me" onPress={onNext} />
     </Animated.View>
   );
 }
@@ -658,8 +658,8 @@ function BadNewsScreen({ onNext }: { onNext: () => void }) {
 
   return (
     <Animated.View entering={FadeIn.duration(400)} style={bns.root}>
-      <Text style={bns.oof}>OOF</Text>
-      <Text style={bns.msg}>I have some bad{"\n"}news for you…</Text>
+      <Text style={bns.oof}>WAIT.</Text>
+      <Text style={bns.msg}>The math isn't{"\n"}working in your favor.</Text>
       <TouchableOpacity onPress={onNext} style={bns.skipBtn}>
         <Text style={bns.skip}>Skip</Text>
       </TouchableOpacity>
@@ -697,16 +697,16 @@ function StatScreen({ onNext, hours }: { onNext: () => void; hours: number }) {
   const years = Math.max(1, Math.round((hours * 70) / 24));
   return (
     <Animated.View entering={FadeInDown.duration(350)} style={sts.root}>
-      <Text style={sts.pre}>You're on track to spend</Text>
+      <Text style={sts.pre}>At this rate, you'll spend</Text>
       <Text style={sts.years}>{years} years</Text>
       <Text style={sts.post}>
-        of your life on apps{"\n"}instead of learning
+        of your exam prep window{"\n"}scrolling instead of studying
       </Text>
 
-      <Text style={sts.mascot}>🤢</Text>
+      <Text style={sts.mascot}>📵</Text>
 
       <Text style={sts.note}>
-        Projection based on {hours}h/day over 70 years
+        Based on {hours}h/day × years until your exam
       </Text>
 
       <View style={{ alignSelf: "stretch" }}>
@@ -770,7 +770,7 @@ function LifeGridScreen({
 
   return (
     <Animated.View entering={FadeInDown.duration(350)} style={lgs.root}>
-      <Text style={lgs.title}>This is your life</Text>
+      <Text style={lgs.title}>This is your study window</Text>
 
       <View style={lgs.grid}>
         {Array.from({ length: ROWS }, (_, row) => (
@@ -794,15 +794,15 @@ function LifeGridScreen({
       <View style={lgs.legend}>
         <View style={lgs.legendRow}>
           <View style={[lgs.legendDot, { backgroundColor: C.green }]} />
-          <Text style={lgs.legendTxt}>You are here (age ~25)</Text>
+          <Text style={lgs.legendTxt}>Where you are now</Text>
         </View>
         <View style={lgs.legendRow}>
           <View style={[lgs.legendDot, { backgroundColor: C.red }]} />
-          <Text style={lgs.legendTxt}>{wastedYears} years spent on apps</Text>
+          <Text style={lgs.legendTxt}>{wastedYears} years lost to distraction</Text>
         </View>
         <View style={lgs.legendRow}>
           <View style={[lgs.legendDot, { backgroundColor: C.progressBg }]} />
-          <Text style={lgs.legendTxt}>Life remaining</Text>
+          <Text style={lgs.legendTxt}>Time remaining before your exam</Text>
         </View>
       </View>
 
@@ -839,12 +839,12 @@ function GoodNewsScreen({
   const years = Math.max(1, Math.round((hours * 70) / 24));
   return (
     <Animated.View entering={FadeInDown.duration(350)} style={gns.root}>
-      <Text style={gns.pre}>The good news is…</Text>
-      <Text style={gns.bold}>Unloq can give you</Text>
+      <Text style={gns.pre}>Here's the good news.</Text>
+      <Text style={gns.bold}>Unloq gives that time back</Text>
       <Text style={gns.years}>
-        {years} years{"\n"}of knowledge back
+        {years} years of{"\n"}focused exam prep
       </Text>
-      <Text style={gns.mascot}>🧠</Text>
+      <Text style={gns.mascot}>📚</Text>
       <View style={{ alignSelf: "stretch" }}>
         <CTAButton label="Let's do this!" onPress={onNext} />
       </View>
@@ -876,18 +876,18 @@ const gns = StyleSheet.create({
 // ── Why Unloq ──────────────────────────────────────────────────────────────────
 function WhyUnloqScreen({ onNext }: { onNext: () => void }) {
   const rows = [
-    { icon: "❌", text: "App blockers", sub: "→ You bypass them", bad: true },
+    { icon: "❌", text: "App blockers", sub: "→ You find a workaround in 30 seconds", bad: true },
     {
       icon: "❌",
       text: "Willpower alone",
-      sub: "→ Exhausting & fails",
+      sub: "→ Decision fatigue kills it by lunch",
       bad: true,
     },
-    { icon: "✅", text: "Unloq", sub: "→ Learn to unlock", bad: false },
+    { icon: "✅", text: "Unloq", sub: "→ Prove you studied, then unlock", bad: false },
   ];
   return (
     <Animated.View entering={FadeInDown.duration(350)} style={wus.root}>
-      <Text style={wus.title}>Why other{"\n"}methods fail</Text>
+      <Text style={wus.title}>Why nothing has{"\n"}worked — until now</Text>
       {rows.map((r) => (
         <View key={r.text} style={[wus.row, !r.bad && wus.rowGood]}>
           <Text style={wus.rowIcon}>{r.icon}</Text>
@@ -902,9 +902,8 @@ function WhyUnloqScreen({ onNext }: { onNext: () => void }) {
       <View style={wus.feynman}>
         <Text style={wus.feynmanTitle}>The Unloq Method</Text>
         <Text style={wus.feynmanSub}>
-          Daily exam prep lessons — curated for Bar Exam, Medical Boards, and more.
-          You prove you understand today's material before your apps unlock. Consistent
-          study beats last-minute cramming every time.
+          Complete daily lessons and quizzes. Your apps stay locked until you finish.
+          No bypass. No exceptions. Consistent daily reps beat a two-week cram — every time.
         </Text>
       </View>
 
@@ -992,8 +991,8 @@ function CommitmentScreen({ onNext }: { onNext: () => void }) {
     <Animated.View entering={FadeInDown.duration(350)} style={cms.root}>
       {!done ? (
         <>
-          <Text style={cms.title}>Ready to make every{"\n"}unlock count?</Text>
-          <Text style={cms.sub}>Make a commitment to yourself</Text>
+          <Text style={cms.title}>Your results start{"\n"}with this habit.</Text>
+          <Text style={cms.sub}>Commit to studying before you scroll</Text>
 
           <TouchableOpacity
             onPress={handleTap}
@@ -1014,10 +1013,10 @@ function CommitmentScreen({ onNext }: { onNext: () => void }) {
       ) : (
         <Animated.View entering={FadeIn.duration(300)} style={cms.doneWrap}>
           <Text style={cms.doneEmoji}>🎉</Text>
-          <Text style={cms.doneTitle}>Let's go!</Text>
+          <Text style={cms.doneTitle}>Committed.</Text>
           <Text style={cms.doneSub}>
-            You're committed. Time to upload your first document and start
-            learning.
+            You've made a promise to yourself. Upload your first study document
+            and let's get to work.
           </Text>
         </Animated.View>
       )}
@@ -1084,15 +1083,15 @@ function PricingScreen({ onNext }: { onNext: () => void }) {
 
   return (
     <Animated.View entering={FadeInDown.duration(350)} style={pr.root}>
-      <Text style={pr.eyebrow}>Choose your plan</Text>
-      <Text style={pr.title}>Start free,{'\n'}upgrade anytime</Text>
+      <Text style={pr.eyebrow}>Your exam prep plan</Text>
+      <Text style={pr.title}>Start today.{'\n'}Your exam won't wait.</Text>
 
       <View style={pr.card}>
         {[
-          { bold: 'Unlimited courses', sub: 'Upload as many PDFs and YouTube videos as you want' },
-          { bold: 'YouTube import', sub: 'Turn any lecture into a structured course instantly' },
-          { bold: 'App blocking', sub: 'Lock distracting apps until your lesson is done' },
-          { bold: 'Flashcards & quizzes', sub: 'Active recall tools built into every lesson' },
+          { bold: 'Unlimited exam prep courses', sub: 'Upload lecture notes, outlines, any PDF or YouTube video' },
+          { bold: 'YouTube import', sub: 'Turn any lecture into a structured daily lesson in seconds' },
+          { bold: 'Enforced app blocking', sub: 'Apps stay locked until you finish your daily lessons — no bypass' },
+          { bold: 'Flashcards & quizzes', sub: 'Active recall built into every lesson — the method that actually builds memory' },
         ].map((f) => (
           <View key={f.bold} style={pr.featureRow}>
             <Text style={pr.featureCheck}>✓</Text>
@@ -1110,14 +1109,14 @@ function PricingScreen({ onNext }: { onNext: () => void }) {
         disabled={loading}
         activeOpacity={0.85}
       >
-        <Text style={pr.btnPrimaryTxt}>{loading ? 'Loading…' : 'Get Premium'}</Text>
+        <Text style={pr.btnPrimaryTxt}>{loading ? 'Loading…' : 'Unlock Premium'}</Text>
       </TouchableOpacity>
 
       <TouchableOpacity onPress={onNext} activeOpacity={0.7} style={pr.btnSecondary}>
-        <Text style={pr.btnSecondaryTxt}>Start with Free →</Text>
+        <Text style={pr.btnSecondaryTxt}>Start free, upgrade later →</Text>
       </TouchableOpacity>
 
-      <Text style={pr.legal}>Free plan includes 1 course · Cancel anytime</Text>
+      <Text style={pr.legal}>Free plan: 1 course included · No credit card required · Cancel anytime</Text>
     </Animated.View>
   );
 }

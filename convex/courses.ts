@@ -1,6 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { requireAdmin } from "./lib/requireAdmin";
 
 // ── Admin queries/mutations ───────────────────────────────────────────────────
 
@@ -50,6 +51,7 @@ export const getCourse = query({
 export const deleteCourse = mutation({
   args: { id: v.id("courses") },
   handler: async (ctx, { id }) => {
+    await requireAdmin(ctx);
     const lessons = await ctx.db
       .query("lessons")
       .withIndex("by_course", (q) => q.eq("courseId", id))
@@ -76,6 +78,7 @@ export const updateCourse = mutation({
     adminCreated: v.optional(v.boolean()),
   },
   handler: async (ctx, { id, group_id, difficulty, adminCreated, ...rest }) => {
+    await requireAdmin(ctx);
     const patch: Record<string, unknown> = { ...rest };
     if (group_id !== undefined) patch.group_id = group_id ?? undefined;
     if (difficulty !== undefined) {
@@ -91,12 +94,14 @@ export const reorderCourses = mutation({
     items: v.array(v.object({ id: v.id("courses"), sort_order: v.number() })),
   },
   handler: async (ctx, { items }) => {
+    await requireAdmin(ctx);
     await Promise.all(items.map(({ id, sort_order }) => ctx.db.patch(id, { sort_order })));
   },
 });
 
 export const generateUploadUrl = mutation({
   handler: async (ctx) => {
+    await requireAdmin(ctx);
     return ctx.storage.generateUploadUrl();
   },
 });
@@ -230,6 +235,7 @@ export const updateStatus = mutation({
     ),
   },
   handler: async (ctx, { courseId, status }) => {
+    await requireAdmin(ctx);
     await ctx.db.patch(courseId, { status });
   },
 });
@@ -251,6 +257,7 @@ export const insertLesson = mutation({
     ),
   },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
     return ctx.db.insert("lessons", { ...args, completed: false });
   },
 });
@@ -270,6 +277,7 @@ export const patchTitleAndDescription = mutation({
     totalLessons: v.number(),
   },
   handler: async (ctx, { courseId, title, description, totalLessons }) => {
+    await requireAdmin(ctx);
     await ctx.db.patch(courseId, { title, description, totalLessons });
   },
 });
@@ -277,6 +285,7 @@ export const patchTitleAndDescription = mutation({
 export const clearLessons = mutation({
   args: { courseId: v.id("courses") },
   handler: async (ctx, { courseId }) => {
+    await requireAdmin(ctx);
     const lessons = await ctx.db
       .query("lessons")
       .withIndex("by_course", (q) => q.eq("courseId", courseId))
@@ -290,9 +299,10 @@ export const remove = mutation({
   handler: async (ctx, { courseId }) => {
     const userId = await getAuthUserId(ctx);
     const course = await ctx.db.get(courseId);
-    // Allow deletion if: user owns it, or it's an admin-created course
     if (!course) throw new Error("Course not found");
-    if (!course.adminCreated && course.userId !== userId) throw new Error("Not authorized");
+    // Admin-created courses can only be deleted from the admin panel (use deleteCourse)
+    if (course.adminCreated) throw new Error("Use the admin panel to delete admin-created courses");
+    if (course.userId !== userId) throw new Error("Not authorized");
     const lessons = await ctx.db
       .query("lessons")
       .withIndex("by_course", (q) => q.eq("courseId", courseId))

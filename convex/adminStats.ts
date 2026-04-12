@@ -1,7 +1,9 @@
 import { query } from "./_generated/server";
+import { requireAdmin } from "./lib/requireAdmin";
 
 export const getAdminStats = query({
   handler: async (ctx) => {
+    await requireAdmin(ctx);
     const allUsers = await ctx.db.query("users").collect();
     const allCourses = await ctx.db.query("courses").collect();
     const allLessons = await ctx.db.query("lessons").collect();

@@ -1,10 +1,10 @@
+import { Alert, Linking } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { GoalConfig } from '../store/useAppStore';
 
 const NOTIFICATION_IDENTIFIER_PREFIX = 'unloq-study-reminder-';
 
-// Set notification handler — silently no-ops in Expo Go (native module missing)
-try {
+export function setupNotificationHandler() {
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
       shouldShowAlert: true,
@@ -12,7 +12,7 @@ try {
       shouldSetBadge: false,
     }),
   });
-} catch {}
+}
 
 export async function requestNotificationPermission(): Promise<boolean> {
   try {
@@ -25,6 +25,15 @@ export async function requestNotificationPermission(): Promise<boolean> {
   }
 }
 
+export async function getNotificationPermissionStatus(): Promise<'granted' | 'denied' | 'undetermined'> {
+  try {
+    const { status } = await Notifications.getPermissionsAsync();
+    return status as 'granted' | 'denied' | 'undetermined';
+  } catch {
+    return 'undetermined';
+  }
+}
+
 function getDaysForConfig(cfg: GoalConfig): number[] {
   switch (cfg.frequency) {
     case 'daily':    return [0, 1, 2, 3, 4, 5, 6];
@@ -34,38 +43,53 @@ function getDaysForConfig(cfg: GoalConfig): number[] {
   }
 }
 
-export async function scheduleStudyReminders(cfg: GoalConfig): Promise<void> {
-  try {
-    await cancelStudyReminders();
-    const granted = await requestNotificationPermission();
-    if (!granted) return;
+/**
+ * Schedules weekly study reminder notifications.
+ * Returns true if notifications were scheduled, false if permission was denied.
+ * Throws if scheduling fails for a reason other than permission.
+ */
+export async function scheduleStudyReminders(cfg: GoalConfig): Promise<boolean> {
+  await cancelStudyReminders();
 
-    const days = getDaysForConfig(cfg);
-    if (days.length === 0) return;
+  const granted = await requestNotificationPermission();
+  if (!granted) return false;
 
-    const [hourStr, minuteStr] = cfg.lockTime.split(':');
-    const hour   = parseInt(hourStr,   10);
-    const minute = parseInt(minuteStr, 10);
+  const days = getDaysForConfig(cfg);
+  if (days.length === 0) return true;
 
-    for (const weekday of days) {
-      await Notifications.scheduleNotificationAsync({
-        identifier: `${NOTIFICATION_IDENTIFIER_PREFIX}${weekday}`,
-        content: {
-          title: 'Time to learn 📖',
-          body: "Complete today's lesson to stay on track.",
-          sound: true,
-        },
-        trigger: {
-          type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
-          weekday: weekday + 1, // expo: 1=Sun … 7=Sat
-          hour,
-          minute,
-        },
-      });
-    }
-  } catch {
-    // Silently ignore — notifications unavailable in Expo Go
+  const [hourStr, minuteStr] = cfg.lockTime.split(':');
+  const hour   = parseInt(hourStr,   10);
+  const minute = parseInt(minuteStr, 10);
+
+  for (const weekday of days) {
+    await Notifications.scheduleNotificationAsync({
+      identifier: `${NOTIFICATION_IDENTIFIER_PREFIX}${weekday}`,
+      content: {
+        title: 'Time to learn 📖',
+        body: "Complete today's lesson to stay on track.",
+        sound: true,
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
+        weekday: weekday + 1, // expo: 1=Sun … 7=Sat
+        hour,
+        minute,
+      },
+    });
   }
+
+  return true;
+}
+
+export function showNotificationPermissionAlert() {
+  Alert.alert(
+    'Notifications disabled',
+    'To receive study reminders, enable notifications for Loqlearn in Settings.',
+    [
+      { text: 'Not now', style: 'cancel' },
+      { text: 'Open Settings', onPress: () => Linking.openSettings() },
+    ],
+  );
 }
 
 export async function cancelStudyReminders(): Promise<void> {

@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { requireAdmin } from "./lib/requireAdmin";
 
 export const listGroups = query({
   handler: async (ctx) => {
@@ -16,6 +17,7 @@ export const createGroup = mutation({
     description: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
     const existing = await ctx.db.query("groups").collect();
     const sort_order = existing.length;
     return ctx.db.insert("groups", { ...args, sort_order });
@@ -29,6 +31,7 @@ export const updateGroup = mutation({
     description: v.optional(v.string()),
   },
   handler: async (ctx, { id, name, description }) => {
+    await requireAdmin(ctx);
     await ctx.db.patch(id, { name, description });
   },
 });
@@ -36,6 +39,7 @@ export const updateGroup = mutation({
 export const deleteGroup = mutation({
   args: { id: v.id("groups") },
   handler: async (ctx, { id }) => {
+    await requireAdmin(ctx);
     // Unlink courses from this group
     const courses = await ctx.db
       .query("courses")
@@ -51,6 +55,7 @@ export const reorderGroups = mutation({
     items: v.array(v.object({ id: v.id("groups"), sort_order: v.number() })),
   },
   handler: async (ctx, { items }) => {
+    await requireAdmin(ctx);
     await Promise.all(items.map(({ id, sort_order }) => ctx.db.patch(id, { sort_order })));
   },
 });

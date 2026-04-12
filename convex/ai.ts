@@ -533,6 +533,9 @@ export const adminGenerateCourse = action({
     pdfStorageId: v.optional(v.id("_storage")),
   },
   handler: async (ctx, args) => {
+    const isAdmin = await ctx.runQuery(api.users.isAdmin, {});
+    if (!isAdmin) throw new Error("Not authorized");
+
     const difficultyLower = args.difficulty.toLowerCase() as "beginner" | "intermediate" | "advanced";
 
     // Create the course record

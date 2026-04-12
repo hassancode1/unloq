@@ -234,11 +234,13 @@ const pillStyles = StyleSheet.create({
 
 // ── Group accordion card ──────────────────────────────────────────────────────
 
-function GroupCard({ group, onCourseSelect, C, fs, F, initialOpen = false }: {
+function GroupCard({ group, onCourseSelect, C, fs, F, initialOpen = false, isPremium, freeCourseId }: {
   group: { name: string; courses: any[] };
   onCourseSelect: (id: Id<'courses'>) => void;
   C: AppColors; fs: (n: number) => number; F: any;
   initialOpen?: boolean;
+  isPremium: boolean;
+  freeCourseId: string | null;
 }) {
   const [open, setOpen] = useState(initialOpen);
   const rotation = useSharedValue(initialOpen ? 1 : 0);
@@ -281,28 +283,38 @@ function GroupCard({ group, onCourseSelect, C, fs, F, initialOpen = false }: {
         <Animated.View entering={FadeInDown.duration(180)} style={[accordionStyles.courseList, { borderTopColor: C.border }]}>
           {group.courses.map((course: any, ci: number) => {
             const { color: cColor } = topicColor(course.title);
+            const locked = !isPremium && course._id !== freeCourseId;
             return (
               <TouchableOpacity
                 key={course._id}
                 style={[
                   accordionStyles.courseRow,
                   ci < group.courses.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
+                  locked && { opacity: 0.6 },
                 ]}
                 activeOpacity={0.72}
-                onPress={() => { Haptics.selectionAsync(); onCourseSelect(course._id); }}
+                onPress={async () => {
+                  if (locked) {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    await RevenueCatUI.presentPaywall();
+                  } else {
+                    Haptics.selectionAsync();
+                    onCourseSelect(course._id);
+                  }
+                }}
               >
                 <View style={[accordionStyles.courseDot, { backgroundColor: `${cColor}18`, borderColor: `${cColor}35` }]}>
-                  <Ionicons name="book-outline" size={13} color={cColor} />
+                  <Ionicons name={locked ? 'lock-closed' : 'book-outline'} size={13} color={locked ? C.muted : cColor} />
                 </View>
                 <View style={{ flex: 1, gap: 2 }}>
-                  <Text style={[{ fontFamily: F.semiBold, fontSize: fs(13), color: C.text }]} numberOfLines={1}>
+                  <Text style={[{ fontFamily: F.semiBold, fontSize: fs(13), color: locked ? C.muted : C.text }]} numberOfLines={1}>
                     {course.title}
                   </Text>
                   <Text style={[{ fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>
-                    {course.totalLessons} lessons
+                    {locked ? 'Premium' : `${course.totalLessons} lessons`}
                   </Text>
                 </View>
-                <Ionicons name="chevron-forward" size={14} color={C.muted} />
+                <Ionicons name={locked ? 'lock-closed-outline' : 'chevron-forward'} size={14} color={C.muted} />
               </TouchableOpacity>
             );
           })}
@@ -327,11 +339,12 @@ function ExamPrepContent({ onCourseSelect, C, fs, F }: {
   onCourseSelect: (id: Id<'courses'>) => void; C: AppColors; fs: (n: number) => number; F: any;
 }) {
   const styles = React.useMemo(() => makeSharedStyles(C), [C]);
+  const { isPremium } = useEntitlement();
   const rawCourses = useQuery(api.courses.listPublishedAdminCourses);
   const isLoading  = rawCourses === undefined;
   const ready      = ((rawCourses ?? []) as any[]).filter((c: any) => c.status === 'ready');
 
-  const { groups, ungrouped } = useMemo(() => {
+  const { groups, ungrouped, freeCourseId } = useMemo(() => {
     const map = new Map<string, { name: string; courses: any[] }>();
     const none: any[] = [];
     for (const c of ready) {
@@ -342,7 +355,10 @@ function ExamPrepContent({ onCourseSelect, C, fs, F }: {
         none.push(c);
       }
     }
-    return { groups: Array.from(map.values()), ungrouped: none };
+    const groupList = Array.from(map.values());
+    // First course across all exam prep content is always free
+    const firstCourse = groupList[0]?.courses[0] ?? none[0] ?? null;
+    return { groups: groupList, ungrouped: none, freeCourseId: firstCourse?._id ?? null };
   }, [ready]);
 
   if (isLoading) {
@@ -386,31 +402,42 @@ function ExamPrepContent({ onCourseSelect, C, fs, F }: {
             onCourseSelect={onCourseSelect}
             C={C} fs={fs} F={F}
             initialOpen={gi === 0}
+            isPremium={isPremium}
+            freeCourseId={freeCourseId}
           />
         </Animated.View>
       ))}
 
       {ungrouped.map((course: any, ci: number) => {
         const { emoji, color } = topicColor(course.title);
+        const locked = !isPremium && course._id !== freeCourseId;
         return (
           <Animated.View key={course._id} entering={FadeInDown.delay((groups.length + ci) * 40).duration(240)}>
             <TouchableOpacity
-              style={[accordionStyles.card, accordionStyles.header, { backgroundColor: C.surface, borderColor: C.border }]}
+              style={[accordionStyles.card, accordionStyles.header, { backgroundColor: C.surface, borderColor: C.border }, locked && { opacity: 0.6 }]}
               activeOpacity={0.72}
-              onPress={() => { Haptics.selectionAsync(); onCourseSelect(course._id); }}
+              onPress={async () => {
+                if (locked) {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  await RevenueCatUI.presentPaywall();
+                } else {
+                  Haptics.selectionAsync();
+                  onCourseSelect(course._id);
+                }
+              }}
             >
               <View style={[accordionStyles.iconWrap, { backgroundColor: `${color}14`, borderColor: `${color}28` }]}>
-                <Text style={{ fontSize: 22 }}>{emoji}</Text>
+                <Text style={{ fontSize: 22 }}>{locked ? '🔒' : emoji}</Text>
               </View>
               <View style={{ flex: 1, gap: 3 }}>
-                <Text style={[{ fontFamily: F.semiBold, fontSize: fs(15), color: C.text, lineHeight: 20 }]} numberOfLines={2}>
+                <Text style={[{ fontFamily: F.semiBold, fontSize: fs(15), color: locked ? C.muted : C.text, lineHeight: 20 }]} numberOfLines={2}>
                   {course.title}
                 </Text>
                 <Text style={[{ fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>
-                  {course.totalLessons} lessons
+                  {locked ? 'Premium' : `${course.totalLessons} lessons`}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={C.muted} />
+              <Ionicons name={locked ? 'lock-closed-outline' : 'chevron-forward'} size={16} color={C.muted} />
             </TouchableOpacity>
           </Animated.View>
         );

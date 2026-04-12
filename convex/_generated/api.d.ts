@@ -15,6 +15,7 @@ import type * as courses from "../courses.js";
 import type * as debug from "../debug.js";
 import type * as groups from "../groups.js";
 import type * as http from "../http.js";
+import type * as lib_requireAdmin from "../lib/requireAdmin.js";
 import type * as users from "../users.js";
 
 import type {
@@ -31,6 +32,7 @@ declare const fullApi: ApiFromModules<{
   debug: typeof debug;
   groups: typeof groups;
   http: typeof http;
+  "lib/requireAdmin": typeof lib_requireAdmin;
   users: typeof users;
 }>;
 
