@@ -232,6 +232,95 @@ const pillStyles = StyleSheet.create({
   label: {},
 });
 
+// ── Group accordion card ──────────────────────────────────────────────────────
+
+function GroupCard({ group, onCourseSelect, C, fs, F, initialOpen = false }: {
+  group: { name: string; courses: any[] };
+  onCourseSelect: (id: Id<'courses'>) => void;
+  C: AppColors; fs: (n: number) => number; F: any;
+  initialOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(initialOpen);
+  const rotation = useSharedValue(initialOpen ? 1 : 0);
+  const chevronAnim = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${rotation.value * 180}deg` }],
+  }));
+
+  const toggle = () => {
+    Haptics.selectionAsync();
+    const next = !open;
+    rotation.value = withSpring(next ? 1 : 0, { damping: 14, stiffness: 160 });
+    setOpen(next);
+  };
+
+  const { emoji, color } = topicColor(group.name);
+  const totalLessons = group.courses.reduce((s: number, c: any) => s + (c.totalLessons ?? 0), 0);
+
+  return (
+    <View style={[accordionStyles.card, { backgroundColor: C.surface, borderColor: open ? `${color}35` : C.border }]}>
+      {/* ── Header (always visible) ── */}
+      <TouchableOpacity style={accordionStyles.header} onPress={toggle} activeOpacity={0.75}>
+        <View style={[accordionStyles.iconWrap, { backgroundColor: `${color}14`, borderColor: `${color}28` }]}>
+          <Text style={{ fontSize: 22 }}>{emoji}</Text>
+        </View>
+        <View style={{ flex: 1, gap: 3 }}>
+          <Text style={[{ fontFamily: F.semiBold, fontSize: fs(15), color: C.text, lineHeight: 20 }]} numberOfLines={2}>
+            {group.name}
+          </Text>
+          <Text style={[{ fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>
+            {group.courses.length} course{group.courses.length !== 1 ? 's' : ''} · {totalLessons} lessons
+          </Text>
+        </View>
+        <Animated.View style={chevronAnim}>
+          <Ionicons name="chevron-down" size={18} color={C.muted} />
+        </Animated.View>
+      </TouchableOpacity>
+
+      {/* ── Expanded course rows ── */}
+      {open && (
+        <Animated.View entering={FadeInDown.duration(180)} style={[accordionStyles.courseList, { borderTopColor: C.border }]}>
+          {group.courses.map((course: any, ci: number) => {
+            const { color: cColor } = topicColor(course.title);
+            return (
+              <TouchableOpacity
+                key={course._id}
+                style={[
+                  accordionStyles.courseRow,
+                  ci < group.courses.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
+                ]}
+                activeOpacity={0.72}
+                onPress={() => { Haptics.selectionAsync(); onCourseSelect(course._id); }}
+              >
+                <View style={[accordionStyles.courseDot, { backgroundColor: `${cColor}18`, borderColor: `${cColor}35` }]}>
+                  <Ionicons name="book-outline" size={13} color={cColor} />
+                </View>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={[{ fontFamily: F.semiBold, fontSize: fs(13), color: C.text }]} numberOfLines={1}>
+                    {course.title}
+                  </Text>
+                  <Text style={[{ fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>
+                    {course.totalLessons} lessons
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={14} color={C.muted} />
+              </TouchableOpacity>
+            );
+          })}
+        </Animated.View>
+      )}
+    </View>
+  );
+}
+
+const accordionStyles = StyleSheet.create({
+  card: { borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: Spacing.md },
+  iconWrap: { width: 48, height: 48, borderRadius: 13, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
+  courseList: { borderTopWidth: StyleSheet.hairlineWidth },
+  courseRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: Spacing.md, paddingVertical: 13 },
+  courseDot: { width: 32, height: 32, borderRadius: 9, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
+});
+
 // ── Exam Prep tab content ─────────────────────────────────────────────────────
 
 function ExamPrepContent({ onCourseSelect, C, fs, F }: {
@@ -242,7 +331,6 @@ function ExamPrepContent({ onCourseSelect, C, fs, F }: {
   const isLoading  = rawCourses === undefined;
   const ready      = ((rawCourses ?? []) as any[]).filter((c: any) => c.status === 'ready');
 
-  // Group courses by group_id, preserving order; ungrouped at the end
   const { groups, ungrouped } = useMemo(() => {
     const map = new Map<string, { name: string; courses: any[] }>();
     const none: any[] = [];
@@ -291,124 +379,45 @@ function ExamPrepContent({ onCourseSelect, C, fs, F }: {
 
   return (
     <Animated.View entering={FadeInDown.delay(60).duration(260)} style={{ gap: 10 }}>
-      {groups.map((group, gi) => {
-        const totalLessons = group.courses.reduce((s: number, c: any) => s + (c.totalLessons ?? 0), 0);
-        const { emoji, color } = topicColor(group.name);
-        const singleCourse    = group.courses.length === 1 ? group.courses[0] : null;
+      {groups.map((group, gi) => (
+        <Animated.View key={gi} entering={FadeInDown.delay(gi * 40).duration(240)}>
+          <GroupCard
+            group={group}
+            onCourseSelect={onCourseSelect}
+            C={C} fs={fs} F={F}
+            initialOpen={gi === 0}
+          />
+        </Animated.View>
+      ))}
 
+      {ungrouped.map((course: any, ci: number) => {
+        const { emoji, color } = topicColor(course.title);
         return (
-          <Animated.View key={gi} entering={FadeInDown.delay(gi * 40).duration(260)}>
+          <Animated.View key={course._id} entering={FadeInDown.delay((groups.length + ci) * 40).duration(240)}>
             <TouchableOpacity
-              style={[groupCardStyles.card, { backgroundColor: C.surface, borderColor: C.border }]}
-              activeOpacity={singleCourse ? 0.72 : 1}
-              onPress={singleCourse ? () => { Haptics.selectionAsync(); onCourseSelect(singleCourse._id); } : undefined}
+              style={[accordionStyles.card, accordionStyles.header, { backgroundColor: C.surface, borderColor: C.border }]}
+              activeOpacity={0.72}
+              onPress={() => { Haptics.selectionAsync(); onCourseSelect(course._id); }}
             >
-              {/* Card header */}
-              <View style={groupCardStyles.header}>
-                <View style={[groupCardStyles.iconWrap, { backgroundColor: `${color}14`, borderColor: `${color}28` }]}>
-                  <Text style={{ fontSize: 22 }}>{emoji}</Text>
-                </View>
-                <View style={{ flex: 1, gap: 3 }}>
-                  <Text style={[groupCardStyles.name, { fontFamily: F.semiBold, fontSize: fs(15), color: C.text }]} numberOfLines={2}>
-                    {group.name}
-                  </Text>
-                  <Text style={[groupCardStyles.meta, { fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>
-                    {totalLessons} lesson{totalLessons !== 1 ? 's' : ''}
-                    {group.courses.length > 1 ? ` · ${group.courses.length} courses` : ''}
-                  </Text>
-                </View>
-                {singleCourse && (
-                  <View style={[groupCardStyles.arrowBtn, { backgroundColor: `${color}14` }]}>
-                    <Ionicons name="arrow-forward" size={15} color={color} />
-                  </View>
-                )}
+              <View style={[accordionStyles.iconWrap, { backgroundColor: `${color}14`, borderColor: `${color}28` }]}>
+                <Text style={{ fontSize: 22 }}>{emoji}</Text>
               </View>
-
-              {/* Multiple courses — show as rows */}
-              {group.courses.length > 1 && (
-                <View style={[groupCardStyles.courseList, { borderTopColor: C.border }]}>
-                  {group.courses.map((course: any, ci: number) => {
-                    return (
-                      <TouchableOpacity
-                        key={course._id}
-                        style={[
-                          groupCardStyles.courseRow,
-                          ci < group.courses.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
-                        ]}
-                        activeOpacity={0.72}
-                        onPress={() => { Haptics.selectionAsync(); onCourseSelect(course._id); }}
-                      >
-                        <Text style={[{ fontFamily: F.medium, fontSize: fs(13), color: C.text, flex: 1 }]} numberOfLines={1}>
-                          {course.title}
-                        </Text>
-                        <Text style={[{ fontFamily: F.regular, fontSize: fs(11), color: C.muted, marginRight: 8 }]}>
-                          {course.totalLessons} lessons
-                        </Text>
-                        <Ionicons name="chevron-forward" size={14} color={C.muted} />
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              )}
+              <View style={{ flex: 1, gap: 3 }}>
+                <Text style={[{ fontFamily: F.semiBold, fontSize: fs(15), color: C.text, lineHeight: 20 }]} numberOfLines={2}>
+                  {course.title}
+                </Text>
+                <Text style={[{ fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>
+                  {course.totalLessons} lessons
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={C.muted} />
             </TouchableOpacity>
           </Animated.View>
         );
       })}
-
-      {/* Ungrouped admin courses */}
-      {ungrouped.length > 0 && (
-        <View style={{ gap: 10 }}>
-          {ungrouped.map((course: any) => {
-            const { emoji, color } = topicColor(course.title);
-            return (
-              <TouchableOpacity
-                key={course._id}
-                style={[groupCardStyles.card, groupCardStyles.header, { backgroundColor: C.surface, borderColor: C.border }]}
-                activeOpacity={0.72}
-                onPress={() => { Haptics.selectionAsync(); onCourseSelect(course._id); }}
-              >
-                <View style={[groupCardStyles.iconWrap, { backgroundColor: `${color}14`, borderColor: `${color}28` }]}>
-                  <Text style={{ fontSize: 22 }}>{emoji}</Text>
-                </View>
-                <View style={{ flex: 1, gap: 3 }}>
-                  <Text style={[groupCardStyles.name, { fontFamily: F.semiBold, fontSize: fs(15), color: C.text }]} numberOfLines={2}>
-                    {course.title}
-                  </Text>
-                  <Text style={[groupCardStyles.meta, { fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>
-                    {course.totalLessons} lessons
-                  </Text>
-                </View>
-                <View style={[groupCardStyles.arrowBtn, { backgroundColor: `${color}14` }]}>
-                  <Ionicons name="arrow-forward" size={15} color={color} />
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      )}
     </Animated.View>
   );
 }
-
-const groupCardStyles = StyleSheet.create({
-  card: {
-    borderRadius: 18,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: Spacing.md,
-  },
-  iconWrap: { width: 50, height: 50, borderRadius: 14, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
-  name: { lineHeight: 20 },
-  meta: {},
-  arrowBtn: { width: 34, height: 34, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-  courseList: { borderTopWidth: StyleSheet.hairlineWidth },
-  courseRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.md, paddingVertical: 12 },
-});
 
 // ── My Courses tab content ────────────────────────────────────────────────────
 

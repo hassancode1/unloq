@@ -2,8 +2,18 @@ import { NativeModules, Platform } from 'react-native';
 
 const { FamilyControlsModule } = NativeModules;
 
+if (Platform.OS === 'ios' && !FamilyControlsModule) {
+  console.warn(
+    '[FamilyControls] Native module not found. ' +
+    'This usually means the Family Controls capability is missing from the App ID in the Apple Developer portal. ' +
+    'Available NativeModules: ' + Object.keys(NativeModules).join(', ')
+  );
+}
+
 function noop(): Promise<any> {
-  return Promise.reject(new Error('FamilyControls is only available on iOS'));
+  return Promise.reject(new Error(
+    'FamilyControls native module unavailable — ensure the Family Controls capability is enabled for this App ID in the Apple Developer portal and rebuild.'
+  ));
 }
 
 const mod = Platform.OS === 'ios' && FamilyControlsModule ? FamilyControlsModule : null;

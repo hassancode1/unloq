@@ -3,6 +3,7 @@ import * as Haptics from 'expo-haptics';
 import React, { useState, useCallback, useEffect } from 'react';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import {
+  Alert,
   ActivityIndicator,
   ScrollView,
   StyleSheet,
@@ -213,14 +214,38 @@ export default function GoalSetupScreen({ onComplete }: Props) {
   const handleOpenPicker = useCallback(async () => {
     setPickerLoading(true);
     try {
-      const status = await getAuthorizationStatus();
-      if (status === 'notDetermined') await requestAuthorization();
+      let status = await getAuthorizationStatus();
+
+      if (status === 'notDetermined') {
+        await requestAuthorization();
+        status = await getAuthorizationStatus();
+      }
+
+      if (status === 'denied') {
+        Alert.alert(
+          'Screen Time Access Required',
+          'Please go to Settings → Screen Time → Loq Learn and allow access.',
+          [{ text: 'OK' }],
+        );
+        return;
+      }
+
+      if (status !== 'approved') {
+        Alert.alert('Permission Required', `Screen Time status: ${status}. Please try again.`);
+        return;
+      }
+
       const count = await presentActivityPicker();
       setBlockedCount(count);
       setAppsSelected(count > 0);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e: any) {
-      if (e?.message !== 'User cancelled') console.warn('FamilyControls:', e?.message);
+      if (e?.code !== 'CANCELLED') {
+        const { NativeModules } = require('react-native');
+        const moduleKeys = Object.keys(NativeModules).filter(k => k.toLowerCase().includes('family') || k.toLowerCase().includes('screen') || k.toLowerCase().includes('managed'));
+        const debug = moduleKeys.length ? `\n\nLoaded: ${moduleKeys.join(', ')}` : `\n\nNo Family/Screen modules found in NativeModules`;
+        Alert.alert('Error', (e?.message ?? 'Something went wrong') + debug);
+      }
     } finally {
       setPickerLoading(false);
     }
