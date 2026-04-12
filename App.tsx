@@ -74,7 +74,7 @@ function computeShouldLock(
 
 function LockCheck() {
   const { flow, setFlow, goalConfig, dailyProgress } = useAppStore();
-  const courses = useQuery(api.courses.listWithProgress);
+  const courses = useQuery(api.courses.listMineWithProgress);
 
   // Stable ref so the AppState handler always sees the latest values
   const ref = useRef({ flow, setFlow, goalConfig, dailyProgress, courses });
@@ -101,9 +101,13 @@ function LockCheck() {
     return () => sub.remove();
   }, [check]);
 
-  // Initial check once courses have loaded from Convex
+  // Initial check once courses have loaded from Convex (run only once — not on every live-query update)
+  const didInitialCheck = useRef(false);
   useEffect(() => {
-    if (courses !== undefined) check();
+    if (courses !== undefined && !didInitialCheck.current) {
+      didInitialCheck.current = true;
+      check();
+    }
   }, [courses]);
 
   // Auto-unlock when a lesson is completed and goal is now met

@@ -32,7 +32,7 @@ export default function StatsScreen() {
   const styles = React.useMemo(() => makeStyles(C), [C]);
   const { goalConfig, dailyProgress } = useAppStore();
 
-  const coursesRaw = (useQuery(api.courses.listWithProgress) ?? []) as any[];
+  const coursesRaw = (useQuery(api.courses.listMineWithProgress) ?? []) as any[];
   const courses = coursesRaw.filter((c: any) => c.status !== "error");
 
   const todayStr = new Date().toISOString().slice(0, 10);

@@ -234,7 +234,7 @@ export default function UploadScreen({ onBack }: Props) {
   const difficulty  = DIFFICULTIES[diffIdx];
 
   const { isPremium } = useEntitlement();
-  const existingCourses = useQuery(api.courses.list);
+  const existingCourses = useQuery(api.courses.listMine);
   const hasReachedFreeLimit = !isPremium && (existingCourses?.filter(c => c.status !== 'error').length ?? 0) >= 1;
 
   const createCourse   = useMutation(api.courses.create);

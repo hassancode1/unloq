@@ -153,6 +153,42 @@ export const list = query({
   },
 });
 
+// Returns only courses the user uploaded themselves (no admin-created courses)
+export const listMine = query({
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+    return ctx.db
+      .query("courses")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .order("desc")
+      .collect();
+  },
+});
+
+// Same as listMine but includes lesson progress counts
+export const listMineWithProgress = query({
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+    const userCourses = await ctx.db
+      .query("courses")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .order("desc")
+      .collect();
+    return Promise.all(
+      userCourses.map(async (course) => {
+        const lessons = await ctx.db
+          .query("lessons")
+          .withIndex("by_course", (q) => q.eq("courseId", course._id))
+          .collect();
+        const completedCount = lessons.filter((l) => l.completed).length;
+        return { ...course, completedCount, lessonCount: lessons.length };
+      }),
+    );
+  },
+});
+
 export const listWithProgress = query({
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);

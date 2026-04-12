@@ -453,11 +453,12 @@ function MyCoursesContent({ onUpload, onCourseSelect, C, fs, F }: {
 }) {
   const styles = React.useMemo(() => makeSharedStyles(C), [C]);
   const { isPremium } = useEntitlement();
-  const rawCourses = useQuery(api.courses.list);
+  const rawCourses = useQuery(api.courses.listMine);
+  const isLoading = rawCourses === undefined;
   const removeCourse = useMutation(api.courses.remove);
 
-  const personalCourses = ((rawCourses ?? []) as any[]).filter((c: any) => !c.adminCreated && c.status === 'ready');
-  const atFreeLimit = !isPremium && ((rawCourses ?? []) as any[]).filter((c: any) => c.status !== 'error' && !c.adminCreated).length >= 1;
+  const personalCourses = ((rawCourses ?? []) as any[]).filter((c: any) => c.status === 'ready');
+  const atFreeLimit = !isPremium && ((rawCourses ?? []) as any[]).filter((c: any) => c.status !== 'error').length >= 1;
 
   const handleCoursePress = async (course: any) => {
     if (course.status === 'error') {
@@ -489,6 +490,22 @@ function MyCoursesContent({ onUpload, onCourseSelect, C, fs, F }: {
       { text: 'Cancel', style: 'cancel' },
     ]);
   };
+
+  if (isLoading) {
+    return (
+      <Animated.View entering={FadeInDown.duration(260)} style={{ gap: 10 }}>
+        {[1, 2, 3].map((i) => (
+          <View key={i} style={[styles.skeletonCard, { backgroundColor: C.surface, borderColor: C.border }]}>
+            <View style={[styles.skeletonIcon, { backgroundColor: C.surfaceAlt }]} />
+            <View style={{ flex: 1, gap: 8 }}>
+              <View style={[styles.skeletonLine, { width: '55%', backgroundColor: C.surfaceAlt }]} />
+              <View style={[styles.skeletonLine, { width: '35%', backgroundColor: C.surfaceAlt }]} />
+            </View>
+          </View>
+        ))}
+      </Animated.View>
+    );
+  }
 
   return (
     <Animated.View entering={FadeInDown.duration(260)} style={{ gap: 12 }}>
