@@ -361,25 +361,49 @@ const withFamilyControls = (config) => {
   config = withXcodeProject(config, (mod) => {
     const project = mod.modResults;
     const projectName = mod.modRequest.projectName;
+    const targetUUID = project.getFirstTarget().uuid;
+
+    // Find the PBXGroup UUID for the main app target (by path or name)
+    const pbxGroups = project.hash.project.objects['PBXGroup'] || {};
+    let groupKey = null;
+    for (const [key, value] of Object.entries(pbxGroups)) {
+      if (key.endsWith('_comment')) continue;
+      if (typeof value === 'object' && (value.path === projectName || value.name === projectName)) {
+        groupKey = key;
+        break;
+      }
+    }
+
+    if (!groupKey) {
+      console.warn(`[withFamilyControls] Could not find PBXGroup for "${projectName}" — skipping file addition`);
+      return mod;
+    }
 
     const sourceFiles = [
-      'FamilyControlsModule.swift',
-      'FamilyControlsModule.mm',
-      'ScreenBlockingModule.swift',
-      'ScreenBlockingModule.mm',
+      { file: 'FamilyControlsModule.swift', type: 'sourcecode.swift' },
+      { file: 'FamilyControlsModule.mm',    type: 'sourcecode.cpp.objcpp' },
+      { file: 'ScreenBlockingModule.swift',  type: 'sourcecode.swift' },
+      { file: 'ScreenBlockingModule.mm',     type: 'sourcecode.cpp.objcpp' },
     ];
 
-    for (const file of sourceFiles) {
-      const filePath = `${projectName}/${file}`;
-      if (!project.hasFile(filePath)) {
-        project.addSourceFile(filePath, {}, projectName);
+    for (const { file, type } of sourceFiles) {
+      const fullPath = `${projectName}/${file}`;
+      if (!project.hasFile(fullPath)) {
+        project.addFile(file, groupKey, {
+          target: targetUUID,
+          lastKnownFileType: type,
+          sourceTree: '"<group>"',
+        });
       }
     }
 
     for (const fw of ['FamilyControls', 'ManagedSettings']) {
-      if (!project.hasFile(`${fw}.framework`)) {
-        project.addFramework(`${fw}.framework`, {
+      const fwPath = `System/Library/Frameworks/${fw}.framework`;
+      if (!project.hasFile(fwPath)) {
+        project.addFramework(fwPath, {
+          target: targetUUID,
           sourceTree: 'SDKROOT',
+          lastKnownFileType: 'wrapper.framework',
           customFramework: false,
         });
       }
