@@ -12,6 +12,7 @@ import type * as adminStats from "../adminStats.js";
 import type * as ai from "../ai.js";
 import type * as auth from "../auth.js";
 import type * as courses from "../courses.js";
+import type * as crons from "../crons.js";
 import type * as debug from "../debug.js";
 import type * as groups from "../groups.js";
 import type * as http from "../http.js";
@@ -29,6 +30,7 @@ declare const fullApi: ApiFromModules<{
   ai: typeof ai;
   auth: typeof auth;
   courses: typeof courses;
+  crons: typeof crons;
   debug: typeof debug;
   groups: typeof groups;
   http: typeof http;

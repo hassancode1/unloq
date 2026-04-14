@@ -31,7 +31,7 @@ import type { AppColors } from '../constants/Colors';
 const GREEN      = '#16A34A';
 const PRIMARY_DEEP = '#4338CA'; // shadow for DuoButton
 
-type ScreenView = 'list' | 'article' | 'flashcards' | 'quiz';
+type ScreenView = 'list' | 'article' | 'diagram' | 'flashcards' | 'quiz';
 type Props = { courseId: Id<'courses'>; onBack: () => void };
 
 // ── Duo-style button ──────────────────────────────────────────────────────────
@@ -145,10 +145,10 @@ function ArticleView({
       {reachedEnd && (
         <Footer C={C}>
           <DuoButton
-            label="Study Flashcards"
+            label="Continue"
             color={C.primary}
             onPress={onFinish}
-            icon={<Ionicons name="layers-outline" size={18} color="#fff" />}
+            icon={<Ionicons name="arrow-forward" size={18} color="#fff" />}
           />
         </Footer>
       )}
@@ -229,7 +229,7 @@ function FlashcardView({
 
           <View style={{ flex: 1 }}>
             {isLast ? (
-              <DuoButton label="Take Quiz" color={C.primary} onPress={onFinish} icon={<Ionicons name="help-circle-outline" size={18} color="#fff" />} />
+              <DuoButton label="Continue" color={C.primary} onPress={onFinish} icon={<Ionicons name="arrow-forward" size={18} color="#fff" />} />
             ) : (
               <DuoButton label="Next" color={C.primary} onPress={next} icon={<Ionicons name="arrow-forward" size={17} color="#fff" />} />
             )}
@@ -259,6 +259,88 @@ const fc = StyleSheet.create({
   hint:     { textAlign: 'center' },
   navRow:   { flexDirection: 'row', alignItems: 'center', gap: 10 },
   navBtn:   { width: 48, height: 52, borderRadius: 14, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
+});
+
+// ── Diagram view ──────────────────────────────────────────────────────────────
+// Renders the lesson diagram as a tree: root → branches → bullet points
+
+function DiagramView({
+  lesson, onFinish, C, fs, F,
+}: {
+  lesson: any; onFinish: () => void; C: AppColors; fs: (n: number) => number; F: any;
+}) {
+  const diagram = lesson.diagram as { root: string; branches: { name: string; points: string[] }[] } | undefined;
+  if (!diagram) return null;
+
+  return (
+    <>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={[dm.scroll, { paddingBottom: 120 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Root node */}
+        <View style={[dm.rootCard, { backgroundColor: C.primary }]}>
+          <Ionicons name="git-branch-outline" size={20} color="rgba(255,255,255,0.7)" />
+          <Text style={[dm.rootText, { fontFamily: F.bold, fontSize: fs(18), color: '#fff' }]}>
+            {diagram.root}
+          </Text>
+        </View>
+
+        {/* Branches */}
+        {diagram.branches.map((branch, bi) => (
+          <View key={bi} style={dm.branchGroup}>
+            {/* Connector line */}
+            <View style={[dm.connectorLine, { backgroundColor: C.border }]} />
+
+            <View style={[dm.branchCard, { backgroundColor: C.surface, borderColor: `${C.primary}40` }]}>
+              {/* Branch header */}
+              <View style={[dm.branchHeader, { borderBottomColor: C.border }]}>
+                <View style={[dm.branchDot, { backgroundColor: C.primary }]} />
+                <Text style={[dm.branchName, { fontFamily: F.semiBold, fontSize: fs(14), color: C.text }]}>
+                  {branch.name}
+                </Text>
+              </View>
+
+              {/* Points */}
+              {branch.points.map((point, pi) => (
+                <View key={pi} style={dm.pointRow}>
+                  <View style={[dm.pointBullet, { backgroundColor: `${C.primary}50` }]} />
+                  <Text style={[dm.pointText, { fontFamily: F.regular, fontSize: fs(13), color: C.sub, lineHeight: fs(13) * 1.6 }]}>
+                    {point}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        ))}
+      </ScrollView>
+
+      <Footer C={C}>
+        <DuoButton
+          label="Continue"
+          color={C.primary}
+          onPress={onFinish}
+          icon={<Ionicons name="arrow-forward" size={18} color="#fff" />}
+        />
+      </Footer>
+    </>
+  );
+}
+
+const dm = StyleSheet.create({
+  scroll:        { padding: Spacing.lg, gap: 0 },
+  rootCard:      { borderRadius: 18, padding: Spacing.lg, alignItems: 'center', gap: 8, marginBottom: 4 },
+  rootText:      { textAlign: 'center' },
+  branchGroup:   { alignItems: 'center' },
+  connectorLine: { width: 2, height: 20 },
+  branchCard:    { width: '100%', borderRadius: 14, borderWidth: 1, overflow: 'hidden', marginBottom: 4 },
+  branchHeader:  { flexDirection: 'row', alignItems: 'center', gap: 10, padding: Spacing.md, borderBottomWidth: StyleSheet.hairlineWidth },
+  branchDot:     { width: 8, height: 8, borderRadius: 4 },
+  branchName:    { flex: 1 },
+  pointRow:      { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingHorizontal: Spacing.md, paddingVertical: 8 },
+  pointBullet:   { width: 6, height: 6, borderRadius: 3, marginTop: 6, flexShrink: 0 },
+  pointText:     { flex: 1 },
 });
 
 // ── Quiz view ─────────────────────────────────────────────────────────────────
@@ -486,9 +568,10 @@ export default function LessonPlayer({ courseId, onBack }: Props) {
     if (current) setExpandedId(current._id);
   }, [!!lessonsRaw]);
 
-  const openArticle    = useCallback((l: any) => { Haptics.selectionAsync(); setActiveLesson(l); setScreenView('article'); },    []);
+  const openArticle    = useCallback((l: any) => { Haptics.selectionAsync(); setActiveLesson(l); setScreenView('article');    }, []);
+  const openDiagram    = useCallback((l: any) => { Haptics.selectionAsync(); setActiveLesson(l); setScreenView('diagram');    }, []);
   const openFlashcards = useCallback((l: any) => { Haptics.selectionAsync(); setActiveLesson(l); setScreenView('flashcards'); }, []);
-  const openQuiz       = useCallback((l: any) => { Haptics.selectionAsync(); setActiveLesson(l); setScreenView('quiz'); },       []);
+  const openQuiz       = useCallback((l: any) => { Haptics.selectionAsync(); setActiveLesson(l); setScreenView('quiz');       }, []);
 
   const handleQuizFinish = useCallback(async () => {
     if (!activeLesson) return;
@@ -499,6 +582,25 @@ export default function LessonPlayer({ courseId, onBack }: Props) {
     setScreenView('list');
     if (next) setExpandedId(next._id);
   }, [activeLesson, lessons, completeLesson, incrementDailyProgress]);
+
+  // Smart flow helpers — skip views whose data is absent
+  const nextAfterArticle = useCallback((l: any) => {
+    if (l.diagram)            return openDiagram(l);
+    if (l.flashcards?.length) return openFlashcards(l);
+    if (l.quiz?.length)       return openQuiz(l);
+    handleQuizFinish();
+  }, [openDiagram, openFlashcards, openQuiz, handleQuizFinish]);
+
+  const nextAfterDiagram = useCallback((l: any) => {
+    if (l.flashcards?.length) return openFlashcards(l);
+    if (l.quiz?.length)       return openQuiz(l);
+    handleQuizFinish();
+  }, [openFlashcards, openQuiz, handleQuizFinish]);
+
+  const nextAfterFlashcards = useCallback((l: any) => {
+    if (l.quiz?.length) return openQuiz(l);
+    handleQuizFinish();
+  }, [openQuiz, handleQuizFinish]);
 
   // ── Loading ───────────────────────────────────────────────────────────────
 
@@ -526,7 +628,18 @@ export default function LessonPlayer({ courseId, onBack }: Props) {
     return (
       <View style={[S.root, { backgroundColor: C.bg, paddingTop: insets.top }]}>
         <Header title={activeLesson.title} sub={course?.title ?? ''} onBackPress={() => setScreenView('list')} />
-        <ArticleView lesson={activeLesson} onFinish={() => openFlashcards(activeLesson)} C={C} fs={fs} F={F} />
+        <ArticleView lesson={activeLesson} onFinish={() => nextAfterArticle(activeLesson)} C={C} fs={fs} F={F} />
+      </View>
+    );
+  }
+
+  // ── Diagram ───────────────────────────────────────────────────────────────
+
+  if (screenView === 'diagram' && activeLesson) {
+    return (
+      <View style={[S.root, { backgroundColor: C.bg, paddingTop: insets.top }]}>
+        <Header title={activeLesson.title} sub="Diagram" onBackPress={() => setScreenView('list')} />
+        <DiagramView lesson={activeLesson} onFinish={() => nextAfterDiagram(activeLesson)} C={C} fs={fs} F={F} />
       </View>
     );
   }
@@ -537,7 +650,7 @@ export default function LessonPlayer({ courseId, onBack }: Props) {
     return (
       <View style={[S.root, { backgroundColor: C.bg, paddingTop: insets.top }]}>
         <Header title={activeLesson.title} sub="Flashcards" onBackPress={() => setScreenView('list')} />
-        <FlashcardView lesson={activeLesson} onFinish={() => openQuiz(activeLesson)} C={C} fs={fs} F={F} />
+        <FlashcardView lesson={activeLesson} onFinish={() => nextAfterFlashcards(activeLesson)} C={C} fs={fs} F={F} />
       </View>
     );
   }
@@ -621,7 +734,11 @@ export default function LessonPlayer({ courseId, onBack }: Props) {
                       </Text>
                       <View style={S.lessonSubRow}>
                         <Text style={[{ fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>
-                          {lesson.flashcards?.length ?? 0} cards · {lesson.quiz?.length ?? 0} questions
+                          {[
+                            (lesson.flashcards?.length ?? 0) > 0 && `${lesson.flashcards.length} cards`,
+                            (lesson.quiz?.length ?? 0) > 0 && `${lesson.quiz.length} questions`,
+                            lesson.diagram && 'diagram',
+                          ].filter(Boolean).join(' · ') || 'article only'}
                         </Text>
                         {isCompleted && (
                           <View style={[S.badge, { backgroundColor: `${C.primary}12`, borderColor: `${C.primary}30` }]}>
@@ -643,7 +760,7 @@ export default function LessonPlayer({ courseId, onBack }: Props) {
                       <View style={[S.bodyDivider, { backgroundColor: C.border }]} />
 
                       {isCompleted ? (
-                        // Completed lesson — all sections available for review
+                        // Completed lesson — all available sections shown for review
                         <>
                           <TouchableOpacity style={S.contentRow} onPress={() => openArticle(lesson)} activeOpacity={0.75}>
                             <View style={[S.contentIcon, { backgroundColor: `${C.primary}10`, borderColor: `${C.primary}20` }]}>
@@ -656,38 +773,60 @@ export default function LessonPlayer({ courseId, onBack }: Props) {
                             <Ionicons name="arrow-forward" size={15} color={C.primary} />
                           </TouchableOpacity>
 
-                          <View style={[S.bodyDivider, { backgroundColor: C.border }]} />
+                          {lesson.diagram && (
+                            <>
+                              <View style={[S.bodyDivider, { backgroundColor: C.border }]} />
+                              <TouchableOpacity style={S.contentRow} onPress={() => openDiagram(lesson)} activeOpacity={0.75}>
+                                <View style={[S.contentIcon, { backgroundColor: `${C.primary}10`, borderColor: `${C.primary}20` }]}>
+                                  <Ionicons name="git-branch-outline" size={16} color={C.primary} />
+                                </View>
+                                <View style={{ flex: 1, gap: 2 }}>
+                                  <Text style={[S.contentLabel, { fontFamily: F.semiBold, fontSize: fs(13), color: C.text }]}>Diagram</Text>
+                                  <Text style={[S.contentSub, { fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>Visual concept overview</Text>
+                                </View>
+                                <Ionicons name="arrow-forward" size={15} color={C.primary} />
+                              </TouchableOpacity>
+                            </>
+                          )}
 
-                          <TouchableOpacity style={S.contentRow} onPress={() => openFlashcards(lesson)} activeOpacity={0.75}>
-                            <View style={[S.contentIcon, { backgroundColor: `${C.primary}10`, borderColor: `${C.primary}20` }]}>
-                              <Ionicons name="layers-outline" size={16} color={C.primary} />
-                            </View>
-                            <View style={{ flex: 1, gap: 2 }}>
-                              <Text style={[S.contentLabel, { fontFamily: F.semiBold, fontSize: fs(13), color: C.text }]}>Flashcards</Text>
-                              <Text style={[S.contentSub, { fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>
-                                {lesson.flashcards?.length ?? 0} cards
-                              </Text>
-                            </View>
-                            <Ionicons name="arrow-forward" size={15} color={C.primary} />
-                          </TouchableOpacity>
+                          {(lesson.flashcards?.length ?? 0) > 0 && (
+                            <>
+                              <View style={[S.bodyDivider, { backgroundColor: C.border }]} />
+                              <TouchableOpacity style={S.contentRow} onPress={() => openFlashcards(lesson)} activeOpacity={0.75}>
+                                <View style={[S.contentIcon, { backgroundColor: `${C.primary}10`, borderColor: `${C.primary}20` }]}>
+                                  <Ionicons name="layers-outline" size={16} color={C.primary} />
+                                </View>
+                                <View style={{ flex: 1, gap: 2 }}>
+                                  <Text style={[S.contentLabel, { fontFamily: F.semiBold, fontSize: fs(13), color: C.text }]}>Flashcards</Text>
+                                  <Text style={[S.contentSub, { fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>
+                                    {lesson.flashcards.length} cards
+                                  </Text>
+                                </View>
+                                <Ionicons name="arrow-forward" size={15} color={C.primary} />
+                              </TouchableOpacity>
+                            </>
+                          )}
 
-                          <View style={[S.bodyDivider, { backgroundColor: C.border }]} />
-
-                          <TouchableOpacity style={S.contentRow} onPress={() => openQuiz(lesson)} activeOpacity={0.75}>
-                            <View style={[S.contentIcon, { backgroundColor: `${GREEN}10`, borderColor: `${GREEN}20` }]}>
-                              <Ionicons name="help-circle-outline" size={16} color={GREEN} />
-                            </View>
-                            <View style={{ flex: 1, gap: 2 }}>
-                              <Text style={[S.contentLabel, { fontFamily: F.semiBold, fontSize: fs(13), color: C.text }]}>Quiz</Text>
-                              <Text style={[S.contentSub, { fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>
-                                {lesson.quiz?.length ?? 0} questions · Completed
-                              </Text>
-                            </View>
-                            <Ionicons name="checkmark-circle" size={16} color={GREEN} />
-                          </TouchableOpacity>
+                          {(lesson.quiz?.length ?? 0) > 0 && (
+                            <>
+                              <View style={[S.bodyDivider, { backgroundColor: C.border }]} />
+                              <TouchableOpacity style={S.contentRow} onPress={() => openQuiz(lesson)} activeOpacity={0.75}>
+                                <View style={[S.contentIcon, { backgroundColor: `${GREEN}10`, borderColor: `${GREEN}20` }]}>
+                                  <Ionicons name="help-circle-outline" size={16} color={GREEN} />
+                                </View>
+                                <View style={{ flex: 1, gap: 2 }}>
+                                  <Text style={[S.contentLabel, { fontFamily: F.semiBold, fontSize: fs(13), color: C.text }]}>Quiz</Text>
+                                  <Text style={[S.contentSub, { fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>
+                                    {lesson.quiz.length} questions · Completed
+                                  </Text>
+                                </View>
+                                <Ionicons name="checkmark-circle" size={16} color={GREEN} />
+                              </TouchableOpacity>
+                            </>
+                          )}
                         </>
                       ) : (
-                        // Incomplete lesson — article is the entry point, rest is visible but locked
+                        // Incomplete lesson — article is the entry point, rest locked
                         <>
                           <TouchableOpacity style={S.contentRow} onPress={() => openArticle(lesson)} activeOpacity={0.75}>
                             <View style={[S.contentIcon, { backgroundColor: `${C.primary}15`, borderColor: `${C.primary}30` }]}>
@@ -700,35 +839,57 @@ export default function LessonPlayer({ courseId, onBack }: Props) {
                             <Ionicons name="arrow-forward" size={15} color={C.primary} />
                           </TouchableOpacity>
 
-                          <View style={[S.bodyDivider, { backgroundColor: C.border }]} />
+                          {lesson.diagram && (
+                            <>
+                              <View style={[S.bodyDivider, { backgroundColor: C.border }]} />
+                              <View style={[S.contentRow, { opacity: 0.35 }]}>
+                                <View style={[S.contentIcon, { backgroundColor: C.surfaceAlt, borderColor: C.border }]}>
+                                  <Ionicons name="git-branch-outline" size={16} color={C.muted} />
+                                </View>
+                                <View style={{ flex: 1, gap: 2 }}>
+                                  <Text style={[S.contentLabel, { fontFamily: F.semiBold, fontSize: fs(13), color: C.text }]}>Diagram</Text>
+                                  <Text style={[S.contentSub, { fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>Visual concept overview</Text>
+                                </View>
+                                <Ionicons name="lock-closed-outline" size={14} color={C.muted} />
+                              </View>
+                            </>
+                          )}
 
-                          <View style={[S.contentRow, { opacity: 0.35 }]}>
-                            <View style={[S.contentIcon, { backgroundColor: C.surfaceAlt, borderColor: C.border }]}>
-                              <Ionicons name="layers-outline" size={16} color={C.muted} />
-                            </View>
-                            <View style={{ flex: 1, gap: 2 }}>
-                              <Text style={[S.contentLabel, { fontFamily: F.semiBold, fontSize: fs(13), color: C.text }]}>Flashcards</Text>
-                              <Text style={[S.contentSub, { fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>
-                                {lesson.flashcards?.length ?? 0} cards to study
-                              </Text>
-                            </View>
-                            <Ionicons name="lock-closed-outline" size={14} color={C.muted} />
-                          </View>
+                          {(lesson.flashcards?.length ?? 0) > 0 && (
+                            <>
+                              <View style={[S.bodyDivider, { backgroundColor: C.border }]} />
+                              <View style={[S.contentRow, { opacity: 0.35 }]}>
+                                <View style={[S.contentIcon, { backgroundColor: C.surfaceAlt, borderColor: C.border }]}>
+                                  <Ionicons name="layers-outline" size={16} color={C.muted} />
+                                </View>
+                                <View style={{ flex: 1, gap: 2 }}>
+                                  <Text style={[S.contentLabel, { fontFamily: F.semiBold, fontSize: fs(13), color: C.text }]}>Flashcards</Text>
+                                  <Text style={[S.contentSub, { fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>
+                                    {lesson.flashcards.length} cards to study
+                                  </Text>
+                                </View>
+                                <Ionicons name="lock-closed-outline" size={14} color={C.muted} />
+                              </View>
+                            </>
+                          )}
 
-                          <View style={[S.bodyDivider, { backgroundColor: C.border }]} />
-
-                          <View style={[S.contentRow, { opacity: 0.35 }]}>
-                            <View style={[S.contentIcon, { backgroundColor: C.surfaceAlt, borderColor: C.border }]}>
-                              <Ionicons name="help-circle-outline" size={16} color={C.muted} />
-                            </View>
-                            <View style={{ flex: 1, gap: 2 }}>
-                              <Text style={[S.contentLabel, { fontFamily: F.semiBold, fontSize: fs(13), color: C.text }]}>Quiz</Text>
-                              <Text style={[S.contentSub, { fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>
-                                {lesson.quiz?.length ?? 0} questions
-                              </Text>
-                            </View>
-                            <Ionicons name="lock-closed-outline" size={14} color={C.muted} />
-                          </View>
+                          {(lesson.quiz?.length ?? 0) > 0 && (
+                            <>
+                              <View style={[S.bodyDivider, { backgroundColor: C.border }]} />
+                              <View style={[S.contentRow, { opacity: 0.35 }]}>
+                                <View style={[S.contentIcon, { backgroundColor: C.surfaceAlt, borderColor: C.border }]}>
+                                  <Ionicons name="help-circle-outline" size={16} color={C.muted} />
+                                </View>
+                                <View style={{ flex: 1, gap: 2 }}>
+                                  <Text style={[S.contentLabel, { fontFamily: F.semiBold, fontSize: fs(13), color: C.text }]}>Quiz</Text>
+                                  <Text style={[S.contentSub, { fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>
+                                    {lesson.quiz.length} questions
+                                  </Text>
+                                </View>
+                                <Ionicons name="lock-closed-outline" size={14} color={C.muted} />
+                              </View>
+                            </>
+                          )}
                         </>
                       )}
                     </View>

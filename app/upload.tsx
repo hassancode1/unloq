@@ -229,6 +229,9 @@ export default function UploadScreen({ onBack }: Props) {
 
   const [sourceTab, setSourceTab]           = useState<SourceTab>('pdf');
   const [youtubeUrl, setYoutubeUrl] = useState('');
+  const [includeFlashcards, setIncludeFlashcards] = useState(true);
+  const [includeQuiz,       setIncludeQuiz]       = useState(true);
+  const [includeDiagram,    setIncludeDiagram]    = useState(false);
 
   const lessonCount = LESSON_STEPS[lessonIdx];
   const difficulty  = DIFFICULTIES[diffIdx];
@@ -237,8 +240,9 @@ export default function UploadScreen({ onBack }: Props) {
   const existingCourses = useQuery(api.courses.listMine);
   const hasReachedFreeLimit = !isPremium && (existingCourses?.filter(c => c.status !== 'error').length ?? 0) >= 1;
 
-  const createCourse   = useMutation(api.courses.create);
-  const generateCourse = useAction(api.ai.generateCourse);
+  const createCourse     = useMutation(api.courses.create);
+  const generateCourse   = useAction(api.ai.generateCourse);
+  const getUploadUrl     = useMutation(api.courses.generateUploadUrl);
 
   const btnScale = useSharedValue(1);
   const btnAnim  = useAnimatedStyle(() => ({ transform: [{ scale: btnScale.value }] }));
@@ -265,7 +269,8 @@ export default function UploadScreen({ onBack }: Props) {
   const canGenerate =
     phase === 'idle' &&
     courseName.trim().length > 0 &&
-    (sourceTab === 'pdf' ? !!docUri : youtubeValid);
+    (sourceTab === 'youtube' ? youtubeValid : true) &&
+    (includeFlashcards || includeQuiz || includeDiagram);
 
   const toastError = (err: any) => {
     // Convex wraps server errors — extract the real message
@@ -275,7 +280,7 @@ export default function UploadScreen({ onBack }: Props) {
       Toast.show({ type: 'error', text1: "Can't generate this video", text2: "This video has no captions. Try a video with subtitles enabled.", visibilityTime: 5000 });
       return;
     }
-    else if (raw.includes('too large') || raw.includes('5 MiB') || raw.includes('size')) message = 'PDF is too large. Please use a file under 3.75 MB.';
+    else if (raw.includes('too large') || raw.includes('5 MiB') || raw.includes('size')) message = 'PDF is too large. Please use a file under 20 MB.';
     else if (raw.includes('API key')) message = 'AI service not configured. Contact support.';
     else if (raw.includes('429') || raw.includes('quota') || raw.includes('rate limit')) message = 'AI is busy right now. Wait a moment and try again.';
     else if (raw.includes('parse') || raw.includes('JSON')) message = 'AI returned an unexpected response. Try again.';
@@ -308,31 +313,54 @@ export default function UploadScreen({ onBack }: Props) {
       btnScale.value = withSpring(1);
     });
     setPhase('uploading');
+    const componentArgs = {
+      includeFlashcards,
+      includeQuiz,
+      includeDiagram,
+    };
     try {
       if (sourceTab === 'pdf') {
-        const fileInfo = await FileSystem.getInfoAsync(docUri!);
-        const MAX_BYTES = 3.75 * 1024 * 1024;
-        const fileSize = (fileInfo as any).size as number | undefined;
-        if (fileInfo.exists && fileSize !== undefined && fileSize > MAX_BYTES) {
-          setPhase('idle');
-          Toast.show({
-            type: 'error',
-            text1: 'PDF too large',
-            text2: `Maximum file size is 3.75 MB. Your file is ${(fileSize / 1024 / 1024).toFixed(1)} MB.`,
-            visibilityTime: 5000,
+        if (docUri) {
+          // PDF selected — upload and generate from it
+          const fileInfo = await FileSystem.getInfoAsync(docUri);
+          const MAX_BYTES = 20 * 1024 * 1024;
+          const fileSize = (fileInfo as any).size as number | undefined;
+          if (fileInfo.exists && fileSize !== undefined && fileSize > MAX_BYTES) {
+            setPhase('idle');
+            Toast.show({
+              type: 'error',
+              text1: 'PDF too large',
+              text2: `Maximum file size is 20 MB. Your file is ${(fileSize / 1024 / 1024).toFixed(1)} MB.`,
+              visibilityTime: 5000,
+            });
+            return;
+          }
+          const uploadUrl = await getUploadUrl();
+          const uploadResponse = await FileSystem.uploadAsync(uploadUrl, docUri, {
+            httpMethod: 'POST',
+            mimeType: 'application/pdf',
           });
-          return;
+          const { storageId: pdfStorageId } = JSON.parse(uploadResponse.body);
+          const courseId = await createCourse({
+            title: courseName.trim(),
+            description: prompt.trim(),
+            docName: docName!,
+            sourceType: 'pdf',
+            totalLessons: lessonCount,
+            difficulty: difficulty.id,
+          });
+          await generateCourse({ courseId, pdfStorageId, lessonCount, difficulty: difficulty.id, userPrompt: prompt.trim() || undefined, ...componentArgs });
+        } else {
+          // No PDF — generate from topic name alone
+          const courseId = await createCourse({
+            title: courseName.trim(),
+            description: prompt.trim(),
+            docName: courseName.trim(),
+            totalLessons: lessonCount,
+            difficulty: difficulty.id,
+          });
+          await generateCourse({ courseId, courseTopic: courseName.trim(), lessonCount, difficulty: difficulty.id, userPrompt: prompt.trim() || undefined, ...componentArgs });
         }
-        const pdfBase64 = await FileSystem.readAsStringAsync(docUri!, { encoding: FileSystem.EncodingType.Base64 });
-        const courseId = await createCourse({
-          title: courseName.trim(),
-          description: prompt.trim(),
-          docName: docName!,
-          sourceType: 'pdf',
-          totalLessons: lessonCount,
-          difficulty: difficulty.id,
-        });
-        await generateCourse({ courseId, pdfBase64, lessonCount, difficulty: difficulty.id, userPrompt: prompt.trim() || undefined });
       } else {
         if (!courseName.trim()) setCourseName('YouTube Course');
         const courseId = await createCourse({
@@ -343,7 +371,7 @@ export default function UploadScreen({ onBack }: Props) {
           totalLessons: lessonCount,
           difficulty: difficulty.id,
         });
-        await generateCourse({ courseId, youtubeUrl: youtubeUrl.trim(), lessonCount, difficulty: difficulty.id, userPrompt: prompt.trim() || undefined });
+        await generateCourse({ courseId, youtubeUrl: youtubeUrl.trim(), lessonCount, difficulty: difficulty.id, userPrompt: prompt.trim() || undefined, ...componentArgs });
       }
       setPhase('done');
       setTimeout(onBack, 1600);
@@ -482,10 +510,10 @@ export default function UploadScreen({ onBack }: Props) {
                       <Ionicons name="cloud-upload-outline" size={32} color={C.muted} />
                     </View>
                     <Text style={[S.uploadTitle, { fontFamily: F.semiBold, fontSize: fs(15), color: C.text }]}>
-                      Upload a PDF
+                      Upload a PDF (optional)
                     </Text>
                     <Text style={[S.uploadSub, { fontFamily: F.regular, fontSize: fs(13), color: C.muted }]}>
-                      Tap to browse your files
+                      Tap to browse · Leave empty to generate from topic
                     </Text>
                   </View>
                 )}
@@ -642,8 +670,49 @@ export default function UploadScreen({ onBack }: Props) {
             </View>
           </Animated.View>
 
+          {/* ── Course components ── */}
+          <Animated.View entering={FadeInDown.delay(220).duration(300)} style={{ gap: 10 }}>
+            <Text style={[S.sectionLabel, { fontFamily: F.extraBold, fontSize: fs(10), color: C.muted }]}>
+              INCLUDE IN COURSE
+            </Text>
+            <View style={S.chipRow}>
+              {([
+                { key: 'flashcards', label: 'Flashcards', icon: 'layers-outline',       value: includeFlashcards, set: setIncludeFlashcards },
+                { key: 'quiz',       label: 'Quiz',       icon: 'help-circle-outline',  value: includeQuiz,       set: setIncludeQuiz       },
+                { key: 'diagram',    label: 'Diagram',    icon: 'git-branch-outline',   value: includeDiagram,    set: setIncludeDiagram    },
+              ] as const).map(({ key, label, icon, value, set }) => {
+                const activeCount = [includeFlashcards, includeQuiz, includeDiagram].filter(Boolean).length;
+                const canToggleOff = !(value && activeCount === 1);
+                return (
+                  <TouchableOpacity
+                    key={key}
+                    style={[
+                      S.diffChip,
+                      {
+                        backgroundColor: value ? `${C.primary}15` : C.surface,
+                        borderColor: value ? C.primary : C.border,
+                        flex: 1,
+                      },
+                    ]}
+                    onPress={() => {
+                      if (!canToggleOff) return;
+                      Haptics.selectionAsync();
+                      set(!value);
+                    }}
+                    activeOpacity={0.75}
+                  >
+                    <Ionicons name={icon as any} size={15} color={value ? C.primary : C.muted} />
+                    <Text style={[S.diffChipTxt, { fontFamily: value ? F.semiBold : F.regular, fontSize: fs(12), color: value ? C.primary : C.sub }]}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </Animated.View>
+
           {/* ── Generate button ── */}
-          <Animated.View entering={FadeInDown.delay(240).duration(300)} style={btnAnim}>
+          <Animated.View entering={FadeInDown.delay(260).duration(300)} style={btnAnim}>
             <TouchableOpacity
               style={[
                 S.generateBtn,
@@ -658,11 +727,6 @@ export default function UploadScreen({ onBack }: Props) {
                 Generate Course
               </Text>
             </TouchableOpacity>
-            {sourceTab === 'pdf' && !docUri && (
-              <Text style={[S.generateHint, { fontFamily: F.regular, fontSize: fs(12), color: C.muted }]}>
-                Upload a PDF to get started
-              </Text>
-            )}
             {sourceTab === 'youtube' && !youtubeValid && !youtubeUrl.trim() && (
               <Text style={[S.generateHint, { fontFamily: F.regular, fontSize: fs(12), color: C.muted }]}>
                 Paste a YouTube URL to get started

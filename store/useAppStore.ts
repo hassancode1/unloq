@@ -29,8 +29,10 @@ interface AppState {
   activeLessonIndex: number;
   darkMode: boolean;
   fontScale: number;
+  revenueCatReady: boolean;
 
   setFlow: (flow: AppFlow) => void;
+  setRevenueCatReady: (ready: boolean) => void;
   setGoalConfig: (config: GoalConfig) => void;
   setExamDate: (date: string | null) => void;
   setActiveCourse: (id: string) => void;
@@ -54,8 +56,10 @@ export const useAppStore = create<AppState>()(
       activeLessonIndex: 0,
       darkMode: false,
       fontScale: 1.0,
+      revenueCatReady: false,
 
       setFlow: (flow) => set({ flow }),
+      setRevenueCatReady: (ready) => set({ revenueCatReady: ready }),
       setGoalConfig: (config) => set({ goalConfig: config }),
       setExamDate: (date) =>
         set((s) => ({

@@ -2,7 +2,7 @@
 
 import { action } from "./_generated/server";
 import { v } from "convex/values";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import { type Id } from "./_generated/dataModel";
 
 
@@ -24,6 +24,9 @@ function buildUserPrompt(
   lessonCount: number,
   difficulty: string,
   userPrompt?: string,
+  includeFlashcards = true,
+  includeQuiz = true,
+  includeDiagram = false,
 ): string {
   const quizDepth =
     {
@@ -36,15 +39,36 @@ function buildUserPrompt(
     ? `Focus area from the learner: "${userPrompt.trim()}". Prioritise sections of the document most relevant to this when selecting which passages to include.\n\n`
     : "";
 
+  const flashcardsInstruction = includeFlashcards
+    ? `\nFLASHCARDS (exactly 4): "front" = a term, name, or short question lifted from the document. "back" = the answer copied verbatim from the document (1–3 sentences).`
+    : "";
+
+  const quizInstruction = includeQuiz
+    ? `\nQUIZ (exactly 4 questions, ${quizDepth}): Each question tests a specific fact stated in the document. One correct option (exact wording from the document), three plausible distractors.`
+    : "";
+
+  const diagramInstruction = includeDiagram
+    ? `\nDIAGRAM (mind map): A single object representing this lesson as a tree. "root" = the lesson title or key concept (one short phrase). "branches" = 3–5 subtopics, each with "name" (phrase from the document) and "points" (2–3 short bullet strings copied from the document).`
+    : "";
+
+  const flashcardsJson = includeFlashcards
+    ? `\n      "flashcards": [\n        { "front": "Term or question from the document", "back": "Verbatim answer from the document" }\n      ],`
+    : "";
+
+  const quizJson = includeQuiz
+    ? `\n      "quiz": [\n        {\n          "question": "Question testing a specific fact in this section?",\n          "options": ["Option A", "Option B", "Option C", "Option D"],\n          "correctAnswer": "Option A"\n        }\n      ],`
+    : "";
+
+  const diagramJson = includeDiagram
+    ? `\n      "diagram": {\n        "root": "Lesson key concept phrase",\n        "branches": [\n          { "name": "Subtopic name", "points": ["Point A", "Point B"] }\n        ]\n      },`
+    : "";
+
   return `${userContext}Structure the document into exactly ${lessonCount} lessons. You MUST use the entire document — divide it into ${lessonCount} roughly equal portions from start to finish. Every portion of the document must be represented. Do not skip or compress later sections.
 
 For each lesson output:
 
 CONTENT (3–5 sections): Each section = one "heading" (a phrase taken from the document, 3–6 words) + one "body" (copy 2–5 consecutive sentences from that part of the document verbatim, fixing only PDF artifacts like broken hyphenation).
-
-FLASHCARDS (exactly 4): "front" = a term, name, or short question lifted from the document. "back" = the answer copied verbatim from the document (1–3 sentences).
-
-QUIZ (exactly 4 questions, ${quizDepth}): Each question tests a specific fact stated in the document. One correct option (exact wording from the document), three plausible distractors.
+${flashcardsInstruction}${quizInstruction}${diagramInstruction}
 
 Output ONLY valid JSON:
 {
@@ -58,17 +82,7 @@ Output ONLY valid JSON:
       "keyConcept": "One sentence copied verbatim from this section that best captures its main point.",
       "content": [
         { "heading": "Heading from document", "body": "Verbatim or near-verbatim sentences from this section of the document." }
-      ],
-      "flashcards": [
-        { "front": "Term or question from the document", "back": "Verbatim answer from the document" }
-      ],
-      "quiz": [
-        {
-          "question": "Question testing a specific fact in this section?",
-          "options": ["Option A", "Option B", "Option C", "Option D"],
-          "correctAnswer": "Option A"
-        }
-      ]
+      ],${flashcardsJson}${quizJson}${diagramJson}
     }
   ]
 }`;
@@ -111,9 +125,36 @@ function buildExamUserPrompt(
   lessonCount: number,
   difficulty: string,
   userPrompt?: string,
+  includeFlashcards = true,
+  includeQuiz = true,
+  includeDiagram = false,
 ): string {
   const extra = userPrompt?.trim()
     ? `\n\nAdditional focus from the course creator: "${userPrompt.trim()}". Prioritise sub-topics most relevant to this instruction.`
+    : "";
+
+  const flashcardsInstruction = includeFlashcards
+    ? "\n\nFLASHCARDS (4–6): Front = rule-recall prompt. Back = the complete black-letter rule, stated precisely."
+    : "";
+
+  const quizInstruction = includeQuiz
+    ? "\n\nQUIZ (4 questions): Each question = a fact-pattern scenario. One correct answer, three plausible distractors based on common exam mistakes."
+    : "";
+
+  const diagramInstruction = includeDiagram
+    ? "\n\nDIAGRAM (mind map): A single object representing this lesson as a tree. \"root\" = the lesson title or key concept (one short phrase). \"branches\" = 3–5 subtopics, each with \"name\" (phrase) and \"points\" (2–3 short bullet strings summarising the key rule or fact)."
+    : "";
+
+  const flashcardsJson = includeFlashcards
+    ? `\n      "flashcards": [\n        { "front": "What are the elements of [rule]?", "back": "Complete black-letter rule: element 1; element 2; element 3." }\n      ],`
+    : "";
+
+  const quizJson = includeQuiz
+    ? `\n      "quiz": [\n        {\n          "question": "Paula was walking on a public sidewalk when David, intending to frighten her, swung his fist within inches of her face. Paula saw the fist coming and flinched. Which of the following best describes David's liability?",\n          "options": [\n            "David is liable for assault because Paula experienced a reasonable apprehension of immediate harmful contact.",\n            "David is not liable because he did not intend to make contact.",\n            "David is liable for battery because his act was intentional.",\n            "David is not liable because no contact occurred."\n          ],\n          "correctAnswer": "David is liable for assault because Paula experienced a reasonable apprehension of immediate harmful contact."\n        }\n      ],`
+    : "";
+
+  const diagramJson = includeDiagram
+    ? `\n      "diagram": {\n        "root": "Lesson key concept phrase",\n        "branches": [\n          { "name": "Subtopic name", "points": ["Point A", "Point B"] }\n        ]\n      },`
     : "";
 
   return `Create an exam prep course on: "${topic}"${extra}
@@ -123,10 +164,7 @@ Divide the topic into exactly ${lessonCount} lessons that together give comprehe
 For each lesson:
 
 CONTENT (3–5 sections): Each section = one "heading" (the specific rule or sub-topic, 3–7 words) + one "body" (3–5 sentences: state the rule precisely, explain when it applies, give a one-sentence illustrative scenario).
-
-FLASHCARDS (4–6): Front = rule-recall prompt. Back = the complete black-letter rule, stated precisely.
-
-QUIZ (4 questions): Each question = a fact-pattern scenario. One correct answer, three plausible distractors based on common exam mistakes.
+${flashcardsInstruction}${quizInstruction}${diagramInstruction}
 
 Output ONLY valid JSON — no markdown fences, no explanation:
 {
@@ -144,22 +182,7 @@ Output ONLY valid JSON — no markdown fences, no explanation:
       "keyConcept": "The single most important sentence a student must remember from this lesson.",
       "content": [
         { "heading": "Rule name or sub-topic", "body": "Black-letter rule stated precisely. Explanation of when it applies. One-sentence scenario illustrating the rule." }
-      ],
-      "flashcards": [
-        { "front": "What are the elements of [rule]?", "back": "Complete black-letter rule: element 1; element 2; element 3." }
-      ],
-      "quiz": [
-        {
-          "question": "Paula was walking on a public sidewalk when David, intending to frighten her, swung his fist within inches of her face. Paula saw the fist coming and flinched. Which of the following best describes David's liability?",
-          "options": [
-            "David is liable for assault because Paula experienced a reasonable apprehension of immediate harmful contact.",
-            "David is not liable because he did not intend to make contact.",
-            "David is liable for battery because his act was intentional.",
-            "David is not liable because no contact occurred."
-          ],
-          "correctAnswer": "David is liable for assault because Paula experienced a reasonable apprehension of immediate harmful contact."
-        }
-      ]
+      ],${flashcardsJson}${quizJson}${diagramJson}
     }
   ]
 }`;
@@ -173,6 +196,9 @@ async function callGeminiExamTopic(
   difficulty: string,
   apiKey: string,
   userPrompt?: string,
+  includeFlashcards = true,
+  includeQuiz = true,
+  includeDiagram = false,
 ): Promise<string> {
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
   const genAI = new GoogleGenerativeAI(apiKey);
@@ -183,10 +209,13 @@ async function callGeminiExamTopic(
       parts: [{ text:
         buildExamSystemPrompt(difficulty) +
         "\n\n" +
-        buildExamUserPrompt(topic, lessonCount, difficulty, userPrompt),
+        buildExamUserPrompt(topic, lessonCount, difficulty, userPrompt, includeFlashcards, includeQuiz, includeDiagram),
       }],
     }],
-    generationConfig: { responseMimeType: "application/json" },
+    generationConfig: {
+      responseMimeType: "application/json",
+      thinkingConfig: { thinkingBudget: 0 },
+    } as any,
   });
   return result.response.text().trim();
 }
@@ -200,6 +229,9 @@ async function callGeminiExamPdf(
   difficulty: string,
   apiKey: string,
   userPrompt?: string,
+  includeFlashcards = true,
+  includeQuiz = true,
+  includeDiagram = false,
 ): Promise<string> {
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
   const genAI = new GoogleGenerativeAI(apiKey);
@@ -212,11 +244,14 @@ async function callGeminiExamPdf(
         { text:
           buildExamSystemPrompt(difficulty) +
           "\n\nThe document above is the source material for this course. Base ALL content strictly on this document — do not add rules or cases not present in it.\n\n" +
-          buildExamUserPrompt(topic, lessonCount, difficulty, userPrompt),
+          buildExamUserPrompt(topic, lessonCount, difficulty, userPrompt, includeFlashcards, includeQuiz, includeDiagram),
         },
       ],
     }],
-    generationConfig: { responseMimeType: "application/json" },
+    generationConfig: {
+      responseMimeType: "application/json",
+      thinkingConfig: { thinkingBudget: 0 },
+    } as any,
   });
   return result.response.text().trim();
 }
@@ -227,6 +262,9 @@ async function callGeminiText(
   difficulty: string,
   apiKey: string,
   userPrompt?: string,
+  includeFlashcards = true,
+  includeQuiz = true,
+  includeDiagram = false,
 ): Promise<string> {
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
   const genAI = new GoogleGenerativeAI(apiKey);
@@ -235,11 +273,14 @@ async function callGeminiText(
     contents: [{ role: "user", parts: [{ text:
       buildSystemPrompt() +
       "\n\n" +
-      buildUserPrompt(lessonCount, difficulty, userPrompt) +
+      buildUserPrompt(lessonCount, difficulty, userPrompt, includeFlashcards, includeQuiz, includeDiagram) +
       "\n\n--- TRANSCRIPT ---\n" +
       transcript,
     }] }],
-    generationConfig: { responseMimeType: "application/json" },
+    generationConfig: {
+      responseMimeType: "application/json",
+      thinkingConfig: { thinkingBudget: 0 },
+    } as any,
   });
   return result.response.text().trim();
 }
@@ -250,6 +291,9 @@ async function callGeminiVideo(
   difficulty: string,
   apiKey: string,
   userPrompt?: string,
+  includeFlashcards = true,
+  includeQuiz = true,
+  includeDiagram = false,
 ): Promise<string> {
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
   const genAI = new GoogleGenerativeAI(apiKey);
@@ -260,7 +304,7 @@ async function callGeminiVideo(
     const result = await model.generateContent({
       contents: [{ role: "user", parts: [
         { fileData: { mimeType: "video/mp4", fileUri: youtubeUrl } },
-        { text: buildSystemPrompt() + "\n\n" + buildUserPrompt(lessonCount, difficulty, userPrompt) },
+        { text: buildSystemPrompt() + "\n\n" + buildUserPrompt(lessonCount, difficulty, userPrompt, includeFlashcards, includeQuiz, includeDiagram) },
       ]}],
       generationConfig: { responseMimeType: "application/json" },
     });
@@ -274,7 +318,7 @@ async function callGeminiVideo(
         `YouTube URL: ${youtubeUrl}\n\n` +
         buildSystemPrompt() +
         "\n\n" +
-        buildUserPrompt(lessonCount, difficulty, userPrompt),
+        buildUserPrompt(lessonCount, difficulty, userPrompt, includeFlashcards, includeQuiz, includeDiagram),
       }] }],
       generationConfig: { responseMimeType: "application/json" },
     });
@@ -288,6 +332,9 @@ async function callGemini(
   difficulty: string,
   apiKey: string,
   userPrompt?: string,
+  includeFlashcards = true,
+  includeQuiz = true,
+  includeDiagram = false,
 ): Promise<string> {
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
   const genAI = new GoogleGenerativeAI(apiKey);
@@ -295,9 +342,12 @@ async function callGemini(
   const result = await model.generateContent({
     contents: [{ role: "user", parts: [
       { inlineData: { mimeType: "application/pdf", data: pdfBase64 } },
-      { text: buildSystemPrompt() + "\n\n" + buildUserPrompt(lessonCount, difficulty, userPrompt) },
+      { text: buildSystemPrompt() + "\n\n" + buildUserPrompt(lessonCount, difficulty, userPrompt, includeFlashcards, includeQuiz, includeDiagram) },
     ]}],
-    generationConfig: { responseMimeType: "application/json" },
+    generationConfig: {
+      responseMimeType: "application/json",
+      thinkingConfig: { thinkingBudget: 0 },
+    } as any,
   });
   return result.response.text().trim();
 }
@@ -531,12 +581,18 @@ export const adminGenerateCourse = action({
     prompt: v.optional(v.string()),
     group_id: v.optional(v.id("groups")),
     pdfStorageId: v.optional(v.id("_storage")),
+    includeFlashcards: v.optional(v.boolean()),
+    includeQuiz: v.optional(v.boolean()),
+    includeDiagram: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const isAdmin = await ctx.runQuery(api.users.isAdmin, {});
     if (!isAdmin) throw new Error("Not authorized");
 
     const difficultyLower = args.difficulty.toLowerCase() as "beginner" | "intermediate" | "advanced";
+    const includeFlashcards = args.includeFlashcards !== false;
+    const includeQuiz       = args.includeQuiz !== false;
+    const includeDiagram    = args.includeDiagram === true;
 
     // Create the course record
     const courseId: Id<"courses"> = await ctx.runMutation(api.courses.create, {
@@ -572,23 +628,23 @@ export const adminGenerateCourse = action({
         let binary = "";
         bytes.forEach((b) => (binary += String.fromCharCode(b)));
         const pdfBase64 = btoa(binary);
-        raw = await callGeminiExamPdf(pdfBase64, args.course_topic, args.lesson_count, difficultyLower, geminiKey, args.prompt);
+        raw = await callGeminiExamPdf(pdfBase64, args.course_topic, args.lesson_count, difficultyLower, geminiKey, args.prompt, includeFlashcards, includeQuiz, includeDiagram);
       } else {
         // No PDF: generate exam prep content from AI knowledge on the topic
-        raw = await callGeminiExamTopic(args.course_topic, args.lesson_count, difficultyLower, geminiKey, args.prompt);
+        raw = await callGeminiExamTopic(args.course_topic, args.lesson_count, difficultyLower, geminiKey, args.prompt, includeFlashcards, includeQuiz, includeDiagram);
       }
 
       raw = raw.replace(/^```json\n?/, "").replace(/^```\n?/, "").replace(/```\n?$/, "").trim();
       const courseData = parseOrRepair(raw);
 
-      await ctx.runMutation(api.courses.patchTitleAndDescription, {
+      await ctx.runMutation(internal.courses.patchTitleAndDescription, {
         courseId,
         title: courseData.title ?? args.course_topic,
         description: courseData.description ?? "",
         totalLessons: courseData.lessons?.length ?? args.lesson_count,
       });
 
-      await ctx.runMutation(api.courses.clearLessons, { courseId });
+      await ctx.runMutation(internal.courses.clearLessons, { courseId });
 
       const lessons: any[] = Array.isArray(courseData.lessons) ? courseData.lessons : [];
       for (const lesson of lessons) {
@@ -613,7 +669,20 @@ export const adminGenerateCourse = action({
               .map((s: any) => ({ heading: String(s.heading), body: String(s.body) }))
           : undefined;
 
-        await ctx.runMutation(api.courses.insertLesson, {
+        const diagram =
+          lesson.diagram?.root && Array.isArray(lesson.diagram?.branches)
+            ? {
+                root: String(lesson.diagram.root),
+                branches: (lesson.diagram.branches as any[])
+                  .filter((b: any) => b?.name && Array.isArray(b.points))
+                  .map((b: any) => ({
+                    name: String(b.name),
+                    points: (b.points as any[]).map(String),
+                  })),
+              }
+            : undefined;
+
+        await ctx.runMutation(internal.courses.insertLesson, {
           courseId,
           lessonNumber: Number(lesson.lessonNumber) || 1,
           title: lesson.title ?? `Lesson ${lesson.lessonNumber}`,
@@ -621,13 +690,14 @@ export const adminGenerateCourse = action({
           content,
           flashcards,
           quiz,
+          diagram,
         });
       }
 
-      await ctx.runMutation(api.courses.updateStatus, { courseId, status: "ready" });
+      await ctx.runMutation(internal.courses.updateStatus, { courseId, status: "ready" });
     } catch (err) {
       console.error("adminGenerateCourse failed:", err);
-      await ctx.runMutation(api.courses.updateStatus, { courseId, status: "error" }).catch(() => {});
+      await ctx.runMutation(internal.courses.updateStatus, { courseId, status: "error" }).catch(() => {});
       throw err;
     }
 
@@ -641,8 +711,10 @@ export const generateCourse = action({
   args: {
     courseId: v.id("courses"),
     pdfBase64: v.optional(v.string()),
+    pdfStorageId: v.optional(v.id("_storage")),
     transcript: v.optional(v.string()),
     youtubeUrl: v.optional(v.string()),
+    courseTopic: v.optional(v.string()),
     lessonCount: v.number(),
     difficulty: v.union(
       v.literal("beginner"),
@@ -650,11 +722,18 @@ export const generateCourse = action({
       v.literal("advanced"),
     ),
     userPrompt: v.optional(v.string()),
+    includeFlashcards: v.optional(v.boolean()),
+    includeQuiz: v.optional(v.boolean()),
+    includeDiagram: v.optional(v.boolean()),
   },
   handler: async (
     ctx,
-    { courseId, pdfBase64, transcript, youtubeUrl, lessonCount, difficulty, userPrompt },
+    { courseId, pdfBase64, pdfStorageId, transcript, youtubeUrl, courseTopic, lessonCount, difficulty, userPrompt, ...flags },
   ) => {
+    const includeFlashcards = flags.includeFlashcards !== false;
+    const includeQuiz       = flags.includeQuiz !== false;
+    const includeDiagram    = flags.includeDiagram === true;
+
     try {
       const geminiKey = process.env.GEMINI_API_KEY;
 
@@ -663,16 +742,30 @@ export const generateCourse = action({
           "No AI API key set. Add GEMINI_API_KEY in Convex env vars.",
         );
 
-      if (!pdfBase64 && !transcript && !youtubeUrl)
-        throw new Error("Either pdfBase64, transcript, or youtubeUrl must be provided.");
+      if (!pdfBase64 && !pdfStorageId && !transcript && !youtubeUrl && !courseTopic)
+        throw new Error("A content source (PDF, YouTube, transcript, or topic) must be provided.");
+
+      // Resolve pdfStorageId → pdfBase64 if needed
+      if (pdfStorageId && !pdfBase64) {
+        const blob = await ctx.storage.get(pdfStorageId);
+        if (!blob) throw new Error("Uploaded PDF not found in storage.");
+        const arrayBuffer = await blob.arrayBuffer();
+        const bytes = new Uint8Array(arrayBuffer);
+        let binary = "";
+        bytes.forEach((b) => (binary += String.fromCharCode(b)));
+        pdfBase64 = btoa(binary);
+      }
 
       let raw: string;
       if (transcript) {
-        raw = await callGeminiText(transcript, lessonCount, difficulty, geminiKey, userPrompt);
+        raw = await callGeminiText(transcript, lessonCount, difficulty, geminiKey, userPrompt, includeFlashcards, includeQuiz, includeDiagram);
       } else if (youtubeUrl) {
-        raw = await callGeminiVideo(youtubeUrl, lessonCount, difficulty, geminiKey, userPrompt);
+        raw = await callGeminiVideo(youtubeUrl, lessonCount, difficulty, geminiKey, userPrompt, includeFlashcards, includeQuiz, includeDiagram);
+      } else if (pdfBase64) {
+        raw = await callGemini(pdfBase64, lessonCount, difficulty, geminiKey, userPrompt, includeFlashcards, includeQuiz, includeDiagram);
       } else {
-        raw = await callGemini(pdfBase64!, lessonCount, difficulty, geminiKey, userPrompt);
+        // Topic-only: generate from course name with no source document
+        raw = await callGeminiExamTopic(courseTopic!, lessonCount, difficulty, geminiKey, userPrompt, includeFlashcards, includeQuiz, includeDiagram);
       }
 
       // Strip markdown fences if present
@@ -684,7 +777,7 @@ export const generateCourse = action({
 
       const courseData = parseOrRepair(raw);
 
-      await ctx.runMutation(api.courses.patchTitleAndDescription, {
+      await ctx.runMutation(internal.courses.patchTitleAndDescription, {
         courseId,
         title: courseData.title ?? "Untitled Course",
         description: courseData.description ?? "",
@@ -692,7 +785,7 @@ export const generateCourse = action({
       });
 
       // Clear any lessons from a previous attempt before inserting (handles action retries)
-      await ctx.runMutation(api.courses.clearLessons, { courseId });
+      await ctx.runMutation(internal.courses.clearLessons, { courseId });
 
       const lessons: any[] = Array.isArray(courseData.lessons)
         ? courseData.lessons
@@ -727,7 +820,20 @@ export const generateCourse = action({
               }))
           : undefined;
 
-        await ctx.runMutation(api.courses.insertLesson, {
+        const diagram =
+          lesson.diagram?.root && Array.isArray(lesson.diagram?.branches)
+            ? {
+                root: String(lesson.diagram.root),
+                branches: (lesson.diagram.branches as any[])
+                  .filter((b: any) => b?.name && Array.isArray(b.points))
+                  .map((b: any) => ({
+                    name: String(b.name),
+                    points: (b.points as any[]).map(String),
+                  })),
+              }
+            : undefined;
+
+        await ctx.runMutation(internal.courses.insertLesson, {
           courseId,
           lessonNumber: Number(lesson.lessonNumber) || 1,
           title: lesson.title ?? `Lesson ${lesson.lessonNumber}`,
@@ -735,17 +841,18 @@ export const generateCourse = action({
           content,
           flashcards,
           quiz,
+          diagram,
         });
       }
 
-      await ctx.runMutation(api.courses.updateStatus, {
+      await ctx.runMutation(internal.courses.updateStatus, {
         courseId,
         status: "ready",
       });
     } catch (err) {
       console.error("generateCourse failed:", err);
       try {
-        await ctx.runMutation(api.courses.updateStatus, {
+        await ctx.runMutation(internal.courses.updateStatus, {
           courseId,
           status: "error",
         });

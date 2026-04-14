@@ -59,6 +59,13 @@ export default defineSchema({
         correctAnswer: v.string(),
       })
     ),
+    diagram: v.optional(v.object({
+      root: v.string(),
+      branches: v.array(v.object({
+        name: v.string(),
+        points: v.array(v.string()),
+      })),
+    })),
     completed: v.boolean(),
   }).index("by_course", ["courseId"]),
 });

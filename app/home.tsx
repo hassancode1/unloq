@@ -458,7 +458,7 @@ function MyCoursesContent({ onUpload, onCourseSelect, C, fs, F }: {
   const removeCourse = useMutation(api.courses.remove);
 
   const personalCourses = ((rawCourses ?? []) as any[]).filter((c: any) => c.status === 'ready');
-  const atFreeLimit = !isPremium && ((rawCourses ?? []) as any[]).filter((c: any) => c.status !== 'error').length >= 1;
+  const atFreeLimit = !isPremium && ((rawCourses ?? []) as any[]).filter((c: any) => c.status === 'ready').length >= 1;
 
   const handleCoursePress = async (course: any) => {
     if (course.status === 'error') {
@@ -594,7 +594,16 @@ function CoursesTab({ onUpload, onCourseSelect, C, fs, F }: {
   const { goalConfig, dailyProgress } = useAppStore();
   const { isPremium } = useEntitlement();
   const viewer = useQuery(api.users.currentUser);
+  const myCourses = useQuery(api.courses.listMine);
   const [contentTab, setContentTab] = useState<ContentTab>('exam');
+  const hasInitialized = React.useRef(false);
+
+  React.useEffect(() => {
+    if (!hasInitialized.current && myCourses !== undefined) {
+      hasInitialized.current = true;
+      if (myCourses.length > 0) setContentTab('mine');
+    }
+  }, [myCourses]);
 
   const todayStr  = new Date().toISOString().slice(0, 10);
   const todayDone = dailyProgress.date === todayStr ? dailyProgress.count : 0;

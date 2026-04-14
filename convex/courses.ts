@@ -1,4 +1,4 @@
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { requireAdmin } from "./lib/requireAdmin";
@@ -101,7 +101,8 @@ export const reorderCourses = mutation({
 
 export const generateUploadUrl = mutation({
   handler: async (ctx) => {
-    await requireAdmin(ctx);
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Must be signed in to upload files");
     return ctx.storage.generateUploadUrl();
   },
 });
@@ -261,7 +262,7 @@ export const create = mutation({
   },
 });
 
-export const updateStatus = mutation({
+export const updateStatus = internalMutation({
   args: {
     courseId: v.id("courses"),
     status: v.union(
@@ -271,12 +272,11 @@ export const updateStatus = mutation({
     ),
   },
   handler: async (ctx, { courseId, status }) => {
-    await requireAdmin(ctx);
     await ctx.db.patch(courseId, { status });
   },
 });
 
-export const insertLesson = mutation({
+export const insertLesson = internalMutation({
   args: {
     courseId: v.id("courses"),
     lessonNumber: v.number(),
@@ -291,9 +291,12 @@ export const insertLesson = mutation({
         correctAnswer: v.string(),
       })
     ),
+    diagram: v.optional(v.object({
+      root: v.string(),
+      branches: v.array(v.object({ name: v.string(), points: v.array(v.string()) })),
+    })),
   },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
     return ctx.db.insert("lessons", { ...args, completed: false });
   },
 });
@@ -305,7 +308,7 @@ export const completeLesson = mutation({
   },
 });
 
-export const patchTitleAndDescription = mutation({
+export const patchTitleAndDescription = internalMutation({
   args: {
     courseId: v.id("courses"),
     title: v.string(),
@@ -313,20 +316,35 @@ export const patchTitleAndDescription = mutation({
     totalLessons: v.number(),
   },
   handler: async (ctx, { courseId, title, description, totalLessons }) => {
-    await requireAdmin(ctx);
     await ctx.db.patch(courseId, { title, description, totalLessons });
   },
 });
 
-export const clearLessons = mutation({
+export const clearLessons = internalMutation({
   args: { courseId: v.id("courses") },
   handler: async (ctx, { courseId }) => {
-    await requireAdmin(ctx);
     const lessons = await ctx.db
       .query("lessons")
       .withIndex("by_course", (q) => q.eq("courseId", courseId))
       .collect();
     await Promise.all(lessons.map((l) => ctx.db.delete(l._id)));
+  },
+});
+
+export const cleanupStuck = internalMutation({
+  handler: async (ctx) => {
+    const cutoff = Date.now() - 15 * 60 * 1000;
+    const stuck = await ctx.db
+      .query("courses")
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("status"), "generating"),
+          q.lt(q.field("createdAt"), cutoff)
+        )
+      )
+      .collect();
+    await Promise.all(stuck.map((c) => ctx.db.delete(c._id)));
+    return stuck.length;
   },
 });
 

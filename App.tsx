@@ -121,11 +121,15 @@ function LockCheck() {
 function RevenueCatSync() {
   const { isAuthenticated } = useConvexAuth();
   const user = useQuery(api.users.currentUser);
+  const setRevenueCatReady = useAppStore((s) => s.setRevenueCatReady);
 
   useEffect(() => {
     if (isAuthenticated && user?._id) {
-      Purchases.logIn(user._id).catch(() => {});
+      Purchases.logIn(user._id)
+        .then(() => setRevenueCatReady(true))
+        .catch(() => {});
     } else if (!isAuthenticated) {
+      setRevenueCatReady(false);
       Purchases.logOut().catch(() => {});
     }
   }, [isAuthenticated, user?._id]);

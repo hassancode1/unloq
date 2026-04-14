@@ -471,6 +471,20 @@ export default function SettingsScreen() {
               </Text>
               <Ionicons name="open-outline" size={14} color={C.muted} />
             </TouchableOpacity>
+            <View style={styles.separator} />
+            <TouchableOpacity
+              style={styles.actionRow}
+              activeOpacity={0.7}
+              onPress={() => Linking.openURL('mailto:support@loqlearn.com?subject=Delete%20My%20Account')}
+            >
+              <View style={[styles.iconBox, { backgroundColor: '#FEE2E218' }]}>
+                <Ionicons name="trash-outline" size={15} color="#EF4444" />
+              </View>
+              <Text style={[styles.rowLabel, { fontSize: fs(14), fontFamily: F.medium, color: '#EF4444' }]}>
+                Delete Account
+              </Text>
+              <Ionicons name="open-outline" size={14} color="#EF4444" />
+            </TouchableOpacity>
           </View>
         </Animated.View>
 
