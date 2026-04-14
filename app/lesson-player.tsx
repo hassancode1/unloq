@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
@@ -10,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import Reanimated, {
+  FadeInDown,
   useSharedValue,
   useAnimatedStyle,
   withRepeat,
@@ -19,6 +21,7 @@ import Reanimated, {
   FadeIn,
   Easing,
 } from 'react-native-reanimated';
+import Svg, { Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../convex/_generated/api';
@@ -262,7 +265,23 @@ const fc = StyleSheet.create({
 });
 
 // ── Diagram view ──────────────────────────────────────────────────────────────
-// Renders the lesson diagram as a tree: root → branches → bullet points
+
+const BRANCH_COLOURS = ['#6366F1', '#EC4899', '#F59E0B', '#10B981', '#3B82F6'];
+
+function ConnectorLine({ colour }: { colour: string }) {
+  return (
+    <Svg width={20} height={28} style={{ alignSelf: 'center' }}>
+      <Path
+        d="M 10 0 C 10 10 10 18 10 28"
+        stroke={colour}
+        strokeWidth={2}
+        strokeOpacity={0.35}
+        fill="none"
+        strokeLinecap="round"
+      />
+    </Svg>
+  );
+}
 
 function DiagramView({
   lesson, onFinish, C, fs, F,
@@ -280,40 +299,65 @@ function DiagramView({
         showsVerticalScrollIndicator={false}
       >
         {/* Root node */}
-        <View style={[dm.rootCard, { backgroundColor: C.primary }]}>
-          <Ionicons name="git-branch-outline" size={20} color="rgba(255,255,255,0.7)" />
-          <Text style={[dm.rootText, { fontFamily: F.bold, fontSize: fs(18), color: '#fff' }]}>
-            {diagram.root}
-          </Text>
-        </View>
+        <Reanimated.View entering={FadeInDown.duration(400).springify()}>
+          <LinearGradient
+            colors={['#6366F1', '#8B5CF6']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={dm.rootCard}
+          >
+            <Ionicons name="git-branch-outline" size={24} color="rgba(255,255,255,0.75)" />
+            <Text style={[dm.rootText, { fontFamily: F.bold, fontSize: fs(20), color: '#fff' }]}>
+              {diagram.root}
+            </Text>
+          </LinearGradient>
+        </Reanimated.View>
 
         {/* Branches */}
-        {diagram.branches.map((branch, bi) => (
-          <View key={bi} style={dm.branchGroup}>
-            {/* Connector line */}
-            <View style={[dm.connectorLine, { backgroundColor: C.border }]} />
+        {diagram.branches.map((branch, bi) => {
+          const accent = BRANCH_COLOURS[bi % BRANCH_COLOURS.length];
+          const branchDelay = (bi + 1) * 120;
+          return (
+            <View key={bi} style={dm.branchGroup}>
+              <ConnectorLine colour={accent} />
 
-            <View style={[dm.branchCard, { backgroundColor: C.surface, borderColor: `${C.primary}40` }]}>
-              {/* Branch header */}
-              <View style={[dm.branchHeader, { borderBottomColor: C.border }]}>
-                <View style={[dm.branchDot, { backgroundColor: C.primary }]} />
-                <Text style={[dm.branchName, { fontFamily: F.semiBold, fontSize: fs(14), color: C.text }]}>
-                  {branch.name}
-                </Text>
-              </View>
-
-              {/* Points */}
-              {branch.points.map((point, pi) => (
-                <View key={pi} style={dm.pointRow}>
-                  <View style={[dm.pointBullet, { backgroundColor: `${C.primary}50` }]} />
-                  <Text style={[dm.pointText, { fontFamily: F.regular, fontSize: fs(13), color: C.sub, lineHeight: fs(13) * 1.6 }]}>
-                    {point}
+              <Reanimated.View
+                entering={FadeInDown.delay(branchDelay).duration(350).springify()}
+                style={[
+                  dm.branchCard,
+                  {
+                    backgroundColor: C.surface,
+                    borderColor: C.border,
+                    borderLeftColor: accent,
+                    shadowColor: accent,
+                  },
+                ]}
+              >
+                {/* Branch header */}
+                <View style={[dm.branchHeader, { borderBottomColor: C.border }]}>
+                  <View style={[dm.branchDot, { backgroundColor: accent }]} />
+                  <Text style={[dm.branchName, { fontFamily: F.semiBold, fontSize: fs(14), color: C.text }]}>
+                    {branch.name}
                   </Text>
                 </View>
-              ))}
+
+                {/* Points */}
+                {branch.points.map((point, pi) => (
+                  <Reanimated.View
+                    key={pi}
+                    entering={FadeInDown.delay(branchDelay + (pi + 1) * 60).duration(300)}
+                    style={dm.pointRow}
+                  >
+                    <Text style={[dm.pointBullet, { color: accent, fontFamily: F.bold, fontSize: fs(14) }]}>•</Text>
+                    <Text style={[dm.pointText, { fontFamily: F.regular, fontSize: fs(13), color: C.sub, lineHeight: fs(13) * 1.65 }]}>
+                      {point}
+                    </Text>
+                  </Reanimated.View>
+                ))}
+              </Reanimated.View>
             </View>
-          </View>
-        ))}
+          );
+        })}
       </ScrollView>
 
       <Footer C={C}>
@@ -329,18 +373,21 @@ function DiagramView({
 }
 
 const dm = StyleSheet.create({
-  scroll:        { padding: Spacing.lg, gap: 0 },
-  rootCard:      { borderRadius: 18, padding: Spacing.lg, alignItems: 'center', gap: 8, marginBottom: 4 },
-  rootText:      { textAlign: 'center' },
-  branchGroup:   { alignItems: 'center' },
-  connectorLine: { width: 2, height: 20 },
-  branchCard:    { width: '100%', borderRadius: 14, borderWidth: 1, overflow: 'hidden', marginBottom: 4 },
-  branchHeader:  { flexDirection: 'row', alignItems: 'center', gap: 10, padding: Spacing.md, borderBottomWidth: StyleSheet.hairlineWidth },
-  branchDot:     { width: 8, height: 8, borderRadius: 4 },
-  branchName:    { flex: 1 },
-  pointRow:      { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingHorizontal: Spacing.md, paddingVertical: 8 },
-  pointBullet:   { width: 6, height: 6, borderRadius: 3, marginTop: 6, flexShrink: 0 },
-  pointText:     { flex: 1 },
+  scroll:       { padding: Spacing.lg, paddingBottom: 0 },
+  rootCard:     { borderRadius: 20, padding: Spacing.lg, alignItems: 'center', gap: 10 },
+  rootText:     { textAlign: 'center' },
+  branchGroup:  { alignItems: 'center' },
+  branchCard:   {
+    width: '100%', borderRadius: 14, borderWidth: 1, borderLeftWidth: 3,
+    overflow: 'hidden',
+    shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.07, shadowRadius: 10, elevation: 3,
+  },
+  branchHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: Spacing.md, borderBottomWidth: StyleSheet.hairlineWidth },
+  branchDot:    { width: 9, height: 9, borderRadius: 5 },
+  branchName:   { flex: 1 },
+  pointRow:     { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingHorizontal: Spacing.md, paddingVertical: 7 },
+  pointBullet:  { lineHeight: 22, flexShrink: 0 },
+  pointText:    { flex: 1 },
 });
 
 // ── Quiz view ─────────────────────────────────────────────────────────────────
@@ -842,7 +889,7 @@ export default function LessonPlayer({ courseId, onBack }: Props) {
                           {lesson.diagram && (
                             <>
                               <View style={[S.bodyDivider, { backgroundColor: C.border }]} />
-                              <View style={[S.contentRow, { opacity: 0.35 }]}>
+                              <TouchableOpacity style={S.contentRow} onPress={() => openDiagram(lesson)} activeOpacity={0.75}>
                                 <View style={[S.contentIcon, { backgroundColor: C.surfaceAlt, borderColor: C.border }]}>
                                   <Ionicons name="git-branch-outline" size={16} color={C.muted} />
                                 </View>
@@ -850,15 +897,15 @@ export default function LessonPlayer({ courseId, onBack }: Props) {
                                   <Text style={[S.contentLabel, { fontFamily: F.semiBold, fontSize: fs(13), color: C.text }]}>Diagram</Text>
                                   <Text style={[S.contentSub, { fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>Visual concept overview</Text>
                                 </View>
-                                <Ionicons name="lock-closed-outline" size={14} color={C.muted} />
-                              </View>
+                                <Ionicons name="arrow-forward" size={15} color={C.muted} />
+                              </TouchableOpacity>
                             </>
                           )}
 
                           {(lesson.flashcards?.length ?? 0) > 0 && (
                             <>
                               <View style={[S.bodyDivider, { backgroundColor: C.border }]} />
-                              <View style={[S.contentRow, { opacity: 0.35 }]}>
+                              <TouchableOpacity style={S.contentRow} onPress={() => openFlashcards(lesson)} activeOpacity={0.75}>
                                 <View style={[S.contentIcon, { backgroundColor: C.surfaceAlt, borderColor: C.border }]}>
                                   <Ionicons name="layers-outline" size={16} color={C.muted} />
                                 </View>
@@ -868,15 +915,15 @@ export default function LessonPlayer({ courseId, onBack }: Props) {
                                     {lesson.flashcards.length} cards to study
                                   </Text>
                                 </View>
-                                <Ionicons name="lock-closed-outline" size={14} color={C.muted} />
-                              </View>
+                                <Ionicons name="arrow-forward" size={15} color={C.muted} />
+                              </TouchableOpacity>
                             </>
                           )}
 
                           {(lesson.quiz?.length ?? 0) > 0 && (
                             <>
                               <View style={[S.bodyDivider, { backgroundColor: C.border }]} />
-                              <View style={[S.contentRow, { opacity: 0.35 }]}>
+                              <TouchableOpacity style={S.contentRow} onPress={() => openQuiz(lesson)} activeOpacity={0.75}>
                                 <View style={[S.contentIcon, { backgroundColor: C.surfaceAlt, borderColor: C.border }]}>
                                   <Ionicons name="help-circle-outline" size={16} color={C.muted} />
                                 </View>
@@ -886,8 +933,8 @@ export default function LessonPlayer({ courseId, onBack }: Props) {
                                     {lesson.quiz.length} questions
                                   </Text>
                                 </View>
-                                <Ionicons name="lock-closed-outline" size={14} color={C.muted} />
-                              </View>
+                                <Ionicons name="arrow-forward" size={15} color={C.muted} />
+                              </TouchableOpacity>
                             </>
                           )}
                         </>

@@ -10,14 +10,14 @@ import { type Id } from "./_generated/dataModel";
 // ── Generic (user-uploaded document) prompts ─────────────────────────────────
 
 function buildSystemPrompt(): string {
-  return `You are a text organiser, not a writer. Your job is to copy text from the document and arrange it into a course structure — nothing more.
+  return `You are a course organiser. Your job is to read the document and arrange its content into a course structure.
 
 RULES (non-negotiable):
-1. Every word in every article body, flashcard answer, and quiz option must come directly from the document text provided. Copy sentences as-is.
-2. The only editing allowed is fixing obvious PDF extraction artifacts: joining hyphenated line-breaks (e.g. "strat-\negy" → "strategy"), removing stray page numbers or headers, and normalising whitespace.
-3. Do not rephrase, simplify, explain, or add any sentence of your own. If the document uses a complex term, keep it. If the document is dense, keep it dense.
-4. Do not add examples, analogies, transitions, or context that are not in the document.
-5. If a section of the document doesn't have enough clean sentences to fill a body field, use whatever is there — even if it is only 1–2 sentences. Do not pad.`;
+1. All content must be closely based on the document — stay faithful to the source material, its terminology, and its ideas.
+2. You may paraphrase slightly to aid clarity, but do not add information, examples, or context that are not in the document.
+3. Preserve technical terms and domain-specific language exactly as used in the document.
+4. Do not add your own examples, analogies, or transitions not grounded in the document.
+5. If a section of the document doesn't have enough content to fill a body field, use whatever is there — even if it is only 1–2 sentences. Do not pad.`;
 }
 
 function buildUserPrompt(
@@ -40,19 +40,19 @@ function buildUserPrompt(
     : "";
 
   const flashcardsInstruction = includeFlashcards
-    ? `\nFLASHCARDS (exactly 4): "front" = a term, name, or short question lifted from the document. "back" = the answer copied verbatim from the document (1–3 sentences).`
+    ? `\nFLASHCARDS (exactly 4): "front" = a key term, concept, or short question from the document. "back" = the answer based on the document (1–3 sentences).`
     : "";
 
   const quizInstruction = includeQuiz
-    ? `\nQUIZ (exactly 4 questions, ${quizDepth}): Each question tests a specific fact stated in the document. One correct option (exact wording from the document), three plausible distractors.`
+    ? `\nQUIZ (exactly 4 questions, ${quizDepth}): Each question tests a specific fact from the document. One correct option, three plausible distractors.`
     : "";
 
   const diagramInstruction = includeDiagram
-    ? `\nDIAGRAM (mind map): A single object representing this lesson as a tree. "root" = the lesson title or key concept (one short phrase). "branches" = 3–5 subtopics, each with "name" (phrase from the document) and "points" (2–3 short bullet strings copied from the document).`
+    ? `\nDIAGRAM (mind map): A single object representing this lesson as a tree. "root" = the lesson title or key concept (one short phrase). "branches" = 3–5 subtopics, each with "name" (key phrase from the document) and "points" (2–3 short bullet strings based on the document).`
     : "";
 
   const flashcardsJson = includeFlashcards
-    ? `\n      "flashcards": [\n        { "front": "Term or question from the document", "back": "Verbatim answer from the document" }\n      ],`
+    ? `\n      "flashcards": [\n        { "front": "Key term or question from the document", "back": "Answer based on the document" }\n      ],`
     : "";
 
   const quizJson = includeQuiz
@@ -67,21 +67,21 @@ function buildUserPrompt(
 
 For each lesson output:
 
-CONTENT (3–5 sections): Each section = one "heading" (a phrase taken from the document, 3–6 words) + one "body" (copy 2–5 consecutive sentences from that part of the document verbatim, fixing only PDF artifacts like broken hyphenation).
+CONTENT (3–5 sections): Each section = one "heading" (a key phrase from that part of the document, 3–6 words) + one "body" (2–5 sentences closely based on that part of the document, preserving its key ideas and terminology).
 ${flashcardsInstruction}${quizInstruction}${diagramInstruction}
 
 Output ONLY valid JSON:
 {
-  "title": "Title taken directly from the document or its cover/header (max 8 words)",
-  "description": "Copy 2–3 sentences from the document's introduction or abstract that describe what it is about.",
-  "learningObjectives": ["Copied or near-verbatim goal statements from the document, or derive only from explicit document content"],
+  "title": "Title based on the document's topic or cover/header (max 8 words)",
+  "description": "2–3 sentences describing what this document is about, based on its introduction or abstract.",
+  "learningObjectives": ["Learning goals derived from the document's content"],
   "lessons": [
     {
       "lessonNumber": 1,
-      "title": "Section title from the document",
-      "keyConcept": "One sentence copied verbatim from this section that best captures its main point.",
+      "title": "Section title based on the document",
+      "keyConcept": "The main point of this section in one sentence.",
       "content": [
-        { "heading": "Heading from document", "body": "Verbatim or near-verbatim sentences from this section of the document." }
+        { "heading": "Key topic from this section", "body": "Explanation closely based on this section of the document, preserving its key ideas and terminology." }
       ],${flashcardsJson}${quizJson}${diagramJson}
     }
   ]
@@ -188,6 +188,31 @@ Output ONLY valid JSON — no markdown fences, no explanation:
 }`;
 }
 
+// ── Retry wrapper for transient Gemini 503 errors ────────────────────────────
+
+async function withGeminiRetry<T>(fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      lastErr = err;
+      const msg: string = err?.message ?? "";
+      const isRetryable =
+        msg.includes("Your request couldn't be completed") ||
+        msg.includes("503") ||
+        msg.includes("overloaded") ||
+        msg.includes("UNAVAILABLE") ||
+        msg.includes("Resource has been exhausted") ||
+        msg.includes("Try again later");
+      if (!isRetryable || attempt === maxAttempts) throw err;
+      // Exponential backoff: 2s, 4s
+      await new Promise((r) => setTimeout(r, 2000 * attempt));
+    }
+  }
+  throw lastErr;
+}
+
 // ── Exam prep generation from topic knowledge (no document) ───────────────────
 
 async function callGeminiExamTopic(
@@ -203,21 +228,23 @@ async function callGeminiExamTopic(
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-  const result = await model.generateContent({
-    contents: [{
-      role: "user",
-      parts: [{ text:
-        buildExamSystemPrompt(difficulty) +
-        "\n\n" +
-        buildExamUserPrompt(topic, lessonCount, difficulty, userPrompt, includeFlashcards, includeQuiz, includeDiagram),
+  return withGeminiRetry(async () => {
+    const result = await model.generateContent({
+      contents: [{
+        role: "user",
+        parts: [{ text:
+          buildExamSystemPrompt(difficulty) +
+          "\n\n" +
+          buildExamUserPrompt(topic, lessonCount, difficulty, userPrompt, includeFlashcards, includeQuiz, includeDiagram),
+        }],
       }],
-    }],
-    generationConfig: {
-      responseMimeType: "application/json",
-      thinkingConfig: { thinkingBudget: 0 },
-    } as any,
+      generationConfig: {
+        responseMimeType: "application/json",
+        thinkingConfig: { thinkingBudget: 0 },
+      } as any,
+    });
+    return result.response.text().trim();
   });
-  return result.response.text().trim();
 }
 
 // ── Exam prep generation from a PDF document ──────────────────────────────────
@@ -236,24 +263,26 @@ async function callGeminiExamPdf(
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-  const result = await model.generateContent({
-    contents: [{
-      role: "user",
-      parts: [
-        { inlineData: { mimeType: "application/pdf", data: pdfBase64 } },
-        { text:
-          buildExamSystemPrompt(difficulty) +
-          "\n\nThe document above is the source material for this course. Base ALL content strictly on this document — do not add rules or cases not present in it.\n\n" +
-          buildExamUserPrompt(topic, lessonCount, difficulty, userPrompt, includeFlashcards, includeQuiz, includeDiagram),
-        },
-      ],
-    }],
-    generationConfig: {
-      responseMimeType: "application/json",
-      thinkingConfig: { thinkingBudget: 0 },
-    } as any,
+  return withGeminiRetry(async () => {
+    const result = await model.generateContent({
+      contents: [{
+        role: "user",
+        parts: [
+          { inlineData: { mimeType: "application/pdf", data: pdfBase64 } },
+          { text:
+            buildExamSystemPrompt(difficulty) +
+            "\n\nThe document above is the source material for this course. Base ALL content strictly on this document — do not add rules or cases not present in it.\n\n" +
+            buildExamUserPrompt(topic, lessonCount, difficulty, userPrompt, includeFlashcards, includeQuiz, includeDiagram),
+          },
+        ],
+      }],
+      generationConfig: {
+        responseMimeType: "application/json",
+        thinkingConfig: { thinkingBudget: 0 },
+      } as any,
+    });
+    return result.response.text().trim();
   });
-  return result.response.text().trim();
 }
 
 async function callGeminiText(
@@ -269,20 +298,22 @@ async function callGeminiText(
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-  const result = await model.generateContent({
-    contents: [{ role: "user", parts: [{ text:
-      buildSystemPrompt() +
-      "\n\n" +
-      buildUserPrompt(lessonCount, difficulty, userPrompt, includeFlashcards, includeQuiz, includeDiagram) +
-      "\n\n--- TRANSCRIPT ---\n" +
-      transcript,
-    }] }],
-    generationConfig: {
-      responseMimeType: "application/json",
-      thinkingConfig: { thinkingBudget: 0 },
-    } as any,
+  return withGeminiRetry(async () => {
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text:
+        buildSystemPrompt() +
+        "\n\n" +
+        buildUserPrompt(lessonCount, difficulty, userPrompt, includeFlashcards, includeQuiz, includeDiagram) +
+        "\n\n--- TRANSCRIPT ---\n" +
+        transcript,
+      }] }],
+      generationConfig: {
+        responseMimeType: "application/json",
+        thinkingConfig: { thinkingBudget: 0 },
+      } as any,
+    });
+    return result.response.text().trim();
   });
-  return result.response.text().trim();
 }
 
 async function callGeminiVideo(
@@ -299,31 +330,33 @@ async function callGeminiVideo(
   const genAI = new GoogleGenerativeAI(apiKey);
 
   // gemini-1.5-pro supports YouTube URL via fileData
-  try {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
-    const result = await model.generateContent({
-      contents: [{ role: "user", parts: [
-        { fileData: { mimeType: "video/mp4", fileUri: youtubeUrl } },
-        { text: buildSystemPrompt() + "\n\n" + buildUserPrompt(lessonCount, difficulty, userPrompt, includeFlashcards, includeQuiz, includeDiagram) },
-      ]}],
-      generationConfig: { responseMimeType: "application/json" },
-    });
-    return result.response.text().trim();
-  } catch {
-    // Fallback: ask Gemini to generate from its knowledge of the video URL
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-    const result = await model.generateContent({
-      contents: [{ role: "user", parts: [{ text:
-        "You are given a YouTube video URL. Use your knowledge of the video's content to generate a structured course.\n\n" +
-        `YouTube URL: ${youtubeUrl}\n\n` +
-        buildSystemPrompt() +
-        "\n\n" +
-        buildUserPrompt(lessonCount, difficulty, userPrompt, includeFlashcards, includeQuiz, includeDiagram),
-      }] }],
-      generationConfig: { responseMimeType: "application/json" },
-    });
-    return result.response.text().trim();
-  }
+  return withGeminiRetry(async () => {
+    try {
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+      const result = await model.generateContent({
+        contents: [{ role: "user", parts: [
+          { fileData: { mimeType: "video/mp4", fileUri: youtubeUrl } },
+          { text: buildSystemPrompt() + "\n\n" + buildUserPrompt(lessonCount, difficulty, userPrompt, includeFlashcards, includeQuiz, includeDiagram) },
+        ]}],
+        generationConfig: { responseMimeType: "application/json" },
+      });
+      return result.response.text().trim();
+    } catch {
+      // Fallback: ask Gemini to generate from its knowledge of the video URL
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+      const result = await model.generateContent({
+        contents: [{ role: "user", parts: [{ text:
+          "You are given a YouTube video URL. Use your knowledge of the video's content to generate a structured course.\n\n" +
+          `YouTube URL: ${youtubeUrl}\n\n` +
+          buildSystemPrompt() +
+          "\n\n" +
+          buildUserPrompt(lessonCount, difficulty, userPrompt, includeFlashcards, includeQuiz, includeDiagram),
+        }] }],
+        generationConfig: { responseMimeType: "application/json" },
+      });
+      return result.response.text().trim();
+    }
+  });
 }
 
 async function callGemini(
@@ -339,17 +372,19 @@ async function callGemini(
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-  const result = await model.generateContent({
-    contents: [{ role: "user", parts: [
-      { inlineData: { mimeType: "application/pdf", data: pdfBase64 } },
-      { text: buildSystemPrompt() + "\n\n" + buildUserPrompt(lessonCount, difficulty, userPrompt, includeFlashcards, includeQuiz, includeDiagram) },
-    ]}],
-    generationConfig: {
-      responseMimeType: "application/json",
-      thinkingConfig: { thinkingBudget: 0 },
-    } as any,
+  return withGeminiRetry(async () => {
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [
+        { inlineData: { mimeType: "application/pdf", data: pdfBase64 } },
+        { text: buildSystemPrompt() + "\n\n" + buildUserPrompt(lessonCount, difficulty, userPrompt, includeFlashcards, includeQuiz, includeDiagram) },
+      ]}],
+      generationConfig: {
+        responseMimeType: "application/json",
+        thinkingConfig: { thinkingBudget: 0 },
+      } as any,
+    });
+    return result.response.text().trim();
   });
-  return result.response.text().trim();
 }
 
 async function callClaude(
@@ -735,6 +770,7 @@ export const generateCourse = action({
     const includeDiagram    = flags.includeDiagram === true;
 
     try {
+      console.log("[generateCourse] start", { courseId, hasPdfBase64: !!pdfBase64, hasPdfStorageId: !!pdfStorageId, hasTranscript: !!transcript, hasYoutube: !!youtubeUrl, hasTopic: !!courseTopic });
       const geminiKey = process.env.GEMINI_API_KEY;
 
       if (!geminiKey)
@@ -757,6 +793,7 @@ export const generateCourse = action({
       }
 
       let raw: string;
+      console.log("[generateCourse] calling Gemini...");
       if (transcript) {
         raw = await callGeminiText(transcript, lessonCount, difficulty, geminiKey, userPrompt, includeFlashcards, includeQuiz, includeDiagram);
       } else if (youtubeUrl) {
@@ -767,6 +804,7 @@ export const generateCourse = action({
         // Topic-only: generate from course name with no source document
         raw = await callGeminiExamTopic(courseTopic!, lessonCount, difficulty, geminiKey, userPrompt, includeFlashcards, includeQuiz, includeDiagram);
       }
+      console.log("[generateCourse] Gemini returned", raw.length, "chars");
 
       // Strip markdown fences if present
       raw = raw
