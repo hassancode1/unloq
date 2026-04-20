@@ -2,7 +2,7 @@
   "expo": {
     "name": "Loqlearn",
     "slug": "loqlearn",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "orientation": "portrait",
     "icon": "./assets/logo.png",
     "userInterfaceStyle": "light",
@@ -14,7 +14,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.loqlearn.app",
-      "buildNumber": "27",
+      "buildNumber": "28",
       "minimumOsVersion": "15.0",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false

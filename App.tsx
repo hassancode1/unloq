@@ -19,12 +19,12 @@ const secureStorage = {
 import Toast from "react-native-toast-message";
 import {
   useFonts,
-  Inter_400Regular,
-  Inter_500Medium,
-  Inter_600SemiBold,
-  Inter_700Bold,
-  Inter_800ExtraBold,
-} from "@expo-google-fonts/inter";
+  Nunito_400Regular,
+  Nunito_500Medium,
+  Nunito_600SemiBold,
+  Nunito_700Bold,
+  Nunito_800ExtraBold,
+} from "@expo-google-fonts/nunito";
 import { useAppStore, type GoalConfig } from "./store/useAppStore";
 import { blockApps, unblockApps } from "./lib/familyControls";
 import ScreenBlocking from "./lib/screenBlocking";
@@ -149,11 +149,11 @@ export default function App() {
   const { flow, setFlow } = useAppStore();
 
   const [fontsLoaded] = useFonts({
-    "Inter-Regular":   Inter_400Regular,
-    "Inter-Medium":    Inter_500Medium,
-    "Inter-SemiBold":  Inter_600SemiBold,
-    "Inter-Bold":      Inter_700Bold,
-    "Inter-ExtraBold": Inter_800ExtraBold,
+    "Nunito-Regular":   Nunito_400Regular,
+    "Nunito-Medium":    Nunito_500Medium,
+    "Nunito-SemiBold":  Nunito_600SemiBold,
+    "Nunito-Bold":      Nunito_700Bold,
+    "Nunito-ExtraBold": Nunito_800ExtraBold,
   });
 
   useEffect(() => {

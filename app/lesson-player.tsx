@@ -69,7 +69,7 @@ function DuoButton({
 const duo = StyleSheet.create({
   shadow: { position: 'absolute', bottom: -4, left: 0, right: 0, height: 52, borderRadius: 14 },
   btn:    { height: 52, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  label:  { color: '#fff', fontSize: 16, fontFamily: 'Inter-Bold' },
+  label:  { color: '#fff', fontSize: 16, fontFamily: 'Nunito-Bold' },
 });
 
 // ── Shared footer ─────────────────────────────────────────────────────────────
@@ -561,7 +561,7 @@ function LoadingView({ C, onBack }: { C: AppColors; onBack: () => void }) {
         <Reanimated.View style={spinStyle}>
           <Ionicons name="reload-outline" size={28} color={C.primary} />
         </Reanimated.View>
-        <Reanimated.Text entering={FadeIn.delay(200)} style={[lv.label, { color: C.muted, fontFamily: 'Inter-Regular' }]}>
+        <Reanimated.Text entering={FadeIn.delay(200)} style={[lv.label, { color: C.muted, fontFamily: 'Nunito-Regular' }]}>
           Loading course…
         </Reanimated.Text>
       </View>

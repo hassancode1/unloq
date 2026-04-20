@@ -55,7 +55,7 @@ export const useAppStore = create<AppState>()(
       activeCourseId: null,
       activeLessonIndex: 0,
       darkMode: false,
-      fontScale: 1.0,
+      fontScale: 1.05,
       revenueCatReady: false,
 
       setFlow: (flow) => set({ flow }),

@@ -70,9 +70,9 @@ function makeStyles(C: AppColors) {
       paddingVertical: 6, borderWidth: 1.5, borderColor: `${P}35`,
     },
     badgeEmoji: { fontSize: 13 },
-    badgeText: { fontSize: 12, fontFamily: 'Inter-Bold', color: P, letterSpacing: 0.3 },
-    title: { fontSize: 30, fontFamily: 'Inter-ExtraBold', color: C.text, lineHeight: 38 },
-    subtitle: { fontSize: 15, fontFamily: 'Inter-SemiBold', color: C.sub, lineHeight: 22 },
+    badgeText: { fontSize: 12, fontFamily: 'Nunito-Bold', color: P, letterSpacing: 0.3 },
+    title: { fontSize: 30, fontFamily: 'Nunito-ExtraBold', color: C.text, lineHeight: 38 },
+    subtitle: { fontSize: 15, fontFamily: 'Nunito-SemiBold', color: C.sub, lineHeight: 22 },
 
     // Frequency chips
     chipRow: { flexDirection: 'row', gap: Spacing.sm },
@@ -81,7 +81,7 @@ function makeStyles(C: AppColors) {
       borderColor: C.border, backgroundColor: C.surfaceAlt, alignItems: 'center',
     },
     chipActive: { backgroundColor: P, borderColor: P },
-    chipText: { fontSize: 13, fontFamily: 'Inter-Bold', color: C.sub },
+    chipText: { fontSize: 13, fontFamily: 'Nunito-Bold', color: C.sub },
     chipTextActive: { color: '#fff' },
 
     // Description card
@@ -90,28 +90,28 @@ function makeStyles(C: AppColors) {
       backgroundColor: C.surfaceAlt, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth,
       borderColor: C.border, padding: Spacing.md,
     },
-    descText: { flex: 1, fontSize: 13, fontFamily: 'Inter-SemiBold', color: C.sub, lineHeight: 20 },
+    descText: { flex: 1, fontSize: 13, fontFamily: 'Nunito-SemiBold', color: C.sub, lineHeight: 20 },
 
     // Day picker
     dayPickerCard: {
       backgroundColor: C.surfaceAlt, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth,
       borderColor: C.border, padding: Spacing.md, gap: 12, alignItems: 'center',
     },
-    dayPickerLabel: { fontSize: 11, fontFamily: 'Inter-ExtraBold', color: C.sub, letterSpacing: 1.2, textTransform: 'uppercase' },
+    dayPickerLabel: { fontSize: 11, fontFamily: 'Nunito-ExtraBold', color: C.sub, letterSpacing: 1.2, textTransform: 'uppercase' },
     dayRow: { flexDirection: 'row', gap: 8 },
     dayBtn: {
       width: 38, height: 38, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth,
       borderColor: C.border, backgroundColor: C.surface, justifyContent: 'center', alignItems: 'center',
     },
     dayBtnActive: { backgroundColor: P, borderColor: P },
-    dayBtnText: { fontSize: 13, fontFamily: 'Inter-Bold', color: C.sub },
+    dayBtnText: { fontSize: 13, fontFamily: 'Nunito-Bold', color: C.sub },
     dayBtnTextActive: { color: '#fff' },
-    dayPickerSub: { fontSize: 12, fontFamily: 'Inter-SemiBold', color: P },
+    dayPickerSub: { fontSize: 12, fontFamily: 'Nunito-SemiBold', color: P },
 
     // Session — lesson tiles
     sectionHeader: { gap: 4 },
-    sectionLabel: { fontSize: 11, fontFamily: 'Inter-ExtraBold', color: C.sub, letterSpacing: 1.2, textTransform: 'uppercase' },
-    sectionSub: { fontSize: 13, fontFamily: 'Inter-SemiBold', color: C.sub, lineHeight: 19 },
+    sectionLabel: { fontSize: 11, fontFamily: 'Nunito-ExtraBold', color: C.sub, letterSpacing: 1.2, textTransform: 'uppercase' },
+    sectionSub: { fontSize: 13, fontFamily: 'Nunito-SemiBold', color: C.sub, lineHeight: 19 },
     tileRow: { flexDirection: 'row', gap: Spacing.sm },
     tile: {
       flex: 1, alignItems: 'center', gap: 4, paddingVertical: 14,
@@ -120,9 +120,9 @@ function makeStyles(C: AppColors) {
     },
     tileActive: { backgroundColor: `${P}12`, borderColor: P },
     tileEmoji: { fontSize: 22 },
-    tileLabel: { fontSize: 13, fontFamily: 'Inter-Bold', color: C.text },
+    tileLabel: { fontSize: 13, fontFamily: 'Nunito-Bold', color: C.text },
     tileLabelActive: { color: P },
-    tileDesc: { fontSize: 11, fontFamily: 'Inter-SemiBold', color: C.sub },
+    tileDesc: { fontSize: 11, fontFamily: 'Nunito-SemiBold', color: C.sub },
     tileDescActive: { color: `${P}BB` },
 
     // Time picker
@@ -163,14 +163,14 @@ function makeStyles(C: AppColors) {
       backgroundColor: `${P}08`, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth,
       borderColor: `${P}25`, padding: Spacing.sm,
     },
-    infoCardText: { flex: 1, fontSize: 12, fontFamily: 'Inter-SemiBold', color: C.sub, lineHeight: 18 },
+    infoCardText: { flex: 1, fontSize: 12, fontFamily: 'Nunito-SemiBold', color: C.sub, lineHeight: 18 },
 
     // Navigation
     stepDots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginBottom: 4 },
     stepDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: C.border },
     stepDotActive: { backgroundColor: P, width: 22 },
     backBtn: { alignSelf: 'center', paddingVertical: 8, paddingHorizontal: 20 },
-    backBtnText: { fontSize: 14, fontFamily: 'Inter-SemiBold', color: C.sub },
+    backBtnText: { fontSize: 14, fontFamily: 'Nunito-SemiBold', color: C.sub },
   });
 }
 

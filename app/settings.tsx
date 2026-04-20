@@ -383,28 +383,6 @@ export default function SettingsScreen() {
           </View>
         </Animated.View>
 
-        {/* ── Exam Mode (Coming Soon) ── */}
-        <Animated.View entering={FadeInDown.delay(150).duration(280)}>
-          <Text style={[styles.cap, { fontSize: fs(10), fontFamily: F.extraBold, color: C.muted }]}>
-            Exam Mode
-          </Text>
-          <View style={[styles.card, { opacity: 0.6 }]}>
-            <View style={styles.row}>
-              <View style={[styles.iconBox, { backgroundColor: `${C.primary}12` }]}>
-                <Ionicons name="school-outline" size={15} color={C.primary} />
-              </View>
-              <Text style={[styles.rowLabel, { fontSize: fs(14), fontFamily: F.medium, color: C.sub }]}>
-                Lock apps until lessons done
-              </Text>
-              <View style={{ backgroundColor: `${C.primary}15`, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                <Text style={{ fontSize: fs(10), fontFamily: F.extraBold, color: C.primary, letterSpacing: 0.5 }}>
-                  SOON
-                </Text>
-              </View>
-            </View>
-          </View>
-        </Animated.View>
-
         {/* ── App Info ── */}
         <Animated.View entering={FadeInDown.delay(180).duration(280)}>
           <Text

@@ -43,10 +43,10 @@ const C = {
 };
 
 const F = {
-  bold:      'Inter-Bold',
-  extraBold: 'Inter-ExtraBold',
-  semi:      'Inter-SemiBold',
-  regular:   'Inter-Regular',
+  bold:      'Nunito-Bold',
+  extraBold: 'Nunito-ExtraBold',
+  semi:      'Nunito-SemiBold',
+  regular:   'Nunito-Regular',
 };
 
 // ── Screen IDs ─────────────────────────────────────────────────────────────────
@@ -220,22 +220,22 @@ function SplashScreen({ onNext }: { onNext: () => void }) {
         <View style={ss.phone}>
           <View style={ss.phoneLockBar} />
           <View style={ss.phoneContent}>
-            <Text style={ss.lockIcon}>⚖️</Text>
-            <Text style={ss.phoneQ}>MBE: Offer + Acceptance{"\n"}requires what element?</Text>
+            <Text style={ss.lockIcon}>📵</Text>
+            <Text style={ss.phoneQ}>Learn it. Prove it.{"\n"}Then unlock your apps.</Text>
             <View style={ss.phoneOpt}>
-              <Text style={ss.phoneOptTxt}>Consideration</Text>
+              <Text style={ss.phoneOptTxt}>Complete lesson ✓</Text>
             </View>
             <View style={ss.phoneOpt}>
-              <Text style={ss.phoneOptTxt}>Meeting of the minds</Text>
+              <Text style={ss.phoneOptTxt}>Pass quiz ✓</Text>
             </View>
             <View style={ss.phoneOpt}>
-              <Text style={ss.phoneOptTxt}>Capacity</Text>
+              <Text style={ss.phoneOptTxt}>Apps unlocked 🔓</Text>
             </View>
           </View>
         </View>
       </View>
 
-      <Text style={ss.title}>Ace your exam.{"\n"}Block distractions.</Text>
+      <Text style={ss.title}>Learn anything.{"\n"}Block distractions.</Text>
       <Text style={ss.sub}>
         Complete daily lessons and quizzes — your{"\n"}apps stay locked until you're done.
       </Text>
@@ -332,17 +332,19 @@ const ss = StyleSheet.create({
 
 // ── Q: Role ────────────────────────────────────────────────────────────────────
 const ROLES = [
-  { emoji: "⚖️", label: "Bar Exam candidate" },
+  { emoji: "📚", label: "Self-improvement / curiosity" },
+  { emoji: "💼", label: "Professional skills / career" },
+  { emoji: "⚖️", label: "Bar Exam / Law school" },
   { emoji: "🩺", label: "Medical student (boards)" },
-  { emoji: "🎓", label: "Other professional exam" },
-  { emoji: "📚", label: "General learner" },
+  { emoji: "🎓", label: "Academic exam prep" },
+  { emoji: "🌍", label: "Language learning" },
 ];
 
 function QRoleScreen({ onNext }: { onNext: () => void }) {
   const [sel, setSel] = useState<string | null>(null);
   return (
     <Animated.View entering={FadeInDown.duration(300)} style={qs.root}>
-      <Text style={qs.title}>What exam are{"\n"}you preparing for?</Text>
+      <Text style={qs.title}>What are you{"\n"}learning for?</Text>
       {ROLES.map((r) => (
         <OptionCard
           key={r.label}
@@ -442,12 +444,12 @@ function QHoursScreen({
   const pct = hours / 12;
   const comment =
     hours <= 2
-      ? "Better than most — but exams still demand more."
+      ? "Better than most — but growth still demands more."
       : hours <= 4
-        ? "That's study time you're giving to an algorithm."
+        ? "That's learning time you're giving to an algorithm."
         : hours <= 7
-          ? "Most students fail because of this."
-          : "No wonder exam prep feels impossible.";
+          ? "Most people never reach their goals because of this."
+          : "No wonder making progress feels impossible.";
 
   return (
     <Animated.View entering={FadeInDown.duration(300)} style={qs.root}>
@@ -574,7 +576,7 @@ const lds = StyleSheet.create({
 function ResultScreen({ onNext }: { onNext: () => void }) {
   return (
     <Animated.View entering={FadeInDown.duration(350)} style={rs.root}>
-      <Text style={rs.eyebrow}>Your exam prep profile is</Text>
+      <Text style={rs.eyebrow}>Your learning profile is</Text>
       <Text style={rs.profile}>The Capable{"\n"}Procrastinator</Text>
 
       <View style={rs.iconWrap}>
@@ -588,7 +590,7 @@ function ResultScreen({ onNext }: { onNext: () => void }) {
 
       <View style={rs.bars}>
         <View style={rs.barRow}>
-          <Text style={rs.barLabel}>Exam pass potential</Text>
+          <Text style={rs.barLabel}>Learning potential</Text>
           <View style={rs.barTrack}>
             <View
               style={[rs.barFill, { width: "82%", backgroundColor: C.green }]}
@@ -700,13 +702,13 @@ function StatScreen({ onNext, hours }: { onNext: () => void; hours: number }) {
       <Text style={sts.pre}>At this rate, you'll spend</Text>
       <Text style={sts.years}>{years} years</Text>
       <Text style={sts.post}>
-        of your exam prep window{"\n"}scrolling instead of studying
+        of your life{"\n"}scrolling instead of learning
       </Text>
 
       <Text style={sts.mascot}>📵</Text>
 
       <Text style={sts.note}>
-        Based on {hours}h/day × years until your exam
+        Based on {hours}h/day × your remaining years
       </Text>
 
       <View style={{ alignSelf: "stretch" }}>
@@ -802,7 +804,7 @@ function LifeGridScreen({
         </View>
         <View style={lgs.legendRow}>
           <View style={[lgs.legendDot, { backgroundColor: C.progressBg }]} />
-          <Text style={lgs.legendTxt}>Time remaining before your exam</Text>
+          <Text style={lgs.legendTxt}>Time remaining to learn and grow</Text>
         </View>
       </View>
 
@@ -842,7 +844,7 @@ function GoodNewsScreen({
       <Text style={gns.pre}>Here's the good news.</Text>
       <Text style={gns.bold}>Unloq gives that time back</Text>
       <Text style={gns.years}>
-        {years} years of{"\n"}focused exam prep
+        {years} years of{"\n"}focused learning
       </Text>
       <Text style={gns.mascot}>📚</Text>
       <View style={{ alignSelf: "stretch" }}>
@@ -1083,12 +1085,12 @@ function PricingScreen({ onNext }: { onNext: () => void }) {
 
   return (
     <Animated.View entering={FadeInDown.duration(350)} style={pr.root}>
-      <Text style={pr.eyebrow}>Your exam prep plan</Text>
-      <Text style={pr.title}>Start today.{'\n'}Your exam won't wait.</Text>
+      <Text style={pr.eyebrow}>Your learning plan</Text>
+      <Text style={pr.title}>Start today.{'\n'}Your goals won't wait.</Text>
 
       <View style={pr.card}>
         {[
-          { bold: 'Unlimited exam prep courses', sub: 'Upload lecture notes, outlines, any PDF or YouTube video' },
+          { bold: 'Unlimited courses from your content', sub: 'Upload notes, outlines, any PDF or YouTube video' },
           { bold: 'YouTube import', sub: 'Turn any lecture into a structured daily lesson in seconds' },
           { bold: 'Enforced app blocking', sub: 'Apps stay locked until you finish your daily lessons — no bypass' },
           { bold: 'Flashcards & quizzes', sub: 'Active recall built into every lesson — the method that actually builds memory' },

@@ -1,12 +1,10 @@
-// Font families — Inter (loaded in App.tsx via expo-google-fonts)
+// Font families — Nunito (loaded in App.tsx via expo-google-fonts)
 export const FontFamily = {
-
-  
-  regular:   'Inter-Regular',
-  medium:    'Inter-Medium',
-  semiBold:  'Inter-SemiBold',
-  bold:      'Inter-Bold',
-  extraBold: 'Inter-ExtraBold',
+  regular:   'Nunito-Regular',
+  medium:    'Nunito-Medium',
+  semiBold:  'Nunito-SemiBold',
+  bold:      'Nunito-Bold',
+  extraBold: 'Nunito-ExtraBold',
 };
 
 // Legacy flat color set — used by onboarding/goal-setup (kept for compatibility)
