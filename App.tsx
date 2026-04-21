@@ -103,6 +103,17 @@ function LockCheck() {
 
   // Initial check once courses have loaded from Convex (run only once — not on every live-query update)
   const didInitialCheck = useRef(false);
+
+  // If the user taps "Study Now" before courses finish loading, mark the initial
+  // check as done so the courses-load effect doesn't re-lock them.
+  const prevFlowRef = useRef(flow);
+  useEffect(() => {
+    if (prevFlowRef.current === 'locked' && flow === 'home') {
+      didInitialCheck.current = true;
+    }
+    prevFlowRef.current = flow;
+  }, [flow]);
+
   useEffect(() => {
     if (courses !== undefined && !didInitialCheck.current) {
       didInitialCheck.current = true;

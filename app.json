@@ -35,7 +35,8 @@
       "expo-font",
       "expo-secure-store",
       "@react-native-community/datetimepicker",
-      "./plugins/withFamilyControls"
+      "./plugins/withFamilyControls",
+      "expo-apple-authentication"
     ],
     "extra": {
       "eas": {

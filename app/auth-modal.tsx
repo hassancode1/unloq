@@ -1,8 +1,10 @@
+import * as AppleAuthentication from 'expo-apple-authentication';
 import * as WebBrowser from 'expo-web-browser';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -37,6 +39,11 @@ export default function AuthModal({ visible, onDismiss, onAuthSuccess }: Props) 
   const [isSignUp, setIsSignUp] = useState(false);
   const [emailLoading, setEmailLoading] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
+  const [appleAvailable, setAppleAvailable] = useState(false);
+
+  useEffect(() => {
+    AppleAuthentication.isAvailableAsync().then(setAppleAvailable).catch(() => {});
+  }, []);
 
   // When auth completes (isAuthenticated flips to true), trigger success
   React.useEffect(() => {
@@ -44,6 +51,30 @@ export default function AuthModal({ visible, onDismiss, onAuthSuccess }: Props) 
       onAuthSuccess();
     }
   }, [isAuthenticated, visible]);
+
+  const handleAppleSignIn = async () => {
+    setLoading(true);
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+      if (!credential.identityToken) throw new Error('No identity token returned');
+      await signIn('apple-native', {
+        identityToken: credential.identityToken,
+        user: credential.user,
+        ...(credential.email ? { email: credential.email } : {}),
+      });
+    } catch (e: any) {
+      if (e?.code !== 'ERR_REQUEST_CANCELED') {
+        Toast.show({ type: 'error', text1: 'Sign in failed', text2: e?.message ?? 'Please try again.' });
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
@@ -137,6 +168,17 @@ export default function AuthModal({ visible, onDismiss, onAuthSuccess }: Props) 
             <Text style={[styles.subtitle, { fontSize: fs(13), fontFamily: F.regular, color: C.sub }]}>
               Your courses are saved to your account and synced across devices.
             </Text>
+
+            {/* Apple button — only shown on iOS 13+ where Sign in with Apple is available */}
+            {appleAvailable && (
+              <AppleAuthentication.AppleAuthenticationButton
+                buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+                buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+                cornerRadius={16}
+                style={styles.appleBtn}
+                onPress={handleAppleSignIn}
+              />
+            )}
 
             {/* Google button */}
             <TouchableOpacity
@@ -255,9 +297,23 @@ export default function AuthModal({ visible, onDismiss, onAuthSuccess }: Props) 
               </Text>
             </TouchableOpacity>
 
-            {/* Fine print */}
+            {/* Fine print with tappable links — required by App Store guideline 3.1.2(c) */}
             <Text style={[styles.fine, { fontSize: fs(11), fontFamily: F.regular, color: C.muted }]}>
-              By continuing you agree to our Terms of Service and Privacy Policy.
+              By continuing you agree to our{' '}
+              <Text
+                style={{ color: C.primary, fontFamily: F.semiBold }}
+                onPress={() => Linking.openURL('https://hassancode1.github.io/unloq/terms-of-service.html')}
+              >
+                Terms of Service
+              </Text>
+              {' '}and{' '}
+              <Text
+                style={{ color: C.primary, fontFamily: F.semiBold }}
+                onPress={() => Linking.openURL('https://hassancode1.github.io/unloq/privacy-policy.html')}
+              >
+                Privacy Policy
+              </Text>
+              .
             </Text>
           </ScrollView>
         </View>
@@ -319,6 +375,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
     paddingHorizontal: Spacing.md,
+  },
+  appleBtn: {
+    width: '100%',
+    height: 54,
   },
   googleBtn: {
     flexDirection: 'row',

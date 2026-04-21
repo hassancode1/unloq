@@ -30,6 +30,7 @@ interface AppState {
   darkMode: boolean;
   fontScale: number;
   revenueCatReady: boolean;
+  onboardingRole: string | null;
 
   setFlow: (flow: AppFlow) => void;
   setRevenueCatReady: (ready: boolean) => void;
@@ -40,6 +41,7 @@ interface AppState {
   toggleDarkMode: () => void;
   increaseFontScale: () => void;
   decreaseFontScale: () => void;
+  setOnboardingRole: (role: string) => void;
 }
 
 function todayStr() {
@@ -57,6 +59,7 @@ export const useAppStore = create<AppState>()(
       darkMode: false,
       fontScale: 1.05,
       revenueCatReady: false,
+      onboardingRole: null,
 
       setFlow: (flow) => set({ flow }),
       setRevenueCatReady: (ready) => set({ revenueCatReady: ready }),
@@ -77,6 +80,7 @@ export const useAppStore = create<AppState>()(
             },
           };
         }),
+      setOnboardingRole: (role) => set({ onboardingRole: role }),
       toggleDarkMode: () => set((s) => ({ darkMode: !s.darkMode })),
       increaseFontScale: () =>
         set((s) => ({
@@ -104,6 +108,7 @@ export const useAppStore = create<AppState>()(
         activeLessonIndex: s.activeLessonIndex,
         darkMode: s.darkMode,
         fontScale: s.fontScale,
+        onboardingRole: s.onboardingRole,
       }),
     },
   ),

@@ -1,14 +1,24 @@
+import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from "expo-file-system";
 import * as Haptics from "expo-haptics";
 import RevenueCatUI, { PAYWALL_RESULT } from "react-native-purchases-ui";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Dimensions,
+  KeyboardAvoidingView,
+  Linking,
   PanResponder,
+  Platform,
+  ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { useMutation, useAction, useConvexAuth } from "convex/react";
+import { api } from "../convex/_generated/api";
+import { useAppStore } from "../store/useAppStore";
 import Animated, {
   FadeIn,
   FadeInDown,
@@ -63,7 +73,8 @@ type ScreenId =
   | "good_news"
   | "why_unloq"
   | "commitment"
-  | "pricing";
+  | "pricing"
+  | "q_course";
 
 const FLOW: ScreenId[] = [
   "splash",
@@ -79,6 +90,7 @@ const FLOW: ScreenId[] = [
   "why_unloq",
   "commitment",
   "pricing",
+  "q_course",
 ];
 
 // Quiz screens that show progress bar (indices 1–3 and 10–11)
@@ -340,7 +352,7 @@ const ROLES = [
   { emoji: "🌍", label: "Language learning" },
 ];
 
-function QRoleScreen({ onNext }: { onNext: () => void }) {
+function QRoleScreen({ onNext, onSelect }: { onNext: () => void; onSelect: (role: string) => void }) {
   const [sel, setSel] = useState<string | null>(null);
   return (
     <Animated.View entering={FadeInDown.duration(300)} style={qs.root}>
@@ -354,6 +366,7 @@ function QRoleScreen({ onNext }: { onNext: () => void }) {
           onPress={() => {
             Haptics.selectionAsync();
             setSel(r.label);
+            onSelect(r.label);
           }}
         />
       ))}
@@ -1119,6 +1132,24 @@ function PricingScreen({ onNext }: { onNext: () => void }) {
       </TouchableOpacity>
 
       <Text style={pr.legal}>Free plan: 1 course included · No credit card required · Cancel anytime</Text>
+
+      <Text style={pr.legal}>
+        By subscribing you agree to our{' '}
+        <Text
+          style={pr.legalLink}
+          onPress={() => Linking.openURL('https://hassancode1.github.io/unloq/terms-of-service.html')}
+        >
+          Terms of Service
+        </Text>
+        {' '}and{' '}
+        <Text
+          style={pr.legalLink}
+          onPress={() => Linking.openURL('https://hassancode1.github.io/unloq/privacy-policy.html')}
+        >
+          Privacy Policy
+        </Text>
+        .
+      </Text>
     </Animated.View>
   );
 }
@@ -1149,6 +1180,254 @@ const pr = StyleSheet.create({
   btnSecondary: { alignItems: 'center', paddingVertical: 8 },
   btnSecondaryTxt: { fontSize: 15, fontFamily: F.semi, color: C.sub },
   legal: { fontSize: 11, fontFamily: F.regular, color: C.sub, textAlign: 'center' },
+  legalLink: { color: C.cta, fontFamily: F.semi },
+});
+
+// ── Q: Course (final onboarding step) ─────────────────────────────────────────
+function QCourseScreen({ onNext, role }: { onNext: () => void; role: string | null }) {
+  const { isAuthenticated } = useConvexAuth();
+  const createCourse   = useMutation(api.courses.create);
+  const generateCourse = useAction(api.ai.generateCourse);
+  const getUploadUrl   = useMutation(api.courses.generateUploadUrl);
+
+  const [topic, setTopic]     = useState("");
+  const [docName, setDocName] = useState<string | null>(null);
+  const [docUri, setDocUri]   = useState<string | null>(null);
+  const [busy, setBusy]       = useState(false);
+  const [done, setDone]       = useState(false);
+
+  const roleLabel = role ?? "your courses";
+
+  const pickDocument = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "application/pdf",
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      setDocName(asset.name);
+      setDocUri(asset.uri);
+      if (!topic) setTopic(asset.name.replace(/\.pdf$/i, ""));
+    } catch {}
+  };
+
+  const handleCreate = async () => {
+    if (!topic.trim() || busy) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setBusy(true);
+    try {
+      if (docUri && docName) {
+        const fileInfo = await FileSystem.getInfoAsync(docUri);
+        const MAX = 20 * 1024 * 1024;
+        if ((fileInfo as any).size > MAX) {
+          setBusy(false);
+          return;
+        }
+        const uploadUrl = await getUploadUrl();
+        const res = await FileSystem.uploadAsync(uploadUrl, docUri, {
+          httpMethod: "POST",
+          mimeType: "application/pdf",
+        });
+        const { storageId } = JSON.parse(res.body);
+        const courseId = await createCourse({
+          title: topic.trim(),
+          description: "",
+          docName,
+          sourceType: "pdf",
+          totalLessons: 5,
+          difficulty: "intermediate",
+        });
+        generateCourse({ courseId, pdfStorageId: storageId, lessonCount: 5, difficulty: "intermediate", includeFlashcards: true, includeQuiz: true, includeDiagram: false }).catch(() => {});
+      } else {
+        const courseId = await createCourse({
+          title: topic.trim(),
+          description: "",
+          docName: topic.trim(),
+          totalLessons: 5,
+          difficulty: "intermediate",
+        });
+        generateCourse({ courseId, courseTopic: topic.trim(), lessonCount: 5, difficulty: "intermediate", includeFlashcards: true, includeQuiz: true, includeDiagram: false }).catch(() => {});
+      }
+      setDone(true);
+      setTimeout(onNext, 1400);
+    } catch {
+      setBusy(false);
+    }
+  };
+
+  if (done) {
+    return (
+      <Animated.View entering={FadeIn.duration(400)} style={qcs.doneRoot}>
+        <Text style={qcs.doneEmoji}>🎉</Text>
+        <Text style={qcs.doneTitle}>Course added!</Text>
+        <Text style={qcs.doneSub}>It'll be ready by the time you get there.</Text>
+      </Animated.View>
+    );
+  }
+
+  return (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={qcs.root}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Ready badge */}
+        <View style={qcs.readyBadge}>
+          <Text style={qcs.readyCheck}>✓</Text>
+          <Text style={qcs.readyTxt} numberOfLines={2}>
+            {roleLabel} courses are ready for you
+          </Text>
+        </View>
+
+        <Text style={qcs.title}>Add your own{"\n"}study material</Text>
+        <Text style={qcs.sub}>
+          Optional — you don't need to upload anything. Your personalised courses
+          are already waiting. But if you have your own notes or a lecture, add
+          it here.
+        </Text>
+
+        {isAuthenticated ? (
+          <>
+            {/* Topic input */}
+            <View style={qcs.inputWrap}>
+              <TextInput
+                style={qcs.input}
+                placeholder="What's the topic? (e.g. Tort Law)"
+                placeholderTextColor={C.sub}
+                value={topic}
+                onChangeText={setTopic}
+                returnKeyType="done"
+              />
+            </View>
+
+            {/* PDF picker */}
+            <TouchableOpacity style={qcs.pdfBtn} onPress={pickDocument} activeOpacity={0.8}>
+              <Text style={qcs.pdfIcon}>{docUri ? "📄" : "📎"}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={qcs.pdfLabel}>
+                  {docUri ? docName ?? "PDF selected" : "Attach a PDF (optional)"}
+                </Text>
+                {!docUri && (
+                  <Text style={qcs.pdfSub}>Leave empty to generate from topic name</Text>
+                )}
+              </View>
+              {docUri && <Text style={qcs.pdfChange}>Change</Text>}
+            </TouchableOpacity>
+
+            <View style={{ marginTop: 8 }}>
+              <CTAButton
+                label={busy ? "Adding…" : "Add course"}
+                onPress={handleCreate}
+                disabled={!topic.trim() || busy}
+              />
+            </View>
+          </>
+        ) : (
+          <View style={qcs.authNote}>
+            <Text style={qcs.authNoteText}>
+              Sign in from the home screen to add your own courses anytime.
+            </Text>
+          </View>
+        )}
+
+        <TouchableOpacity onPress={onNext} style={qcs.skipBtn} activeOpacity={0.7}>
+          <Text style={qcs.skipTxt}>Skip for now  →</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+const qcs = StyleSheet.create({
+  root: {
+    paddingHorizontal: 24,
+    paddingTop: 8,
+    paddingBottom: 24,
+    gap: 14,
+  },
+  readyBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#DCFCE7",
+    borderRadius: 30,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    alignSelf: "flex-start",
+    marginBottom: 4,
+  },
+  readyCheck: { fontSize: 14, color: "#15803D", fontFamily: F.bold },
+  readyTxt: { fontSize: 13, fontFamily: F.semi, color: "#15803D", flexShrink: 1 },
+  title: {
+    fontSize: 28,
+    fontFamily: F.extraBold,
+    color: C.title,
+    lineHeight: 36,
+  },
+  sub: {
+    fontSize: 14,
+    fontFamily: F.semi,
+    color: C.sub,
+    lineHeight: 21,
+  },
+  inputWrap: {
+    backgroundColor: C.card,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: C.cardBorder,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  input: {
+    fontSize: 15,
+    fontFamily: F.semi,
+    color: C.title,
+  },
+  pdfBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: C.card,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: C.cardBorder,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  pdfIcon: { fontSize: 20 },
+  pdfLabel: { fontSize: 14, fontFamily: F.semi, color: C.title },
+  pdfSub:   { fontSize: 12, fontFamily: F.regular, color: C.sub, marginTop: 2 },
+  pdfChange: { fontSize: 13, fontFamily: F.semi, color: C.cta },
+  authNote: {
+    backgroundColor: C.selected,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: C.selectedBorder,
+    padding: 14,
+  },
+  authNoteText: {
+    fontSize: 14,
+    fontFamily: F.semi,
+    color: C.sub,
+    lineHeight: 20,
+    textAlign: "center",
+  },
+  skipBtn: { alignSelf: "center", paddingVertical: 10, marginTop: 4 },
+  skipTxt: { fontSize: 15, fontFamily: F.semi, color: C.sub },
+  doneRoot: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 16,
+    paddingHorizontal: 24,
+  },
+  doneEmoji: { fontSize: 72 },
+  doneTitle: { fontSize: 32, fontFamily: F.extraBold, color: C.title },
+  doneSub:   { fontSize: 15, fontFamily: F.semi, color: C.sub, textAlign: "center" },
 });
 
 // ── Main ───────────────────────────────────────────────────────────────────────
@@ -1159,6 +1438,7 @@ export default function OnboardingScreen({ onComplete }: Props) {
   const [idx, setIdx] = useState(0);
   const [hours, setHours] = useState(4);
   const screen = FLOW[idx];
+  const { onboardingRole, setOnboardingRole } = useAppStore();
 
   const next = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1195,7 +1475,7 @@ export default function OnboardingScreen({ onComplete }: Props) {
       {/* Screen content */}
       <View style={root.content} key={screen}>
         {screen === "splash" && <SplashScreen onNext={next} />}
-        {screen === "q_role" && <QRoleScreen onNext={next} />}
+        {screen === "q_role" && <QRoleScreen onNext={next} onSelect={setOnboardingRole} />}
         {screen === "q_distraction" && <QDistractionScreen onNext={next} />}
         {screen === "q_hours" && (
           <QHoursScreen onNext={next} onHoursChange={setHours} />
@@ -1212,7 +1492,8 @@ export default function OnboardingScreen({ onComplete }: Props) {
         )}
         {screen === "why_unloq" && <WhyUnloqScreen onNext={next} />}
         {screen === "commitment" && <CommitmentScreen onNext={next} />}
-        {screen === "pricing" && <PricingScreen onNext={onComplete} />}
+        {screen === "pricing" && <PricingScreen onNext={next} />}
+        {screen === "q_course" && <QCourseScreen onNext={onComplete} role={onboardingRole} />}
       </View>
 
       <View style={{ height: insets.bottom + 8 }} />
