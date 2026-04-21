@@ -171,12 +171,14 @@ function makeStyles(C: AppColors) {
     stepDotActive: { backgroundColor: P, width: 22 },
     backBtn: { alignSelf: 'center', paddingVertical: 8, paddingHorizontal: 20 },
     backBtnText: { fontSize: 14, fontFamily: 'Nunito-SemiBold', color: C.sub },
+    cancelBar: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: 2 },
+    cancelTxt: { fontSize: 15, fontFamily: 'Nunito-SemiBold', color: C.muted },
   });
 }
 
-type Props = { onComplete: () => void };
+type Props = { onComplete: () => void; onBack?: () => void };
 
-export default function GoalSetupScreen({ onComplete }: Props) {
+export default function GoalSetupScreen({ onComplete, onBack }: Props) {
   const insets = useSafeAreaInsets();
   const setGoalConfig = useAppStore((s) => s.setGoalConfig);
   const { C, fs, F } = useTheme();
@@ -287,6 +289,12 @@ export default function GoalSetupScreen({ onComplete }: Props) {
     };
     return (
       <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+        {onBack && (
+          <TouchableOpacity onPress={onBack} style={styles.cancelBar} activeOpacity={0.7}>
+            <Ionicons name="chevron-back" size={20} color={C.muted} />
+            <Text style={styles.cancelTxt}>Cancel</Text>
+          </TouchableOpacity>
+        )}
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <Animated.View entering={FadeInDown.duration(300)} style={styles.header}>
             <View style={styles.badge}>
@@ -371,6 +379,12 @@ export default function GoalSetupScreen({ onComplete }: Props) {
   if (step === 'session') {
     return (
       <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+        {onBack && (
+          <TouchableOpacity onPress={onBack} style={styles.cancelBar} activeOpacity={0.7}>
+            <Ionicons name="chevron-back" size={20} color={C.muted} />
+            <Text style={styles.cancelTxt}>Cancel</Text>
+          </TouchableOpacity>
+        )}
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <Animated.View entering={FadeInDown.duration(300)} style={styles.header}>
             <View style={styles.badge}>
@@ -446,6 +460,12 @@ export default function GoalSetupScreen({ onComplete }: Props) {
   // ── Step 3: App blocker ───────────────────────────────────────────────────
   return (
     <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+      {onBack && (
+        <TouchableOpacity onPress={onBack} style={styles.cancelBar} activeOpacity={0.7}>
+          <Ionicons name="chevron-back" size={20} color={C.muted} />
+          <Text style={styles.cancelTxt}>Cancel</Text>
+        </TouchableOpacity>
+      )}
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Animated.View entering={FadeInDown.duration(300)} style={styles.header}>
           <View style={styles.badge}>

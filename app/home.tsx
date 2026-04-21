@@ -58,7 +58,7 @@ const ROLE_KEYWORDS: Record<string, string[]> = {
 function courseMatchesRole(course: any, role: string | null): boolean {
   if (!role) return true;
   const keywords = ROLE_KEYWORDS[role] ?? [];
-  if (keywords.length === 0) return true;
+  if (keywords.length === 0) return false;
   const haystack = `${course.title} ${course.description ?? ''} ${course.course_topic ?? ''} ${(course.tags ?? []).join(' ')}`.toLowerCase();
   return keywords.some(kw => haystack.includes(kw));
 }
