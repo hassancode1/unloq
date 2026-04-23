@@ -41,7 +41,8 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_published", ["published"])
-    .index("by_group", ["group_id"]),
+    .index("by_group", ["group_id"])
+    .index("by_admin_created", ["adminCreated"]),
 
   lessons: defineTable({
     courseId: v.id("courses"),

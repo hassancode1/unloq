@@ -54,7 +54,6 @@ export default function SettingsScreen() {
         style: "destructive",
         onPress: async () => {
           await signOut();
-          setFlow("onboarding");
         },
       },
     ]);

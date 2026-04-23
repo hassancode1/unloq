@@ -1,5 +1,6 @@
 import { mutation, query, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { requireAdmin } from "./lib/requireAdmin";
 
@@ -7,23 +8,23 @@ import { requireAdmin } from "./lib/requireAdmin";
 
 export const listCourses = query({
   handler: async (ctx) => {
-    const all = await ctx.db.query("courses").order("desc").collect();
-    const courses = all.filter((c) => c.adminCreated === true);
-    return Promise.all(
-      courses.map(async (course) => {
-        const lessons = await ctx.db
-          .query("lessons")
-          .withIndex("by_course", (q) => q.eq("courseId", course._id))
-          .collect();
-        const group = course.group_id ? await ctx.db.get(course.group_id) : null;
-        return {
-          ...course,
-          total_lessons: lessons.length || course.totalLessons,
-          course_topic: course.course_topic ?? course.docName,
-          group_name: group?.name ?? null,
-        };
-      }),
-    );
+    await requireAdmin(ctx);
+    const courses = await ctx.db
+      .query("courses")
+      .withIndex("by_admin_created", (q) => q.eq("adminCreated", true))
+      .collect();
+
+    // Batch-fetch only the unique groups referenced by these courses
+    const uniqueGroupIds = [...new Set(courses.map((c) => c.group_id).filter(Boolean))] as Id<"groups">[];
+    const groupDocs = await Promise.all(uniqueGroupIds.map((id) => ctx.db.get(id)));
+    const groupMap = new Map(groupDocs.filter(Boolean).map((g) => [g!._id, g!]));
+
+    return courses.map((course) => ({
+      ...course,
+      total_lessons: course.totalLessons,
+      course_topic: course.course_topic ?? course.docName,
+      group_name: course.group_id ? (groupMap.get(course.group_id)?.name ?? null) : null,
+    }));
   },
 });
 
