@@ -34,6 +34,8 @@ import OnboardingScreen from "./app/onboarding";
 import GoalSetupScreen from "./app/goal-setup";
 import HomeScreen from "./app/home";
 import LockedScreen from "./app/locked";
+import OfflineScreen from "./app/offline";
+import { useNetworkStatus } from "./hooks/useNetworkStatus";
 
 const convex = new ConvexReactClient(process.env.EXPO_PUBLIC_CONVEX_URL!);
 
@@ -158,6 +160,7 @@ if (REVENUECAT_IOS_KEY) {
 
 export default function App() {
   const { flow, setFlow } = useAppStore();
+  const { isConnected, networkLoading, recheck } = useNetworkStatus();
 
   const [fontsLoaded] = useFonts({
     "Nunito-Regular":   Nunito_400Regular,
@@ -194,8 +197,16 @@ export default function App() {
         {flow === "goalsetup" && (
           <GoalSetupScreen onComplete={() => setFlow("home")} onBack={() => setFlow("home")} />
         )}
-        {flow === "home" && <HomeScreen />}
-        {flow === "locked" && <LockedScreen />}
+        {flow === "home" && (
+          !networkLoading && !isConnected
+            ? <OfflineScreen onRetry={recheck} />
+            : <HomeScreen />
+        )}
+        {flow === "locked" && (
+          !networkLoading && !isConnected
+            ? <OfflineScreen onRetry={recheck} />
+            : <LockedScreen />
+        )}
       </SafeAreaProvider>
       <Toast />
     </ConvexAuthProvider>

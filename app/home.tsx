@@ -372,10 +372,10 @@ function CoursesContent({ onUpload, onCourseSelect, suggestedCourses, isPremium,
       <Animated.View entering={FadeInDown.duration(260)} style={{ gap: 10 }}>
         {[1, 2, 3].map((i) => (
           <View key={i} style={[styles.skeletonCard, { backgroundColor: C.surface, borderColor: C.border }]}>
-            <View style={[styles.skeletonIcon, { backgroundColor: C.surfaceAlt }]} />
+            <View style={[styles.skeletonIcon, { backgroundColor: C.border }]} />
             <View style={{ flex: 1, gap: 8 }}>
-              <View style={[styles.skeletonLine, { width: '55%', backgroundColor: C.surfaceAlt }]} />
-              <View style={[styles.skeletonLine, { width: '35%', backgroundColor: C.surfaceAlt }]} />
+              <View style={[styles.skeletonLine, { width: '55%', backgroundColor: C.border }]} />
+              <View style={[styles.skeletonLine, { width: '35%', backgroundColor: C.border }]} />
             </View>
           </View>
         ))}
@@ -658,7 +658,7 @@ export default function HomeScreen() {
     <View style={{ flex: 1, backgroundColor: C.bg, paddingTop: insets.top }}>
       <View style={{ flex: 1 }}>
         {activeTab === 'learn'    && <CoursesTab onUpload={handleUploadPress} onCourseSelect={setDetailCourse} C={C} fs={fs} F={F} />}
-        {activeTab === 'stats'    && <StatsScreen />}
+        {activeTab === 'stats'    && <StatsScreen onOpenCourse={(id) => setDetailCourse(id)} />}
         {activeTab === 'settings' && <SettingsScreen />}
       </View>
 

@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import React from 'react';
 import {
+  Alert,
   Image,
   Linking,
   ScrollView,
@@ -10,8 +11,9 @@ import {
   Text,
   TouchableOpacity,
   View,
-} from 'react-native';
+} from "react-native";
 import { useQuery } from 'convex/react';
+import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from '../convex/_generated/api';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -42,6 +44,21 @@ export default function SettingsScreen() {
   const { goalConfig, setFlow, toggleDarkMode, increaseFontScale, decreaseFontScale } = useAppStore();
   const styles = React.useMemo(() => makeStyles(C), [C]);
   const viewer = useQuery(api.users.currentUser);
+  const { signOut } = useAuthActions();
+
+  const handleSignOut = () => {
+    Alert.alert("Sign Out", "Are you sure you want to sign out?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Sign Out",
+        style: "destructive",
+        onPress: async () => {
+          await signOut();
+          setFlow("onboarding");
+        },
+      },
+    ]);
+  };
 
   return (
     <View style={[styles.root]}>
@@ -74,9 +91,17 @@ export default function SettingsScreen() {
             {viewer?.image ? (
               <Image source={{ uri: viewer.image }} style={styles.avatarImg} />
             ) : (
-              <View style={[styles.avatar, { backgroundColor: `${C.primary}18` }]}>
+              <View
+                style={[styles.avatar, { backgroundColor: `${C.primary}18` }]}
+              >
                 {viewer?.name ? (
-                  <Text style={{ fontSize: fs(32), fontFamily: F.bold, color: C.primary }}>
+                  <Text
+                    style={{
+                      fontSize: fs(32),
+                      fontFamily: F.bold,
+                      color: C.primary,
+                    }}
+                  >
                     {viewer.name[0].toUpperCase()}
                   </Text>
                 ) : (
@@ -91,7 +116,7 @@ export default function SettingsScreen() {
               { fontSize: fs(22), fontFamily: F.bold, color: C.text },
             ]}
           >
-            {viewer?.name ?? 'Learner'}
+            {viewer?.name ?? "Learner"}
           </Text>
           <Text
             style={[
@@ -425,12 +450,27 @@ export default function SettingsScreen() {
             <TouchableOpacity
               style={styles.actionRow}
               activeOpacity={0.7}
-              onPress={() => Linking.openURL('https://hassancode1.github.io/unloq/privacy-policy.html')}
+              onPress={() =>
+                Linking.openURL(
+                  "https://hassancode1.github.io/unloq/privacy-policy.html",
+                )
+              }
             >
-              <View style={[styles.iconBox, { backgroundColor: `${C.primary}12` }]}>
-                <Ionicons name="shield-checkmark-outline" size={15} color={C.primary} />
+              <View
+                style={[styles.iconBox, { backgroundColor: `${C.primary}12` }]}
+              >
+                <Ionicons
+                  name="shield-checkmark-outline"
+                  size={15}
+                  color={C.primary}
+                />
               </View>
-              <Text style={[styles.rowLabel, { fontSize: fs(14), fontFamily: F.medium, color: C.sub }]}>
+              <Text
+                style={[
+                  styles.rowLabel,
+                  { fontSize: fs(14), fontFamily: F.medium, color: C.sub },
+                ]}
+              >
                 Privacy Policy
               </Text>
               <Ionicons name="open-outline" size={14} color={C.muted} />
@@ -439,12 +479,27 @@ export default function SettingsScreen() {
             <TouchableOpacity
               style={styles.actionRow}
               activeOpacity={0.7}
-              onPress={() => Linking.openURL('https://hassancode1.github.io/unloq/terms-of-service.html')}
+              onPress={() =>
+                Linking.openURL(
+                  "https://hassancode1.github.io/unloq/terms-of-service.html",
+                )
+              }
             >
-              <View style={[styles.iconBox, { backgroundColor: `${C.primary}12` }]}>
-                <Ionicons name="document-text-outline" size={15} color={C.primary} />
+              <View
+                style={[styles.iconBox, { backgroundColor: `${C.primary}12` }]}
+              >
+                <Ionicons
+                  name="document-text-outline"
+                  size={15}
+                  color={C.primary}
+                />
               </View>
-              <Text style={[styles.rowLabel, { fontSize: fs(14), fontFamily: F.medium, color: C.sub }]}>
+              <Text
+                style={[
+                  styles.rowLabel,
+                  { fontSize: fs(14), fontFamily: F.medium, color: C.sub },
+                ]}
+              >
                 Terms of Service
               </Text>
               <Ionicons name="open-outline" size={14} color={C.muted} />
@@ -453,12 +508,41 @@ export default function SettingsScreen() {
             <TouchableOpacity
               style={styles.actionRow}
               activeOpacity={0.7}
-              onPress={() => Linking.openURL('mailto:support@loqlearn.com?subject=Delete%20My%20Account')}
+              onPress={handleSignOut}
             >
-              <View style={[styles.iconBox, { backgroundColor: '#FEE2E218' }]}>
+              <View
+                style={[styles.iconBox, { backgroundColor: `${C.error}18` }]}
+              >
+                <Ionicons name="log-out-outline" size={15} color={C.error} />
+              </View>
+              <Text
+                style={[
+                  styles.rowLabel,
+                  { fontSize: fs(14), fontFamily: F.medium, color: C.error },
+                ]}
+              >
+                Sign Out
+              </Text>
+            </TouchableOpacity>
+            <View style={styles.separator} />
+            <TouchableOpacity
+              style={styles.actionRow}
+              activeOpacity={0.7}
+              onPress={() =>
+                Linking.openURL(
+                  "mailto:support@loqlearn.com?subject=Delete%20My%20Account",
+                )
+              }
+            >
+              <View style={[styles.iconBox, { backgroundColor: "#FEE2E218" }]}>
                 <Ionicons name="trash-outline" size={15} color="#EF4444" />
               </View>
-              <Text style={[styles.rowLabel, { fontSize: fs(14), fontFamily: F.medium, color: '#EF4444' }]}>
+              <Text
+                style={[
+                  styles.rowLabel,
+                  { fontSize: fs(14), fontFamily: F.medium, color: "#EF4444" },
+                ]}
+              >
                 Delete Account
               </Text>
               <Ionicons name="open-outline" size={14} color="#EF4444" />

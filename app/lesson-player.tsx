@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  PanResponder,
   ScrollView,
   StyleSheet,
   Text,
@@ -20,6 +21,7 @@ import Reanimated, {
   withDelay,
   FadeIn,
   Easing,
+  runOnJS,
 } from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -178,25 +180,76 @@ function FlashcardView({
   lesson: any; onFinish: () => void; C: AppColors; fs: (n: number) => number; F: any;
 }) {
   const cards: any[] = lesson.flashcards ?? [];
-  const [idx, setIdx]       = useState(0);
-  const [flipped, setFlipped] = useState(false);
+  const [idx, setIdx]           = useState(0);
+  const [showBack, setShowBack] = useState(false);
+
+  // UI-thread shared values — reliably readable/writable from both worklets and JS thread
+  const flipAnim  = useSharedValue(0);    // rotation degrees
+  const isFlipped = useSharedValue(false); // true = back face visible
+
+  const cardFlipStyle = useAnimatedStyle(() => ({
+    transform: [{ perspective: 900 }, { rotateY: `${flipAnim.value}deg` }],
+  }));
 
   const flip = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setFlipped(v => !v);
+    const toBack = !isFlipped.value; // always reads the real current state
+    flipAnim.value = withTiming(90, { duration: 180, easing: Easing.in(Easing.ease) }, (done) => {
+      'worklet';
+      if (!done) return;
+      isFlipped.value = toBack;           // update on UI thread — safe in worklet
+      runOnJS(setShowBack)(toBack);       // sync React state for re-render
+      flipAnim.value = -90;
+      flipAnim.value = withTiming(0, { duration: 180, easing: Easing.out(Easing.ease) });
+    });
   };
 
   const next = () => {
     Haptics.selectionAsync();
-    if (idx < cards.length - 1) { setIdx(i => i + 1); setFlipped(false); }
+    if (idxRef.current < cards.length - 1) {
+      // Reset flip state synchronously — both shared value and React state
+      isFlipped.value = false;
+      setShowBack(false);
+      flipAnim.value = 0;
+      setIdx(i => i + 1);
+    }
   };
 
   const prev = () => {
     Haptics.selectionAsync();
-    if (idx > 0) { setIdx(i => i - 1); setFlipped(false); }
+    if (idxRef.current > 0) {
+      isFlipped.value = false;
+      setShowBack(false);
+      flipAnim.value = 0;
+      setIdx(i => i - 1);
+    }
   };
 
-  const card = cards[idx];
+  // Refs so the PanResponder (created once) always calls the latest functions
+  const idxRef  = useRef(idx);
+  const flipRef = useRef(flip);
+  const nextRef = useRef(next);
+  const prevRef = useRef(prev);
+  useEffect(() => { idxRef.current = idx; }, [idx]);
+  useEffect(() => { flipRef.current = flip; nextRef.current = next; prevRef.current = prev; });
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 5 || Math.abs(gs.dy) > 5,
+      onPanResponderRelease: (_, gs) => {
+        const { dx, dy } = gs;
+        if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
+          if (dx < 0) nextRef.current();
+          else prevRef.current();
+        } else if (Math.abs(dx) < 12 && Math.abs(dy) < 12) {
+          flipRef.current();
+        }
+      },
+    })
+  ).current;
+
+  const card   = cards[idx];
   const isLast = idx === cards.length - 1;
 
   return (
@@ -210,17 +263,20 @@ function FlashcardView({
 
       {/* Card */}
       <View style={fc.cardWrap}>
-        <TouchableOpacity style={[fc.card, { backgroundColor: flipped ? C.primary : C.surface, borderColor: flipped ? C.primary : C.border }]} onPress={flip} activeOpacity={0.9}>
-          <Text style={[fc.side, { fontFamily: F.extraBold, fontSize: fs(10), color: flipped ? 'rgba(255,255,255,0.55)' : C.muted }]}>
-            {flipped ? 'ANSWER' : `CARD ${idx + 1} OF ${cards.length}`}
+        <Reanimated.View
+          style={[fc.card, { backgroundColor: showBack ? C.primary : C.surface, borderColor: showBack ? C.primary : C.border }, cardFlipStyle]}
+          {...panResponder.panHandlers}
+        >
+          <Text style={[fc.side, { fontFamily: F.extraBold, fontSize: fs(10), color: showBack ? 'rgba(255,255,255,0.55)' : C.muted }]}>
+            {showBack ? 'ANSWER' : `CARD ${idx + 1} OF ${cards.length}`}
           </Text>
-          <Text style={[fc.cardText, { fontFamily: flipped ? F.regular : F.semiBold, fontSize: fs(19), color: flipped ? '#fff' : C.text }]}>
-            {flipped ? card?.back : card?.front}
+          <Text style={[fc.cardText, { fontFamily: showBack ? F.regular : F.semiBold, fontSize: fs(19), color: showBack ? '#fff' : C.text }]}>
+            {showBack ? card?.back : card?.front}
           </Text>
-          <Text style={[fc.hint, { fontFamily: F.regular, fontSize: fs(12), color: flipped ? 'rgba(255,255,255,0.45)' : C.muted }]}>
-            Tap to {flipped ? 'see term' : 'reveal answer'}
+          <Text style={[fc.hint, { fontFamily: F.regular, fontSize: fs(12), color: showBack ? 'rgba(255,255,255,0.45)' : C.muted }]}>
+            Tap to flip · Swipe to navigate
           </Text>
-        </TouchableOpacity>
+        </Reanimated.View>
       </View>
 
       {/* Nav + action */}
@@ -540,7 +596,7 @@ function LoadingView({ C, onBack }: { C: AppColors; onBack: () => void }) {
   }));
 
   const Bar = ({ w, h = 12, mt = 0 }: { w: string; h?: number; mt?: number }) => (
-    <Reanimated.View style={[{ width: w as any, height: h, borderRadius: h / 2, backgroundColor: C.border, marginTop: mt }, shimStyle]} />
+    <Reanimated.View style={[{ width: w as any, height: h, borderRadius: h / 2, backgroundColor: C.borderStrong, marginTop: mt }, shimStyle]} />
   );
 
   return (

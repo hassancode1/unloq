@@ -1,10 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import React from 'react';
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from 'convex/react';
 import { api } from '../convex/_generated/api';
+import { Id } from '../convex/_generated/dataModel';
 import { useTheme } from '../hooks/useTheme';
 import { useAppStore } from '../store/useAppStore';
 import { Spacing } from '../constants/spacing';
@@ -26,7 +28,9 @@ function topicEmoji(title: string): string {
   return "📚";
 }
 
-export default function StatsScreen() {
+type Props = { onOpenCourse: (courseId: Id<'courses'>) => void };
+
+export default function StatsScreen({ onOpenCourse }: Props) {
   const insets = useSafeAreaInsets();
   const { C, fs, F } = useTheme();
   const styles = React.useMemo(() => makeStyles(C), [C]);
@@ -264,7 +268,11 @@ export default function StatsScreen() {
 
                   return (
                     <View key={course._id}>
-                      <View style={styles.courseRow}>
+                      <TouchableOpacity
+                        style={styles.courseRow}
+                        activeOpacity={0.75}
+                        onPress={() => { Haptics.selectionAsync(); onOpenCourse(course._id); }}
+                      >
                         <View
                           style={[
                             styles.courseIcon,
@@ -335,7 +343,8 @@ export default function StatsScreen() {
                         >
                           {pct}%
                         </Text>
-                      </View>
+                        <Ionicons name="chevron-forward" size={14} color={C.muted} />
+                      </TouchableOpacity>
                       {i < arr.length - 1 && (
                         <View
                           style={[

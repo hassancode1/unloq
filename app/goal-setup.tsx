@@ -243,10 +243,11 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e: any) {
       if (e?.code !== 'CANCELLED') {
-        const { NativeModules } = require('react-native');
-        const moduleKeys = Object.keys(NativeModules).filter(k => k.toLowerCase().includes('family') || k.toLowerCase().includes('screen') || k.toLowerCase().includes('managed'));
-        const debug = moduleKeys.length ? `\n\nLoaded: ${moduleKeys.join(', ')}` : `\n\nNo Family/Screen modules found in NativeModules`;
-        Alert.alert('Error', (e?.message ?? 'Something went wrong') + debug);
+        Alert.alert(
+          'Screen Time Unavailable',
+          'Unable to access Screen Time on this device. This can happen if the device is managed by a parent or employer.\n\nYou can still use Unloq — app blocking just won\'t be available.',
+          [{ text: 'OK' }],
+        );
       }
     } finally {
       setPickerLoading(false);

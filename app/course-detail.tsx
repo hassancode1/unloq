@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -8,13 +8,21 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, {
+  FadeInDown,
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from 'convex/react';
 import { api } from '../convex/_generated/api';
 import { Id } from '../convex/_generated/dataModel';
 import { useTheme } from '../hooks/useTheme';
 import { Spacing } from '../constants/spacing';
+import type { AppColors } from '../constants/Colors';
 
 type Props = {
   courseId: Id<'courses'>;
@@ -49,6 +57,29 @@ const DIFFICULTY_COLOR: Record<string, string> = {
   advanced:     '#7C3AED',
 };
 
+function SkeletonLoader({ C, insets, onBack }: { C: AppColors; insets: any; onBack: () => void }) {
+  const shimmer = useSharedValue(0);
+  useEffect(() => {
+    shimmer.value = withRepeat(withTiming(1, { duration: 900, easing: Easing.inOut(Easing.ease) }), -1, true);
+  }, []);
+  const shimStyle = useAnimatedStyle(() => ({ opacity: 0.5 + shimmer.value * 0.4 }));
+
+  return (
+    <View style={[S.root, { backgroundColor: C.bg, paddingTop: insets.top }]}>
+      <View style={[S.header, { borderBottomColor: C.border }]}>
+        <TouchableOpacity style={[S.backBtn, { backgroundColor: C.surfaceAlt, borderColor: C.border }]} onPress={onBack}>
+          <Ionicons name="arrow-back" size={19} color={C.muted} />
+        </TouchableOpacity>
+      </View>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+        <Animated.View style={[S.skeletonHero, { backgroundColor: C.borderStrong }, shimStyle]} />
+        <Animated.View style={[S.skeletonLine, { width: 160, backgroundColor: C.borderStrong }, shimStyle]} />
+        <Animated.View style={[S.skeletonLine, { width: 100, backgroundColor: C.borderStrong }, shimStyle]} />
+      </View>
+    </View>
+  );
+}
+
 export default function CourseDetailScreen({ courseId, onBack, onStartLesson }: Props) {
   const insets = useSafeAreaInsets();
   const { C, fs, F } = useTheme();
@@ -70,20 +101,7 @@ export default function CourseDetailScreen({ courseId, onBack, onStartLesson }: 
   const isLoading = course === undefined || rawLessons === undefined;
 
   if (isLoading) {
-    return (
-      <View style={[S.root, { backgroundColor: C.bg, paddingTop: insets.top }]}>
-        <View style={[S.header, { borderBottomColor: C.border }]}>
-          <TouchableOpacity style={[S.backBtn, { backgroundColor: C.surfaceAlt, borderColor: C.border }]} onPress={onBack}>
-            <Ionicons name="arrow-back" size={19} color={C.muted} />
-          </TouchableOpacity>
-        </View>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-          <View style={[S.skeletonHero, { backgroundColor: C.surfaceAlt }]} />
-          <View style={[S.skeletonLine, { width: 160, backgroundColor: C.surfaceAlt }]} />
-          <View style={[S.skeletonLine, { width: 100, backgroundColor: C.surfaceAlt }]} />
-        </View>
-      </View>
-    );
+    return <SkeletonLoader C={C} insets={insets} onBack={onBack} />;
   }
 
   return (
@@ -169,12 +187,14 @@ export default function CourseDetailScreen({ courseId, onBack, onStartLesson }: 
                 const isLocked = !isDone && !isNext && idx > 0 && !lessons[idx - 1]?.completed;
 
                 return (
-                  <View
+                  <TouchableOpacity
                     key={lesson._id}
                     style={[
                       S.lessonRow,
                       idx < lessons.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
                     ]}
+                    activeOpacity={0.75}
+                    onPress={() => { Haptics.selectionAsync(); onStartLesson(); }}
                   >
                     {/* Number / status icon */}
                     <View style={[
@@ -218,7 +238,7 @@ export default function CourseDetailScreen({ courseId, onBack, onStartLesson }: 
                       </View>
                     )}
                     {isDone && <Ionicons name="checkmark-circle" size={16} color={C.success} />}
-                  </View>
+                  </TouchableOpacity>
                 );
               })}
             </View>
