@@ -110,26 +110,10 @@ export const generateUploadUrl = mutation({
 
 export const listPublishedAdminCourses = query({
   handler: async (ctx) => {
-    const courses = await ctx.db
+    return ctx.db
       .query("courses")
       .withIndex("by_published", (q) => q.eq("published", true))
       .collect();
-    return Promise.all(
-      courses.map(async (course) => {
-        const lessons = await ctx.db
-          .query("lessons")
-          .withIndex("by_course", (q) => q.eq("courseId", course._id))
-          .collect();
-        const group = course.group_id ? await ctx.db.get(course.group_id) : null;
-        const completedCount = lessons.filter((l) => l.completed).length;
-        return {
-          ...course,
-          completedCount,
-          lessonCount: lessons.length,
-          group_name: group?.name ?? null,
-        };
-      }),
-    );
   },
 });
 
@@ -180,12 +164,19 @@ export const listMineWithProgress = query({
       .collect();
     return Promise.all(
       userCourses.map(async (course) => {
-        const lessons = await ctx.db
-          .query("lessons")
-          .withIndex("by_course", (q) => q.eq("courseId", course._id))
-          .collect();
-        const completedCount = lessons.filter((l) => l.completed).length;
-        return { ...course, completedCount, lessonCount: lessons.length };
+        // Use the denormalized counter when available (set by completeLesson).
+        // Fall back to counting lesson docs for courses created before this field existed.
+        let completedCount: number;
+        if (course.completedLessons !== undefined) {
+          completedCount = course.completedLessons;
+        } else {
+          const lessons = await ctx.db
+            .query("lessons")
+            .withIndex("by_course", (q) => q.eq("courseId", course._id))
+            .collect();
+          completedCount = lessons.filter((l) => l.completed).length;
+        }
+        return { ...course, completedCount, lessonCount: course.totalLessons };
       }),
     );
   },
@@ -305,7 +296,15 @@ export const insertLesson = internalMutation({
 export const completeLesson = mutation({
   args: { lessonId: v.id("lessons") },
   handler: async (ctx, { lessonId }) => {
+    const lesson = await ctx.db.get(lessonId);
+    if (!lesson || lesson.completed) return;
     await ctx.db.patch(lessonId, { completed: true });
+    const course = await ctx.db.get(lesson.courseId);
+    if (course) {
+      await ctx.db.patch(lesson.courseId, {
+        completedLessons: (course.completedLessons ?? 0) + 1,
+      });
+    }
   },
 });
 

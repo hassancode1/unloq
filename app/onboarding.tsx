@@ -1,6 +1,8 @@
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system";
 import * as Haptics from "expo-haptics";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import RevenueCatUI, { PAYWALL_RESULT } from "react-native-purchases-ui";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -25,6 +27,7 @@ import Animated, {
   FadeOut,
   useAnimatedStyle,
   useSharedValue,
+  withRepeat,
   withSpring,
   withTiming,
 } from "react-native-reanimated";
@@ -67,6 +70,7 @@ type ScreenId =
   | "q_hours"
   | "loading"
   | "result"
+  | "semester_goal"
   | "bad_news"
   | "stat"
   | "life_grid"
@@ -83,6 +87,7 @@ const FLOW: ScreenId[] = [
   "q_hours",
   "loading",
   "result",
+  "semester_goal",
   "bad_news",
   "stat",
   "life_grid",
@@ -162,15 +167,35 @@ const ctaStyles = StyleSheet.create({
   label: { color: C.white, fontSize: 18, fontFamily: F.bold },
 });
 
+// ── IconBadge ──────────────────────────────────────────────────────────────────
+function IconBadge({
+  name,
+  size = 32,
+  color = C.cta,
+  bg = C.selected,
+}: {
+  name: keyof typeof Ionicons.glyphMap;
+  size?: number;
+  color?: string;
+  bg?: string;
+}) {
+  return (
+    <View style={{ width: size * 2, height: size * 2, borderRadius: size,
+      backgroundColor: bg, justifyContent: "center", alignItems: "center" }}>
+      <Ionicons name={name} size={size} color={color} />
+    </View>
+  );
+}
+
 // ── OptionCard ─────────────────────────────────────────────────────────────────
 function OptionCard({
   label,
-  emoji,
+  iconName,
   selected,
   onPress,
 }: {
   label: string;
-  emoji: string;
+  iconName: keyof typeof Ionicons.glyphMap;
   selected: boolean;
   onPress: () => void;
 }) {
@@ -180,7 +205,9 @@ function OptionCard({
       onPress={onPress}
       style={[optStyles.card, selected && optStyles.selected]}
     >
-      <Text style={optStyles.emoji}>{emoji}</Text>
+      <View style={[optStyles.iconBox, selected && optStyles.iconBoxSelected]}>
+        <Ionicons name={iconName} size={20} color={selected ? C.cta : C.sub} />
+      </View>
       <Text style={[optStyles.label, selected && optStyles.labelSelected]}>
         {label}
       </Text>
@@ -202,7 +229,15 @@ const optStyles = StyleSheet.create({
     marginBottom: 10,
   },
   selected: { backgroundColor: C.selected, borderColor: C.selectedBorder },
-  emoji: { fontSize: 20 },
+  iconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "#F3F4F6",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  iconBoxSelected: { backgroundColor: C.selectedBorder + "22" },
   label: { fontSize: 15, fontFamily: F.semi, color: C.title, flex: 1 },
   labelSelected: { color: C.cta },
 });
@@ -229,27 +264,31 @@ function SplashScreen({ onNext }: { onNext: () => void }) {
     <Animated.View entering={FadeIn.duration(400)} style={ss.root}>
       {/* Phone mockup */}
       <View style={ss.phoneWrap}>
-        <View style={ss.phone}>
-          <View style={ss.phoneLockBar} />
-          <View style={ss.phoneContent}>
-            <Text style={ss.lockIcon}>📵</Text>
-            <Text style={ss.phoneQ}>Learn it. Prove it.{"\n"}Then unlock your apps.</Text>
-            <View style={ss.phoneOpt}>
-              <Text style={ss.phoneOptTxt}>Complete lesson ✓</Text>
-            </View>
-            <View style={ss.phoneOpt}>
-              <Text style={ss.phoneOptTxt}>Pass quiz ✓</Text>
-            </View>
-            <View style={ss.phoneOpt}>
-              <Text style={ss.phoneOptTxt}>Apps unlocked 🔓</Text>
+        <LinearGradient colors={["#EEF2FF", "#E0E7FF"]} style={ss.phoneGlow}>
+          <View style={ss.phone}>
+            <View style={ss.phoneLockBar} />
+            <View style={ss.phoneContent}>
+              <View style={ss.lockIconWrap}>
+                <Ionicons name="lock-closed" size={26} color={C.cta} />
+              </View>
+              <Text style={ss.phoneQ}>Study first.{"\n"}Then unlock your apps.</Text>
+              <View style={ss.phoneOpt}>
+                <Text style={ss.phoneOptTxt}>Complete lesson ✓</Text>
+              </View>
+              <View style={ss.phoneOpt}>
+                <Text style={ss.phoneOptTxt}>Pass quiz ✓</Text>
+              </View>
+              <View style={[ss.phoneOpt, ss.phoneOptUnlocked]}>
+                <Text style={[ss.phoneOptTxt, ss.phoneOptTxtGreen]}>Apps unlocked ✓</Text>
+              </View>
             </View>
           </View>
-        </View>
+        </LinearGradient>
       </View>
 
       <Text style={ss.title}>Learn anything.{"\n"}Block distractions.</Text>
       <Text style={ss.sub}>
-        Complete daily lessons and quizzes — your{"\n"}apps stay locked until you're done.
+        Your apps are blocking your semester goals.{"\n"}Study first — then unlock.
       </Text>
 
       <View style={{ width: "100%", marginTop: 8 }}>
@@ -270,17 +309,21 @@ const ss = StyleSheet.create({
     paddingTop: 16,
   },
   phoneWrap: { marginBottom: 28, marginTop: 8 },
+  phoneGlow: {
+    borderRadius: 36,
+    padding: 12,
+    shadowColor: C.cta,
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 8 },
+  },
   phone: {
     width: 200,
-    borderRadius: 28,
+    borderRadius: 22,
     backgroundColor: "#F0EDE8",
     borderWidth: 8,
     borderColor: "#2D2D2D",
     overflow: "hidden",
-    shadowColor: "#000",
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
   },
   phoneLockBar: {
     height: 6,
@@ -295,7 +338,15 @@ const ss = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
-  lockIcon: { fontSize: 28 },
+  lockIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: C.selected,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 2,
+  },
   phoneQ: {
     fontSize: 12,
     fontFamily: F.bold,
@@ -310,12 +361,14 @@ const ss = StyleSheet.create({
     paddingVertical: 7,
     paddingHorizontal: 10,
   },
+  phoneOptUnlocked: { backgroundColor: C.greenLight },
   phoneOptTxt: {
     fontSize: 10,
     fontFamily: F.semi,
     color: C.title,
     textAlign: "center",
   },
+  phoneOptTxtGreen: { color: "#15803D" },
   title: {
     fontSize: 34,
     fontFamily: F.extraBold,
@@ -343,13 +396,13 @@ const ss = StyleSheet.create({
 });
 
 // ── Q: Role ────────────────────────────────────────────────────────────────────
-const ROLES = [
-  { emoji: "📚", label: "Self-improvement / curiosity" },
-  { emoji: "💼", label: "Professional skills / career" },
-  { emoji: "⚖️", label: "Bar Exam / Law school" },
-  { emoji: "🩺", label: "Medical student (boards)" },
-  { emoji: "🎓", label: "Academic exam prep" },
-  { emoji: "🌍", label: "Language learning" },
+const ROLES: { iconName: keyof typeof Ionicons.glyphMap; label: string }[] = [
+  { iconName: "book-outline", label: "Self-improvement / curiosity" },
+  { iconName: "briefcase-outline", label: "Professional skills / career" },
+  { iconName: "scale-outline", label: "Bar Exam / Law school" },
+  { iconName: "medkit-outline", label: "Medical student (boards)" },
+  { iconName: "school-outline", label: "Academic exam prep" },
+  { iconName: "globe-outline", label: "Language learning" },
 ];
 
 function QRoleScreen({ onNext, onSelect }: { onNext: () => void; onSelect: (role: string) => void }) {
@@ -360,7 +413,7 @@ function QRoleScreen({ onNext, onSelect }: { onNext: () => void; onSelect: (role
       {ROLES.map((r) => (
         <OptionCard
           key={r.label}
-          emoji={r.emoji}
+          iconName={r.iconName}
           label={r.label}
           selected={sel === r.label}
           onPress={() => {
@@ -378,13 +431,13 @@ function QRoleScreen({ onNext, onSelect }: { onNext: () => void; onSelect: (role
 }
 
 // ── Q: Distraction ─────────────────────────────────────────────────────────────
-const DISTRACTIONS = [
-  { emoji: "📱", label: "Social media / Reels" },
-  { emoji: "🎮", label: "Games" },
-  { emoji: "📰", label: "News / Reddit" },
-  { emoji: "▶️", label: "YouTube" },
-  { emoji: "💬", label: "Messaging apps" },
-  { emoji: "🤷", label: "Everything honestly" },
+const DISTRACTIONS: { iconName: keyof typeof Ionicons.glyphMap; label: string }[] = [
+  { iconName: "phone-portrait-outline", label: "Social media / Reels" },
+  { iconName: "game-controller-outline", label: "Games" },
+  { iconName: "newspaper-outline", label: "News / Reddit" },
+  { iconName: "play-circle-outline", label: "YouTube" },
+  { iconName: "chatbubbles-outline", label: "Messaging apps" },
+  { iconName: "infinite-outline", label: "Everything honestly" },
 ];
 
 function QDistractionScreen({ onNext }: { onNext: () => void }) {
@@ -395,7 +448,7 @@ function QDistractionScreen({ onNext }: { onNext: () => void }) {
       {DISTRACTIONS.map((d) => (
         <OptionCard
           key={d.label}
-          emoji={d.emoji}
+          iconName={d.iconName}
           label={d.label}
           selected={sel === d.label}
           onPress={() => {
@@ -545,15 +598,18 @@ const hrs = StyleSheet.create({
 // ── Loading ────────────────────────────────────────────────────────────────────
 function LoadingScreen({ onNext }: { onNext: () => void }) {
   const progress = useSharedValue(0);
-  const [msg, setMsg] = useState("Analyzing your habits…");
+  const pulse = useSharedValue(1);
+  const [msg, setMsg] = useState("Mapping your semester ahead…");
 
   const barStyle = useAnimatedStyle(() => ({
     width: `${progress.value * 100}%` as any,
   }));
+  const pulseStyle = useAnimatedStyle(() => ({ opacity: pulse.value }));
 
   useEffect(() => {
     progress.value = withTiming(1, { duration: 2400 });
-    const t1 = setTimeout(() => setMsg("Building your profile…"), 800);
+    pulse.value = withRepeat(withTiming(0.4, { duration: 700 }), -1, true);
+    const t1 = setTimeout(() => setMsg("Building your study plan…"), 800);
     const t2 = setTimeout(() => setMsg("Almost there…"), 1700);
     const t3 = setTimeout(() => onNext(), 2600);
     return () => {
@@ -565,6 +621,9 @@ function LoadingScreen({ onNext }: { onNext: () => void }) {
 
   return (
     <Animated.View entering={FadeIn.duration(300)} style={lds.root}>
+      <Animated.View style={[lds.iconWrap, pulseStyle]}>
+        <Ionicons name="lock-open-outline" size={40} color={C.cta} />
+      </Animated.View>
       <Text style={lds.msg}>{msg}</Text>
       <View style={lds.track}>
         <Animated.View style={[lds.fill, barStyle]} />
@@ -574,13 +633,15 @@ function LoadingScreen({ onNext }: { onNext: () => void }) {
 }
 
 const lds = StyleSheet.create({
-  root: { flex: 1, justifyContent: "center", paddingHorizontal: 24, gap: 16 },
-  msg: { fontSize: 18, fontFamily: F.bold, color: C.title },
+  root: { flex: 1, justifyContent: "center", paddingHorizontal: 24, gap: 16, alignItems: "center" },
+  iconWrap: { marginBottom: 8 },
+  msg: { fontSize: 18, fontFamily: F.bold, color: C.title, alignSelf: "flex-start" },
   track: {
     height: 8,
     backgroundColor: C.progressBg,
     borderRadius: 4,
     overflow: "hidden",
+    alignSelf: "stretch",
   },
   fill: { height: 8, backgroundColor: C.cta, borderRadius: 4 },
 });
@@ -592,9 +653,9 @@ function ResultScreen({ onNext }: { onNext: () => void }) {
       <Text style={rs.eyebrow}>Your learning profile is</Text>
       <Text style={rs.profile}>The Capable{"\n"}Procrastinator</Text>
 
-      <View style={rs.iconWrap}>
-        <Text style={rs.icon}>🧠</Text>
-      </View>
+      <LinearGradient colors={["#818CF8", "#6366F1"]} style={rs.iconWrap}>
+        <Ionicons name="flash" size={40} color="#FFFFFF" />
+      </LinearGradient>
 
       <Text style={rs.desc}>
         You know the material matters. But when it's time to study, your phone
@@ -638,13 +699,11 @@ const rs = StyleSheet.create({
   iconWrap: {
     width: 80,
     height: 80,
-    borderRadius: 20,
-    backgroundColor: C.selected,
+    borderRadius: 40,
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 16,
   },
-  icon: { fontSize: 40 },
   desc: {
     fontSize: 15,
     fontFamily: F.semi,
@@ -664,6 +723,82 @@ const rs = StyleSheet.create({
   barFill: { height: 10, borderRadius: 5 },
 });
 
+// ── Semester Goal ──────────────────────────────────────────────────────────────
+function SemesterGoalScreen({
+  onNext,
+  onGoalSet,
+}: {
+  onNext: () => void;
+  onGoalSet: (goal: string) => void;
+}) {
+  const [goal, setGoal] = useState("");
+  return (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+      <Animated.View entering={FadeInDown.duration(300)} style={sgs.root}>
+        <IconBadge name="trophy-outline" size={28} color={C.cta} bg={C.selected} />
+        <Text style={sgs.title}>What's your{"\n"}goal this semester?</Text>
+        <Text style={sgs.sub}>Be specific — vague goals stay dreams</Text>
+
+        <TextInput
+          style={sgs.input}
+          placeholder="e.g. Pass the MCAT, ace my finals, finish my thesis..."
+          placeholderTextColor={C.sub}
+          value={goal}
+          onChangeText={setGoal}
+          multiline
+          maxLength={120}
+        />
+
+        <Text style={sgs.hint}>This becomes your daily reminder of what you're unlocking for</Text>
+
+        <View style={{ marginTop: "auto", paddingBottom: 8 }}>
+          <CTAButton
+            label={goal.trim() ? "Lock it in" : "Skip for now"}
+            onPress={() => {
+              if (goal.trim()) {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                onGoalSet(goal.trim());
+              }
+              onNext();
+            }}
+          />
+        </View>
+      </Animated.View>
+    </KeyboardAvoidingView>
+  );
+}
+
+const sgs = StyleSheet.create({
+  root: { flex: 1, paddingHorizontal: 24, paddingTop: 24, gap: 12 },
+  title: {
+    fontSize: 28,
+    fontFamily: F.extraBold,
+    color: C.title,
+    lineHeight: 36,
+    marginTop: 4,
+  },
+  sub: { fontSize: 14, fontFamily: F.semi, color: C.sub },
+  input: {
+    backgroundColor: C.card,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: C.cardBorder,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 15,
+    fontFamily: F.semi,
+    color: C.title,
+    minHeight: 100,
+    textAlignVertical: "top",
+  },
+  hint: {
+    fontSize: 12,
+    fontFamily: F.regular,
+    color: C.sub,
+    lineHeight: 17,
+  },
+});
+
 // ── Bad news ───────────────────────────────────────────────────────────────────
 function BadNewsScreen({ onNext }: { onNext: () => void }) {
   useEffect(() => {
@@ -674,7 +809,7 @@ function BadNewsScreen({ onNext }: { onNext: () => void }) {
   return (
     <Animated.View entering={FadeIn.duration(400)} style={bns.root}>
       <Text style={bns.oof}>WAIT.</Text>
-      <Text style={bns.msg}>The math isn't{"\n"}working in your favor.</Text>
+      <Text style={bns.msg}>Your semester goal{"\n"}is already in danger.</Text>
       <TouchableOpacity onPress={onNext} style={bns.skipBtn}>
         <Text style={bns.skip}>Skip</Text>
       </TouchableOpacity>
@@ -715,10 +850,17 @@ function StatScreen({ onNext, hours }: { onNext: () => void; hours: number }) {
       <Text style={sts.pre}>At this rate, you'll spend</Text>
       <Text style={sts.years}>{years} years</Text>
       <Text style={sts.post}>
-        of your life{"\n"}scrolling instead of learning
+        of your life lost —{"\n"}and your semester is just the start
       </Text>
 
-      <Text style={sts.mascot}>📵</Text>
+      <View style={sts.mascotWrap}>
+        <LinearGradient colors={["#FEE2E2", "#FECACA"]} style={sts.mascotGrad}>
+          <Ionicons name="phone-portrait-outline" size={44} color={C.red} />
+          <View style={sts.mascotBadge}>
+            <Ionicons name="close-circle" size={22} color={C.red} />
+          </View>
+        </LinearGradient>
+      </View>
 
       <Text style={sts.note}>
         Based on {hours}h/day × your remaining years
@@ -758,7 +900,21 @@ const sts = StyleSheet.create({
     lineHeight: 30,
     marginBottom: 24,
   },
-  mascot: { fontSize: 80, marginBottom: 16 },
+  mascotWrap: { position: "relative", marginBottom: 16 },
+  mascotGrad: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  mascotBadge: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    backgroundColor: C.white,
+    borderRadius: 11,
+  },
   note: { fontSize: 12, fontFamily: F.regular, color: C.sub, marginBottom: 32 },
 });
 
@@ -785,7 +941,8 @@ function LifeGridScreen({
 
   return (
     <Animated.View entering={FadeInDown.duration(350)} style={lgs.root}>
-      <Text style={lgs.title}>This is your study window</Text>
+      <Text style={lgs.title}>This is your life.{"\n"}One dot = one year.</Text>
+      <Text style={lgs.gridSub}>Every year you scroll instead of study is a year you can't get back.</Text>
 
       <View style={lgs.grid}>
         {Array.from({ length: ROWS }, (_, row) => (
@@ -834,6 +991,7 @@ const lgs = StyleSheet.create({
     color: C.title,
     marginBottom: 20,
   },
+  gridSub: { fontSize: 13, fontFamily: F.semi, color: C.sub, lineHeight: 18, marginBottom: 16, marginTop: -12 },
   grid: { gap: 6, marginBottom: 24 },
   row: { flexDirection: "row", gap: 6 },
   dot: { width: (SW - 48 - 6 * 7) / 8, aspectRatio: 1, borderRadius: 100 },
@@ -859,7 +1017,10 @@ function GoodNewsScreen({
       <Text style={gns.years}>
         {years} years of{"\n"}focused learning
       </Text>
-      <Text style={gns.mascot}>📚</Text>
+      <Text style={gns.semester}>Starting this semester.</Text>
+      <LinearGradient colors={["#D1FAE5", "#A7F3D0"]} style={gns.mascotCircle}>
+        <Ionicons name="checkmark-circle" size={64} color={C.green} />
+      </LinearGradient>
       <View style={{ alignSelf: "stretch" }}>
         <CTAButton label="Let's do this!" onPress={onNext} />
       </View>
@@ -885,27 +1046,36 @@ const gns = StyleSheet.create({
     lineHeight: 56,
     marginBottom: 24,
   },
-  mascot: { fontSize: 80, marginBottom: 40 },
+  semester: { fontSize: 16, fontFamily: F.bold, color: C.green, marginBottom: 16 },
+  mascotCircle: {
+    width: 112,
+    height: 112,
+    borderRadius: 56,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 32,
+  },
 });
 
 // ── Why Unloq ──────────────────────────────────────────────────────────────────
 function WhyUnloqScreen({ onNext }: { onNext: () => void }) {
   const rows = [
-    { icon: "❌", text: "App blockers", sub: "→ You find a workaround in 30 seconds", bad: true },
-    {
-      icon: "❌",
-      text: "Willpower alone",
-      sub: "→ Decision fatigue kills it by lunch",
-      bad: true,
-    },
-    { icon: "✅", text: "Unloq", sub: "→ Prove you studied, then unlock", bad: false },
+    { text: "App blockers", sub: "→ You find a workaround in 30 seconds", bad: true },
+    { text: "Willpower alone", sub: "→ Decision fatigue kills it by lunch", bad: true },
+    { text: "Unloq", sub: "→ Prove you studied, then unlock", bad: false },
   ];
   return (
     <Animated.View entering={FadeInDown.duration(350)} style={wus.root}>
       <Text style={wus.title}>Why nothing has{"\n"}worked — until now</Text>
       {rows.map((r) => (
         <View key={r.text} style={[wus.row, !r.bad && wus.rowGood]}>
-          <Text style={wus.rowIcon}>{r.icon}</Text>
+          <View style={[wus.iconBox, r.bad ? wus.iconBoxBad : wus.iconBoxGood]}>
+            <Ionicons
+              name={r.bad ? "close" : "checkmark"}
+              size={15}
+              color={r.bad ? "#DC2626" : "#16A34A"}
+            />
+          </View>
           <Text style={[wus.rowTxt, !r.bad && wus.rowTxtGood]}>
             <Text style={wus.rowBold}>{r.text}</Text>
             {"  "}
@@ -946,7 +1116,15 @@ const wus = StyleSheet.create({
     marginBottom: 10,
   },
   rowGood: { backgroundColor: C.greenLight },
-  rowIcon: { fontSize: 20 },
+  iconBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  iconBoxBad: { backgroundColor: "#FEE2E2" },
+  iconBoxGood: { backgroundColor: "#DCFCE7" },
   rowTxt: { fontSize: 14, fontFamily: F.semi, color: "#991B1B", flex: 1 },
   rowTxtGood: { color: "#15803D" },
   rowBold: { fontFamily: F.extraBold },
@@ -1006,17 +1184,19 @@ function CommitmentScreen({ onNext }: { onNext: () => void }) {
     <Animated.View entering={FadeInDown.duration(350)} style={cms.root}>
       {!done ? (
         <>
-          <Text style={cms.title}>Your results start{"\n"}with this habit.</Text>
-          <Text style={cms.sub}>Commit to studying before you scroll</Text>
+          <Text style={cms.title}>Your semester starts{"\n"}with this choice.</Text>
+          <Text style={cms.sub}>Study first. Then your apps unlock.</Text>
 
           <TouchableOpacity
             onPress={handleTap}
             activeOpacity={0.85}
             style={cms.chainArea}
           >
-            <Animated.Text style={[cms.chainEmoji, chainStyle]}>
-              ⛓️
-            </Animated.Text>
+            <Animated.View style={[cms.lockWrap, chainStyle]}>
+              <LinearGradient colors={["#818CF8", "#6366F1"]} style={cms.lockGrad}>
+                <Ionicons name={done ? "lock-open" : "lock-closed"} size={48} color="#FFF" />
+              </LinearGradient>
+            </Animated.View>
             <View style={cms.tapHint}>
               {Array.from({ length: 5 }, (_, i) => (
                 <View key={i} style={[cms.pip, i < taps && cms.pipDone]} />
@@ -1027,10 +1207,12 @@ function CommitmentScreen({ onNext }: { onNext: () => void }) {
         </>
       ) : (
         <Animated.View entering={FadeIn.duration(300)} style={cms.doneWrap}>
-          <Text style={cms.doneEmoji}>🎉</Text>
-          <Text style={cms.doneTitle}>Committed.</Text>
+          <LinearGradient colors={["#D1FAE5", "#6EE7B7"]} style={cms.doneCircle}>
+            <Ionicons name="checkmark" size={56} color={C.green} />
+          </LinearGradient>
+          <Text style={cms.doneTitle}>You're locked in.</Text>
           <Text style={cms.doneSub}>
-            You've made a promise to yourself. Upload your first study document
+            Your semester goal is set. Upload your first study document
             and let's get to work.
           </Text>
         </Animated.View>
@@ -1055,7 +1237,14 @@ const cms = StyleSheet.create({
     justifyContent: "center",
     gap: 16,
   },
-  chainEmoji: { fontSize: 80 },
+  lockWrap: { alignItems: "center", justifyContent: "center" },
+  lockGrad: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   tapHint: { flexDirection: "row", gap: 10 },
   pip: {
     width: 12,
@@ -1071,7 +1260,13 @@ const cms = StyleSheet.create({
     justifyContent: "center",
     gap: 16,
   },
-  doneEmoji: { fontSize: 80 },
+  doneCircle: {
+    width: 112,
+    height: 112,
+    borderRadius: 56,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   doneTitle: { fontSize: 40, fontFamily: F.extraBold, color: C.title },
   doneSub: {
     fontSize: 16,
@@ -1260,7 +1455,9 @@ function QCourseScreen({ onNext, role }: { onNext: () => void; role: string | nu
   if (done) {
     return (
       <Animated.View entering={FadeIn.duration(400)} style={qcs.doneRoot}>
-        <Text style={qcs.doneEmoji}>🎉</Text>
+        <LinearGradient colors={["#D1FAE5", "#6EE7B7"]} style={qcs.doneCircle}>
+          <Ionicons name="checkmark" size={48} color={C.green} />
+        </LinearGradient>
         <Text style={qcs.doneTitle}>Course added!</Text>
         <Text style={qcs.doneSub}>It'll be ready by the time you get there.</Text>
       </Animated.View>
@@ -1425,7 +1622,13 @@ const qcs = StyleSheet.create({
     gap: 16,
     paddingHorizontal: 24,
   },
-  doneEmoji: { fontSize: 72 },
+  doneCircle: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   doneTitle: { fontSize: 32, fontFamily: F.extraBold, color: C.title },
   doneSub:   { fontSize: 15, fontFamily: F.semi, color: C.sub, textAlign: "center" },
 });
@@ -1438,7 +1641,7 @@ export default function OnboardingScreen({ onComplete }: Props) {
   const [idx, setIdx] = useState(0);
   const [hours, setHours] = useState(4);
   const screen = FLOW[idx];
-  const { onboardingRole, setOnboardingRole } = useAppStore();
+  const { onboardingRole, setOnboardingRole, setSemesterGoal } = useAppStore();
 
   const next = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1468,7 +1671,7 @@ export default function OnboardingScreen({ onComplete }: Props) {
           style={root.topBar}
         >
           <ProgressBar step={progressStep} total={QUIZ_TOTAL + 2} />
-          <Text style={root.mascot}>📖</Text>
+          <Ionicons name="book-outline" size={22} color={C.cta} />
         </Animated.View>
       )}
 
@@ -1482,6 +1685,9 @@ export default function OnboardingScreen({ onComplete }: Props) {
         )}
         {screen === "loading" && <LoadingScreen onNext={next} />}
         {screen === "result" && <ResultScreen onNext={next} />}
+        {screen === "semester_goal" && (
+          <SemesterGoalScreen onNext={next} onGoalSet={setSemesterGoal} />
+        )}
         {screen === "bad_news" && <BadNewsScreen onNext={next} />}
         {screen === "stat" && <StatScreen onNext={next} hours={hours} />}
         {screen === "life_grid" && (
@@ -1510,6 +1716,5 @@ const root = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 10,
   },
-  mascot: { fontSize: 28 },
   content: { flex: 1 },
 });

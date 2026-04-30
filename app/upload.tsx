@@ -237,8 +237,6 @@ export default function UploadScreen({ onBack }: Props) {
   const difficulty  = DIFFICULTIES[diffIdx];
 
   const { isPremium } = useEntitlement();
-  const existingCourses = useQuery(api.courses.listMine);
-  const hasReachedFreeLimit = !isPremium && (existingCourses?.filter(c => c.status !== 'error').length ?? 0) >= 1;
 
   const createCourse     = useMutation(api.courses.create);
   const generateCourse   = useAction(api.ai.generateCourse);
@@ -303,11 +301,6 @@ export default function UploadScreen({ onBack }: Props) {
 
   const handleGenerate = async () => {
     if (!canGenerate) return;
-    if (hasReachedFreeLimit) {
-      const purchased = await presentPaywall();
-      if (!purchased) return;
-      // fall through and generate after successful purchase
-    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     btnScale.value = withSpring(0.96, { damping: 12, stiffness: 500 }, () => {
       btnScale.value = withSpring(1);
@@ -436,17 +429,11 @@ export default function UploadScreen({ onBack }: Props) {
             <View style={[S.tabRow, { backgroundColor: C.surface, borderColor: C.border }]}>
               {(['pdf', 'youtube'] as SourceTab[]).map((tab) => {
                 const active = sourceTab === tab;
-                const isYoutubeLocked = tab === 'youtube' && !isPremium;
                 return (
                   <TouchableOpacity
                     key={tab}
                     style={[S.tabBtn, active && { backgroundColor: C.primary }]}
-                    onPress={async () => {
-                      if (isYoutubeLocked) {
-                        const purchased = await presentPaywall();
-                        if (!purchased) return;
-                        // purchased — fall through to switch tab
-                      }
+                    onPress={() => {
                       Haptics.selectionAsync();
                       setSourceTab(tab);
                       setDocUri(null); setDocName(null);
@@ -457,25 +444,15 @@ export default function UploadScreen({ onBack }: Props) {
                     <Ionicons
                       name={tab === 'pdf' ? 'document-text-outline' : 'logo-youtube'}
                       size={15}
-                      color={active ? '#fff' : isYoutubeLocked ? C.muted : C.sub}
+                      color={active ? '#fff' : C.sub}
                     />
-                    <Text style={[S.tabBtnTxt, { fontFamily: F.semiBold, fontSize: fs(13), color: active ? '#fff' : isYoutubeLocked ? C.muted : C.sub }]}>
+                    <Text style={[S.tabBtnTxt, { fontFamily: F.semiBold, fontSize: fs(13), color: active ? '#fff' : C.sub }]}>
                       {tab === 'pdf' ? 'PDF' : 'YouTube'}
                     </Text>
-                    {isYoutubeLocked && (
-                      <Ionicons name="lock-closed" size={11} color={C.muted} />
-                    )}
                   </TouchableOpacity>
                 );
               })}
             </View>
-
-            {/* YouTube Pro caption */}
-            {!isPremium && (
-              <Text style={[S.proCaptionTxt, { fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>
-                🔒 YouTube import is a Pro feature — upgrade to unlock
-              </Text>
-            )}
 
             {/* PDF upload zone */}
             {sourceTab === 'pdf' && (

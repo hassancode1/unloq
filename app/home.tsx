@@ -26,6 +26,8 @@ import { Id } from '../convex/_generated/dataModel';
 
 import { useTheme } from '../hooks/useTheme';
 import { useEntitlement } from '../hooks/useEntitlement';
+import { useNetworkStatus } from '../hooks/useNetworkStatus';
+import { hasSelection } from '../lib/familyControls';
 import { useAppStore, type GoalConfig } from '../store/useAppStore';
 import { Spacing } from '../constants/spacing';
 import type { AppColors } from '../constants/Colors';
@@ -143,8 +145,8 @@ const tabStyles = StyleSheet.create({
 
 // ── Daily mission card ────────────────────────────────────────────────────────
 
-function MissionCard({ goalConfig, todayDone, C, fs, F }: {
-  goalConfig: GoalConfig; todayDone: number; C: AppColors; fs: (n: number) => number; F: any;
+function MissionCard({ goalConfig, todayDone, appsSelected, C, fs, F }: {
+  goalConfig: GoalConfig; todayDone: number; appsSelected: boolean; C: AppColors; fs: (n: number) => number; F: any;
 }) {
   const goalDay = isTodayGoalDay(goalConfig);
   const goalMet = todayDone >= goalConfig.lessonTarget;
@@ -158,6 +160,24 @@ function MissionCard({ goalConfig, todayDone, C, fs, F }: {
         <View style={{ flex: 1 }}>
           <Text style={[missionStyles.title, { fontFamily: F.semiBold, fontSize: fs(15), color: C.text }]}>Rest day</Text>
           <Text style={[missionStyles.sub, { fontFamily: F.regular, fontSize: fs(12), color: C.muted }]}>No lessons required today</Text>
+        </View>
+      </Animated.View>
+    );
+  }
+
+  if (!appsSelected && !goalMet) {
+    return (
+      <Animated.View entering={FadeInDown.duration(280)} style={[missionStyles.card, { backgroundColor: `${C.muted}08`, borderColor: `${C.muted}20` }]}>
+        <View style={[missionStyles.iconWrap, { backgroundColor: `${C.muted}12` }]}>
+          <Ionicons name="phone-portrait-outline" size={20} color={C.muted} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[missionStyles.title, { fontFamily: F.semiBold, fontSize: fs(15), color: C.text }]}>
+            No apps blocked yet
+          </Text>
+          <Text style={[missionStyles.sub, { fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>
+            Pick apps in Goal Setup to start locking
+          </Text>
         </View>
       </Animated.View>
     );
@@ -334,7 +354,6 @@ function CoursesContent({ onUpload, onCourseSelect, suggestedCourses, isPremium,
   const removeCourse = useMutation(api.courses.remove);
 
   const personalCourses = ((rawCourses ?? []) as any[]).filter((c: any) => c.status === 'ready');
-  const atFreeLimit = !isPremium && ((rawCourses ?? []) as any[]).filter((c: any) => c.status !== 'error').length >= 1;
 
   const handleCoursePress = async (course: any) => {
     if (course.status === 'error') {
@@ -372,10 +391,10 @@ function CoursesContent({ onUpload, onCourseSelect, suggestedCourses, isPremium,
       <Animated.View entering={FadeInDown.duration(260)} style={{ gap: 10 }}>
         {[1, 2, 3].map((i) => (
           <View key={i} style={[styles.skeletonCard, { backgroundColor: C.surface, borderColor: C.border }]}>
-            <View style={[styles.skeletonIcon, { backgroundColor: C.border }]} />
+            <View style={[styles.skeletonIcon, { backgroundColor: C.borderStrong }]} />
             <View style={{ flex: 1, gap: 8 }}>
-              <View style={[styles.skeletonLine, { width: '55%', backgroundColor: C.border }]} />
-              <View style={[styles.skeletonLine, { width: '35%', backgroundColor: C.border }]} />
+              <View style={[styles.skeletonLine, { width: '55%', backgroundColor: C.borderStrong }]} />
+              <View style={[styles.skeletonLine, { width: '35%', backgroundColor: C.borderStrong }]} />
             </View>
           </View>
         ))}
@@ -399,11 +418,11 @@ function CoursesContent({ onUpload, onCourseSelect, suggestedCourses, isPremium,
             Add study material
           </Text>
           <Text style={[{ fontFamily: F.regular, fontSize: fs(12), color: C.sub }]}>
-            {atFreeLimit ? 'Upgrade to add more courses' : 'PDF · AI generates your lessons'}
+            PDF · AI generates your lessons
           </Text>
         </View>
-        <View style={[styles.arrowBtn, { backgroundColor: atFreeLimit ? `${C.warning}14` : `${C.primary}14` }]}>
-          <Ionicons name={atFreeLimit ? 'lock-closed-outline' : 'add'} size={16} color={atFreeLimit ? C.warning : C.primary} />
+        <View style={[styles.arrowBtn, { backgroundColor: `${C.primary}14` }]}>
+          <Ionicons name="add" size={16} color={C.primary} />
         </View>
       </TouchableOpacity>
 
@@ -539,6 +558,11 @@ function CoursesTab({ onUpload, onCourseSelect, C, fs, F }: {
   const { isPremium } = useEntitlement();
   const viewer = useQuery(api.users.currentUser);
   const rawAdmin = useQuery(api.courses.listPublishedAdminCourses);
+  const [appsSelected, setAppsSelected] = useState(true);
+
+  React.useEffect(() => {
+    hasSelection().then(setAppsSelected).catch(() => setAppsSelected(true));
+  }, []);
 
   const suggestedCourses = useMemo(() => {
     const ready = ((rawAdmin ?? []) as any[]).filter((c: any) => c.status === 'ready');
@@ -593,7 +617,7 @@ function CoursesTab({ onUpload, onCourseSelect, C, fs, F }: {
       </View>
 
       {/* ── Daily mission ── */}
-      {goalConfig && <MissionCard goalConfig={goalConfig} todayDone={todayDone} C={C} fs={fs} F={F} />}
+      {goalConfig && <MissionCard goalConfig={goalConfig} todayDone={todayDone} appsSelected={appsSelected} C={C} fs={fs} F={F} />}
 
       {/* ── Course list ── */}
       <ScrollView
@@ -628,6 +652,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { C, fs, F } = useTheme();
   const { isAuthenticated } = useConvexAuth();
+  const { isConnected, networkLoading } = useNetworkStatus();
   const [activeTab, setActiveTab] = useState<Tab>('learn');
   const [showUpload, setShowUpload] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -654,12 +679,25 @@ export default function HomeScreen() {
     />
   );
 
+  const showOfflineBanner = !networkLoading && !isConnected;
+
   return (
     <View style={{ flex: 1, backgroundColor: C.bg, paddingTop: insets.top }}>
+      {showOfflineBanner && (
+        <Animated.View
+          entering={FadeIn.duration(200)}
+          style={[rootStyles.networkBanner, { backgroundColor: C.warning }]}
+        >
+          <Ionicons name="wifi-outline" size={13} color="#fff" />
+          <Text style={{ color: '#fff', fontFamily: F.semiBold, fontSize: fs(12) }}>
+            No internet connection
+          </Text>
+        </Animated.View>
+      )}
       <View style={{ flex: 1 }}>
         {activeTab === 'learn'    && <CoursesTab onUpload={handleUploadPress} onCourseSelect={setDetailCourse} C={C} fs={fs} F={F} />}
         {activeTab === 'stats'    && <StatsScreen onOpenCourse={(id) => setDetailCourse(id)} />}
-        {activeTab === 'settings' && <SettingsScreen />}
+        {activeTab === 'settings' && <SettingsScreen onNavigateToCourses={() => setActiveTab('learn')} />}
       </View>
 
       <Animated.View
@@ -686,6 +724,7 @@ export default function HomeScreen() {
 
 const rootStyles = StyleSheet.create({
   tabBar: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 8 },
+  networkBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: Spacing.lg, paddingVertical: 7 },
 });
 
 // ── Shared styles ─────────────────────────────────────────────────────────────

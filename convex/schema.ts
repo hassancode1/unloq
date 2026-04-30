@@ -38,6 +38,7 @@ export default defineSchema({
     course_topic: v.optional(v.string()),
     sort_order: v.optional(v.number()),
     tags: v.optional(v.array(v.string())),
+    completedLessons: v.optional(v.number()),
   })
     .index("by_user", ["userId"])
     .index("by_published", ["published"])

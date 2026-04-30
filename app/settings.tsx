@@ -38,7 +38,7 @@ function fmtFrequency(g: GoalConfig): string {
   return days || '—';
 }
 
-export default function SettingsScreen() {
+export default function SettingsScreen({ onNavigateToCourses }: { onNavigateToCourses?: () => void }) {
   const insets = useSafeAreaInsets();
   const { C, isDark, fs, fontScale, F } = useTheme();
   const { goalConfig, setFlow, toggleDarkMode, increaseFontScale, decreaseFontScale } = useAppStore();
@@ -407,8 +407,33 @@ export default function SettingsScreen() {
           </View>
         </Animated.View>
 
+        {/* ── My Courses ── */}
+        <Animated.View entering={FadeInDown.delay(150).duration(280)}>
+          <Text style={[styles.cap, { fontSize: fs(10), fontFamily: F.extraBold, color: C.muted }]}>
+            My Courses
+          </Text>
+          <View style={styles.card}>
+            <TouchableOpacity
+              style={styles.actionRow}
+              activeOpacity={0.7}
+              onPress={() => {
+                Haptics.selectionAsync();
+                onNavigateToCourses?.();
+              }}
+            >
+              <View style={[styles.iconBox, { backgroundColor: `${C.primary}12` }]}>
+                <Ionicons name="book-outline" size={15} color={C.primary} />
+              </View>
+              <Text style={[styles.actionTxt, { fontSize: fs(14), fontFamily: F.medium, color: C.primary }]}>
+                View my courses
+              </Text>
+              <Ionicons name="chevron-forward" size={14} color={C.primary} />
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+
         {/* ── App Info ── */}
-        <Animated.View entering={FadeInDown.delay(180).duration(280)}>
+        <Animated.View entering={FadeInDown.delay(210).duration(280)}>
           <Text
             style={[
               styles.cap,
