@@ -63,3 +63,21 @@ export function blockApps(): Promise<boolean> {
 export function unblockApps(): Promise<boolean> {
   return mod ? mod.unblockApps() : Promise.resolve(true);
 }
+
+/**
+ * Starts a recurring daily DeviceActivity schedule (midnight → 11:59pm).
+ * The UnloqMonitor extension fires at midnight each day and re-applies shields
+ * automatically, even when the app is closed. Call once after goal setup.
+ * Requires iOS 16+.
+ */
+export function startMonitoring(): Promise<boolean> {
+  return mod ? mod.startMonitoring() : Promise.resolve(false);
+}
+
+/**
+ * Stops all DeviceActivity monitoring schedules.
+ * Only call this if the user disables blocking entirely.
+ */
+export function stopMonitoring(): Promise<boolean> {
+  return mod ? mod.stopMonitoring() : Promise.resolve(true);
+}
