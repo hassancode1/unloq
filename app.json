@@ -36,7 +36,8 @@
       "expo-secure-store",
       "@react-native-community/datetimepicker",
       "./plugins/withFamilyControls",
-      "expo-apple-authentication"
+      "expo-apple-authentication",
+      "expo-web-browser"
     ],
     "extra": {
       "eas": {
