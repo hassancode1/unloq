@@ -872,7 +872,7 @@ const withFamilyControls = (config) => {
       objs['PBXCopyFilesBuildPhase'][embedPhaseUUID] = {
         isa: 'PBXCopyFilesBuildPhase',
         buildActionMask: 2147483647,
-        dstPath: '',
+        dstPath: '""',
         dstSubfolderSpec: 13,
         files: [embedBuildFile],
         name: '"Embed App Extensions"',

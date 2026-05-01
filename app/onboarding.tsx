@@ -87,7 +87,6 @@ const FLOW: ScreenId[] = [
   "q_hours",
   "loading",
   "result",
-  "semester_goal",
   "bad_news",
   "stat",
   "life_grid",
@@ -485,6 +484,7 @@ function QHoursScreen({
 }) {
   const [hours, setHours] = useState(4);
   const sliderWidth = SW - 48;
+  const startX = useRef(0);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -492,13 +492,14 @@ function QHoursScreen({
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: (e) => {
         const x = e.nativeEvent.locationX;
+        startX.current = x;
         const clamped = Math.max(0, Math.min(x, sliderWidth));
         const h = Math.round((clamped / sliderWidth) * 12);
         setHours(h);
         onHoursChange(h);
       },
-      onPanResponderMove: (e) => {
-        const x = e.nativeEvent.locationX;
+      onPanResponderMove: (_, gestureState) => {
+        const x = startX.current + gestureState.dx;
         const clamped = Math.max(0, Math.min(x, sliderWidth));
         const h = Math.round((clamped / sliderWidth) * 12);
         setHours(h);
@@ -1641,7 +1642,7 @@ export default function OnboardingScreen({ onComplete }: Props) {
   const [idx, setIdx] = useState(0);
   const [hours, setHours] = useState(4);
   const screen = FLOW[idx];
-  const { onboardingRole, setOnboardingRole, setSemesterGoal } = useAppStore();
+  const { onboardingRole, setOnboardingRole } = useAppStore();
 
   const next = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1685,10 +1686,7 @@ export default function OnboardingScreen({ onComplete }: Props) {
         )}
         {screen === "loading" && <LoadingScreen onNext={next} />}
         {screen === "result" && <ResultScreen onNext={next} />}
-        {screen === "semester_goal" && (
-          <SemesterGoalScreen onNext={next} onGoalSet={setSemesterGoal} />
-        )}
-        {screen === "bad_news" && <BadNewsScreen onNext={next} />}
+{screen === "bad_news" && <BadNewsScreen onNext={next} />}
         {screen === "stat" && <StatScreen onNext={next} hours={hours} />}
         {screen === "life_grid" && (
           <LifeGridScreen onNext={next} hours={hours} />

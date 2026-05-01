@@ -528,7 +528,7 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
 
         <Animated.View entering={FadeInDown.delay(240).duration(300)} style={{ gap: Spacing.sm }}>
           <StepDots />
-          <DuoButton label="Start Unloqing 🔓" onPress={handleSave} />
+          <DuoButton label="Start Unloqing 🔓" onPress={handleSave} disabled={!appsSelected} />
           <TouchableOpacity onPress={() => setStep('session')} style={styles.backBtn}>
             <Text style={styles.backBtnText}>← Back</Text>
           </TouchableOpacity>

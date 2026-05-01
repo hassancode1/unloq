@@ -193,14 +193,14 @@ function FlashcardView({
 
   const flip = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const toBack = !isFlipped.value; // always reads the real current state
-    flipAnim.value = withTiming(90, { duration: 180, easing: Easing.in(Easing.ease) }, (done) => {
+    const toBack = !isFlipped.value;
+    flipAnim.value = withTiming(90, { duration: 260, easing: Easing.in(Easing.ease) }, (done) => {
       'worklet';
       if (!done) return;
-      isFlipped.value = toBack;           // update on UI thread — safe in worklet
-      runOnJS(setShowBack)(toBack);       // sync React state for re-render
+      isFlipped.value = toBack;
+      runOnJS(setShowBack)(toBack);
       flipAnim.value = -90;
-      flipAnim.value = withTiming(0, { duration: 180, easing: Easing.out(Easing.ease) });
+      flipAnim.value = withSpring(0, { damping: 18, stiffness: 180, overshootClamping: true });
     });
   };
 

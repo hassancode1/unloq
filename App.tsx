@@ -192,7 +192,7 @@ export default function App() {
           <OnboardingScreen onComplete={() => setFlow("goalsetup")} />
         )}
         {flow === "goalsetup" && (
-          <GoalSetupScreen onComplete={() => setFlow("home")} onBack={() => setFlow("home")} />
+          <GoalSetupScreen onComplete={() => setFlow("home")} />
         )}
         {flow === "home" && <HomeScreen />}
         {flow === "locked" && <LockedScreen />}
