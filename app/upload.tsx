@@ -237,6 +237,8 @@ export default function UploadScreen({ onBack }: Props) {
   const difficulty  = DIFFICULTIES[diffIdx];
 
   const { isPremium } = useEntitlement();
+  const existingCourses = useQuery(api.courses.listMine) ?? [];
+  const hasCourse = existingCourses.length > 0;
 
   const createCourse     = useMutation(api.courses.create);
   const generateCourse   = useAction(api.ai.generateCourse);
@@ -292,15 +294,16 @@ export default function UploadScreen({ onBack }: Props) {
       requiredEntitlementIdentifier: 'premium',
     });
     const purchased = result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED;
-    if (purchased) {
-      // Force-refresh so isPremium updates before the next render
-      await Purchases.getCustomerInfo();
-    }
+    if (purchased) await Purchases.getCustomerInfo();
     return purchased;
   };
 
   const handleGenerate = async () => {
     if (!canGenerate) return;
+    if (!isPremium && hasCourse) {
+      await presentPaywall();
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     btnScale.value = withSpring(0.96, { damping: 12, stiffness: 500 }, () => {
       btnScale.value = withSpring(1);
