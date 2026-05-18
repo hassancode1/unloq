@@ -81,3 +81,12 @@ export function startMonitoring(): Promise<boolean> {
 export function stopMonitoring(): Promise<boolean> {
   return mod ? mod.stopMonitoring() : Promise.resolve(true);
 }
+
+/**
+ * Writes today's lesson progress to the shared App Group UserDefaults so the
+ * UnloqShield extension can read it and display accurate progress on the native
+ * block screen.
+ */
+export function setStudyProgress(completed: number, target: number): Promise<void> {
+  return mod ? mod.setStudyProgress(completed, target) : Promise.resolve();
+}

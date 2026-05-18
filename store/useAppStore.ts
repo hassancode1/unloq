@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { setStudyProgress } from '../lib/familyControls';
 
 export type AppFlow = 'loading' | 'onboarding' | 'goalsetup' | 'home' | 'locked';
 
@@ -82,12 +83,10 @@ export const useAppStore = create<AppState>()(
         set((s) => {
           const today = todayStr();
           const prev = s.dailyProgress;
-          return {
-            dailyProgress: {
-              date: today,
-              count: prev.date === today ? prev.count + 1 : 1,
-            },
-          };
+          const newCount = prev.date === today ? prev.count + 1 : 1;
+          const target = s.goalConfig?.lessonTarget ?? 1;
+          setStudyProgress(newCount, target).catch(() => {});
+          return { dailyProgress: { date: today, count: newCount } };
         }),
       setOnboardingRole: (role) => set({ onboardingRole: role }),
       setSemesterGoal: (goal) => set({ semesterGoal: goal }),

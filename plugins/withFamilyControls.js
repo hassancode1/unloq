@@ -13,6 +13,8 @@ const fs = require('fs');
 const kAppGroup = 'group.com.loqlearn.app';
 const kExtBundleId = 'com.loqlearn.app.monitor';
 const kExtName = 'UnloqMonitor';
+const kShieldExtName = 'UnloqShield';
+const kShieldBundleId = 'com.loqlearn.app.shield';
 
 // ─── Swift / ObjC source content ─────────────────────────────────────────────
 
@@ -161,7 +163,9 @@ class FamilyControlsModule: NSObject {
     _ resolve: @escaping RCTPromiseResolveBlock,
     rejecter reject: @escaping RCTPromiseRejectBlock
   ) {
-    store.clearAllSettings()
+    if #available(iOS 16, *) {
+      store.clearAllSettings()
+    }
     // Record completion date so the extension won't re-block if startMonitoring fires mid-day
     let f = DateFormatter()
     f.dateFormat = "yyyy-MM-dd"
@@ -198,6 +202,18 @@ class FamilyControlsModule: NSObject {
     if #available(iOS 16, *) {
       DeviceActivityCenter().stopMonitoring()
     }
+    resolve(true)
+  }
+
+  @objc func setStudyProgress(
+    _ completed: NSInteger,
+    target: NSInteger,
+    resolver resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    let ud = UserDefaults(suiteName: kAppGroup)
+    ud?.set(completed, forKey: "loqlearn.lessonsCompleted")
+    ud?.set(target, forKey: "loqlearn.lessonsTarget")
     resolve(true)
   }
 }
@@ -288,6 +304,13 @@ RCT_EXTERN_METHOD(
 
 RCT_EXTERN_METHOD(
   stopMonitoring:(RCTPromiseResolveBlock)resolve
+  rejecter:(RCTPromiseRejectBlock)reject
+)
+
+RCT_EXTERN_METHOD(
+  setStudyProgress:(NSInteger)completed
+  target:(NSInteger)target
+  resolver:(RCTPromiseResolveBlock)resolve
   rejecter:(RCTPromiseRejectBlock)reject
 )
 
@@ -515,6 +538,125 @@ const MONITOR_EXTENSION_ENTITLEMENTS = `\
 </plist>
 `;
 
+// ─── ShieldConfiguration extension source ────────────────────────────────────
+
+const SHIELD_SWIFT = `\
+import ManagedSettingsUI
+import ManagedSettings
+import Foundation
+import UIKit
+
+private let kAppGroup = "${kAppGroup}"
+
+class UnloqShieldConfiguration: ShieldConfigurationDataSource {
+
+  private let indigo = UIColor(red: 99/255.0, green: 102/255.0, blue: 241/255.0, alpha: 1)
+
+  override func configuration(shielding application: Application) -> ShieldConfiguration {
+    buildShield()
+  }
+
+  override func configuration(shielding webDomain: WebDomain) -> ShieldConfiguration {
+    buildShield()
+  }
+
+  private func buildShield() -> ShieldConfiguration {
+    let ud = UserDefaults(suiteName: kAppGroup)
+    let completed = ud?.integer(forKey: "loqlearn.lessonsCompleted") ?? 0
+    let target    = max(ud?.integer(forKey: "loqlearn.lessonsTarget") ?? 1, 1)
+
+    let quotes = [
+      "Champions are made in the moments they want to stop.",
+      "Your future self is watching. Don't let them down.",
+      "Every lesson is a step closer to who you want to be.",
+      "Discipline is choosing what you want most over what you want now.",
+      "The apps will be there. Your growth window won't.",
+      "Knowledge compounds. Distraction doesn't.",
+      "You locked these apps for a reason. Remember why.",
+    ]
+    let dayOfYear = Calendar.current.ordinality(of: .day, in: .year, for: Date()) ?? 1
+    let quote = quotes[(dayOfYear - 1) % quotes.count]
+
+    let progressText = "\\u{1F4DA} \\(completed) of \\(target) lessons done today"
+
+    return ShieldConfiguration(
+      backgroundBlurStyle: .systemUltraThinMaterial,
+      icon: makeIcon(),
+      title: ShieldConfiguration.Label(text: "Focus Mode", color: indigo),
+      subtitle: ShieldConfiguration.Label(
+        text: "\\(quote)\\n\\n\\(progressText)",
+        color: .secondaryLabel
+      ),
+      primaryButtonLabel: ShieldConfiguration.Label(text: "Close & Study \\u{2192}", color: .white),
+      primaryButtonBackgroundColor: indigo
+    )
+  }
+
+  private func makeIcon() -> UIImage {
+    let size = CGSize(width: 60, height: 60)
+    return UIGraphicsImageRenderer(size: size).image { _ in
+      indigo.withAlphaComponent(0.15).setFill()
+      UIBezierPath(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: 16).fill()
+      let cfg = UIImage.SymbolConfiguration(pointSize: 30, weight: .semibold)
+      if let img = UIImage(systemName: "lock.fill", withConfiguration: cfg)?
+          .withTintColor(indigo, renderingMode: .alwaysOriginal) {
+        let s = img.size
+        img.draw(in: CGRect(
+          x: (size.width - s.width) / 2,
+          y: (size.height - s.height) / 2,
+          width: s.width, height: s.height
+        ))
+      }
+    }
+  }
+}
+`;
+
+const SHIELD_PLIST = `\
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDisplayName</key>
+    <string>UnloqShield</string>
+    <key>CFBundleExecutable</key>
+    <string>$(EXECUTABLE_NAME)</string>
+    <key>CFBundleIdentifier</key>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>$(PRODUCT_NAME)</string>
+    <key>CFBundlePackageType</key>
+    <string>XPC!</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>NSExtension</key>
+    <dict>
+        <key>NSExtensionPointIdentifier</key>
+        <string>com.apple.managed-settings.shield.configuration</string>
+        <key>NSExtensionPrincipalClass</key>
+        <string>$(PRODUCT_MODULE_NAME).UnloqShieldConfiguration</string>
+    </dict>
+</dict>
+</plist>
+`;
+
+const SHIELD_ENTITLEMENTS = `\
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.application-groups</key>
+    <array>
+        <string>${kAppGroup}</string>
+    </array>
+</dict>
+</plist>
+`;
+
 // ─── Plugin ──────────────────────────────────────────────────────────────────
 
 /** @type {(config: import('@expo/config-plugins').ExpoConfig) => import('@expo/config-plugins').ExpoConfig} */
@@ -584,306 +726,385 @@ const withFamilyControls = (config) => {
       }
     }
 
-    // ── Extension target ───────────────────────────────────────────────────
-    // Guard: skip if the extension target already exists
+    // ── Extension targets ──────────────────────────────────────────────────
     const nativeTargets = project.hash.project.objects['PBXNativeTarget'] || {};
-    const extAlreadyExists = Object.values(nativeTargets).some(
+    const monitorExists = Object.values(nativeTargets).some(
       (t) => t && typeof t === 'object' && t.name === kExtName
     );
-    if (extAlreadyExists) return mod;
+    const shieldExists = Object.values(nativeTargets).some(
+      (t) => t && typeof t === 'object' && t.name === kShieldExtName
+    );
 
     const u = () => project.generateUuid();
-
-    // File references
-    const swiftFileRef      = u();
-    const plistFileRef      = u();
-    const entitlementsRef   = u();
-    const productRef        = u();
-    const daFwRef           = u();
-    const msFwRef           = u();
-    const fcFwRef           = u();
-
-    // Build files
-    const swiftBuildFile    = u();
-    const daFwBuildFile     = u();
-    const msFwBuildFile     = u();
-    const fcFwBuildFile     = u();
-    const embedBuildFile    = u();
-
-    // Build phases
-    const sourcesPhaseUUID  = u();
-    const fwPhaseUUID       = u();
-    const resourcesPhaseUUID = u();
-
-    // Configs
-    const debugConfigUUID   = u();
-    const releaseConfigUUID = u();
-    const configListUUID    = u();
-
-    // Target / dependency
-    const extTargetUUID     = u();
-    const extGroupUUID      = u();
-    const containerProxyUUID = u();
-    const targetDepUUID     = u();
-    const embedPhaseUUID    = u();
-
     const objs = project.hash.project.objects;
-
-    // PBXFileReference
-    objs['PBXFileReference'] = objs['PBXFileReference'] || {};
-    objs['PBXFileReference'][swiftFileRef] = {
-      isa: 'PBXFileReference',
-      lastKnownFileType: 'sourcecode.swift',
-      name: 'UnloqMonitor.swift',
-      path: `${kExtName}/UnloqMonitor.swift`,
-      sourceTree: '"<group>"',
-    };
-    objs['PBXFileReference'][`${swiftFileRef}_comment`] = 'UnloqMonitor.swift';
-    objs['PBXFileReference'][plistFileRef] = {
-      isa: 'PBXFileReference',
-      lastKnownFileType: 'text.plist.xml',
-      name: 'Info.plist',
-      path: `${kExtName}/Info.plist`,
-      sourceTree: '"<group>"',
-    };
-    objs['PBXFileReference'][`${plistFileRef}_comment`] = 'Info.plist';
-    objs['PBXFileReference'][entitlementsRef] = {
-      isa: 'PBXFileReference',
-      lastKnownFileType: 'text.plist.entitlements',
-      name: 'UnloqMonitorExtension.entitlements',
-      path: `${kExtName}/UnloqMonitorExtension.entitlements`,
-      sourceTree: '"<group>"',
-    };
-    objs['PBXFileReference'][`${entitlementsRef}_comment`] = 'UnloqMonitorExtension.entitlements';
-    objs['PBXFileReference'][productRef] = {
-      isa: 'PBXFileReference',
-      explicitFileType: '"wrapper.app-extension"',
-      includeInIndex: 0,
-      path: 'UnloqMonitor.appex',
-      sourceTree: 'BUILT_PRODUCTS_DIR',
-    };
-    objs['PBXFileReference'][`${productRef}_comment`] = 'UnloqMonitor.appex';
-    objs['PBXFileReference'][daFwRef] = {
-      isa: 'PBXFileReference',
-      lastKnownFileType: 'wrapper.framework',
-      name: 'DeviceActivity.framework',
-      path: 'System/Library/Frameworks/DeviceActivity.framework',
-      sourceTree: 'SDKROOT',
-    };
-    objs['PBXFileReference'][`${daFwRef}_comment`] = 'DeviceActivity.framework';
-    objs['PBXFileReference'][msFwRef] = {
-      isa: 'PBXFileReference',
-      lastKnownFileType: 'wrapper.framework',
-      name: 'ManagedSettings.framework',
-      path: 'System/Library/Frameworks/ManagedSettings.framework',
-      sourceTree: 'SDKROOT',
-    };
-    objs['PBXFileReference'][`${msFwRef}_comment`] = 'ManagedSettings.framework';
-    objs['PBXFileReference'][fcFwRef] = {
-      isa: 'PBXFileReference',
-      lastKnownFileType: 'wrapper.framework',
-      name: 'FamilyControls.framework',
-      path: 'System/Library/Frameworks/FamilyControls.framework',
-      sourceTree: 'SDKROOT',
-    };
-    objs['PBXFileReference'][`${fcFwRef}_comment`] = 'FamilyControls.framework';
-
-    // PBXBuildFile
-    objs['PBXBuildFile'] = objs['PBXBuildFile'] || {};
-    objs['PBXBuildFile'][swiftBuildFile] = {
-      isa: 'PBXBuildFile', fileRef: swiftFileRef,
-    };
-    objs['PBXBuildFile'][`${swiftBuildFile}_comment`] = 'UnloqMonitor.swift in Sources';
-    objs['PBXBuildFile'][daFwBuildFile] = {
-      isa: 'PBXBuildFile', fileRef: daFwRef,
-    };
-    objs['PBXBuildFile'][`${daFwBuildFile}_comment`] = 'DeviceActivity.framework in Frameworks';
-    objs['PBXBuildFile'][msFwBuildFile] = {
-      isa: 'PBXBuildFile', fileRef: msFwRef,
-    };
-    objs['PBXBuildFile'][`${msFwBuildFile}_comment`] = 'ManagedSettings.framework in Frameworks';
-    objs['PBXBuildFile'][fcFwBuildFile] = {
-      isa: 'PBXBuildFile', fileRef: fcFwRef,
-    };
-    objs['PBXBuildFile'][`${fcFwBuildFile}_comment`] = 'FamilyControls.framework in Frameworks';
-    objs['PBXBuildFile'][embedBuildFile] = {
-      isa: 'PBXBuildFile',
-      fileRef: productRef,
-      settings: { ATTRIBUTES: ['CodeSignOnCopy', 'RemoveHeadersOnCopy'] },
-    };
-    objs['PBXBuildFile'][`${embedBuildFile}_comment`] = 'UnloqMonitor.appex in Embed App Extensions';
-
-    // Build phases for extension
-    objs['PBXSourcesBuildPhase'] = objs['PBXSourcesBuildPhase'] || {};
-    objs['PBXSourcesBuildPhase'][sourcesPhaseUUID] = {
-      isa: 'PBXSourcesBuildPhase',
-      buildActionMask: 2147483647,
-      files: [swiftBuildFile],
-      runOnlyForDeploymentPostprocessing: 0,
-    };
-    objs['PBXSourcesBuildPhase'][`${sourcesPhaseUUID}_comment`] = 'Sources';
-
-    objs['PBXFrameworksBuildPhase'] = objs['PBXFrameworksBuildPhase'] || {};
-    objs['PBXFrameworksBuildPhase'][fwPhaseUUID] = {
-      isa: 'PBXFrameworksBuildPhase',
-      buildActionMask: 2147483647,
-      files: [daFwBuildFile, msFwBuildFile, fcFwBuildFile],
-      runOnlyForDeploymentPostprocessing: 0,
-    };
-    objs['PBXFrameworksBuildPhase'][`${fwPhaseUUID}_comment`] = 'Frameworks';
-
-    objs['PBXResourcesBuildPhase'] = objs['PBXResourcesBuildPhase'] || {};
-    objs['PBXResourcesBuildPhase'][resourcesPhaseUUID] = {
-      isa: 'PBXResourcesBuildPhase',
-      buildActionMask: 2147483647,
-      files: [],
-      runOnlyForDeploymentPostprocessing: 0,
-    };
-    objs['PBXResourcesBuildPhase'][`${resourcesPhaseUUID}_comment`] = 'Resources';
-
-    // Build configurations
-    const extBuildSettings = {
-      CODE_SIGN_ENTITLEMENTS: `"${kExtName}/UnloqMonitorExtension.entitlements"`,
-      CODE_SIGN_STYLE: 'Automatic',
-      CURRENT_PROJECT_VERSION: '1',
-      INFOPLIST_FILE: `"${kExtName}/Info.plist"`,
-      IPHONEOS_DEPLOYMENT_TARGET: '16.0',
-      LD_RUNPATH_SEARCH_PATHS: '"$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"',
-      PRODUCT_BUNDLE_IDENTIFIER: `"${kExtBundleId}"`,
-      PRODUCT_NAME: '"$(TARGET_NAME)"',
-      SKIP_INSTALL: 'YES',
-      SWIFT_VERSION: '5.0',
-      TARGETED_DEVICE_FAMILY: '"1,2"',
-    };
-
-    objs['XCBuildConfiguration'] = objs['XCBuildConfiguration'] || {};
-    objs['XCBuildConfiguration'][debugConfigUUID] = {
-      isa: 'XCBuildConfiguration',
-      buildSettings: extBuildSettings,
-      name: 'Debug',
-    };
-    objs['XCBuildConfiguration'][`${debugConfigUUID}_comment`] = 'Debug';
-    objs['XCBuildConfiguration'][releaseConfigUUID] = {
-      isa: 'XCBuildConfiguration',
-      buildSettings: extBuildSettings,
-      name: 'Release',
-    };
-    objs['XCBuildConfiguration'][`${releaseConfigUUID}_comment`] = 'Release';
-
-    objs['XCConfigurationList'] = objs['XCConfigurationList'] || {};
-    objs['XCConfigurationList'][configListUUID] = {
-      isa: 'XCConfigurationList',
-      buildConfigurations: [debugConfigUUID, releaseConfigUUID],
-      defaultConfigurationIsVisible: 0,
-      defaultConfigurationName: 'Release',
-    };
-    objs['XCConfigurationList'][`${configListUUID}_comment`] = `Build configuration list for PBXNativeTarget "${kExtName}"`;
-
-    // PBXGroup for extension folder — virtual folder only (name, no path).
-    // File refs already carry the full relative path (UnloqMonitor/filename), so
-    // adding a path here would cause Xcode to double-nest and not find the files.
-    objs['PBXGroup'][extGroupUUID] = {
-      isa: 'PBXGroup',
-      children: [swiftFileRef, plistFileRef, entitlementsRef],
-      name: kExtName,
-      sourceTree: '"<group>"',
-    };
-    objs['PBXGroup'][`${extGroupUUID}_comment`] = kExtName;
-
-    // Add extension group to the root project group
-    const rootGroupUUID = project.hash.project.objects['PBXProject'][project.hash.project.rootObject].mainGroup;
-    const rootGroup = objs['PBXGroup'][rootGroupUUID];
-    if (rootGroup && Array.isArray(rootGroup.children) && !rootGroup.children.includes(extGroupUUID)) {
-      rootGroup.children.push(extGroupUUID);
-    }
-
-    // Add product to Products group
-    for (const [key, value] of Object.entries(objs['PBXGroup'])) {
-      if (key.endsWith('_comment')) continue;
-      if (typeof value === 'object' && value.name === 'Products') {
-        if (Array.isArray(value.children) && !value.children.includes(productRef)) {
-          value.children.push(productRef);
-        }
-        break;
-      }
-    }
-
-    // PBXNativeTarget for extension
-    objs['PBXNativeTarget'] = objs['PBXNativeTarget'] || {};
-    objs['PBXNativeTarget'][extTargetUUID] = {
-      isa: 'PBXNativeTarget',
-      buildConfigurationList: configListUUID,
-      buildPhases: [sourcesPhaseUUID, fwPhaseUUID, resourcesPhaseUUID],
-      buildRules: [],
-      dependencies: [],
-      name: kExtName,
-      productName: kExtName,
-      productReference: productRef,
-      productType: '"com.apple.product-type.app-extension"',
-    };
-    objs['PBXNativeTarget'][`${extTargetUUID}_comment`] = kExtName;
-
-    // Add extension target to the project's targets array
-    const projectObj = objs['PBXProject'][project.hash.project.rootObject];
-    if (Array.isArray(projectObj.targets) && !projectObj.targets.includes(extTargetUUID)) {
-      projectObj.targets.push(extTargetUUID);
-    }
-
-    // PBXContainerItemProxy + PBXTargetDependency: main app depends on extension
-    objs['PBXContainerItemProxy'] = objs['PBXContainerItemProxy'] || {};
-    objs['PBXContainerItemProxy'][containerProxyUUID] = {
-      isa: 'PBXContainerItemProxy',
-      containerPortal: project.hash.project.rootObject,
-      proxyType: 1,
-      remoteGlobalIDString: extTargetUUID,
-      remoteInfo: `"${kExtName}"`,
-    };
-    objs['PBXContainerItemProxy'][`${containerProxyUUID}_comment`] = 'PBXContainerItemProxy';
-
-    objs['PBXTargetDependency'] = objs['PBXTargetDependency'] || {};
-    objs['PBXTargetDependency'][targetDepUUID] = {
-      isa: 'PBXTargetDependency',
-      target: extTargetUUID,
-      targetProxy: containerProxyUUID,
-    };
-    objs['PBXTargetDependency'][`${targetDepUUID}_comment`] = kExtName;
-
-    // Add dependency to main target
     const mainTargetObj = objs['PBXNativeTarget'][mainTargetUUID];
-    if (mainTargetObj && Array.isArray(mainTargetObj.dependencies)) {
-      mainTargetObj.dependencies.push(targetDepUUID);
-    }
+    const projectObj = objs['PBXProject'][project.hash.project.rootObject];
+    const rootGroupUUID = projectObj.mainGroup;
+    const rootGroup = objs['PBXGroup'][rootGroupUUID];
 
-    // PBXCopyFilesBuildPhase on main target: Embed App Extensions
-    objs['PBXCopyFilesBuildPhase'] = objs['PBXCopyFilesBuildPhase'] || {};
-
-    // Reuse existing Embed App Extensions phase if present, else create one
-    let embedPhaseKey = null;
-    for (const [key, value] of Object.entries(objs['PBXCopyFilesBuildPhase'])) {
-      if (key.endsWith('_comment')) continue;
-      if (typeof value === 'object' && value.name === '"Embed App Extensions"' && value.dstSubfolderSpec === 13) {
-        embedPhaseKey = key;
-        if (!value.files.includes(embedBuildFile)) value.files.push(embedBuildFile);
-        break;
+    /** Adds an appex embed build file to the Embed App Extensions copy phase (creates it if missing). */
+    function addToEmbedPhase(embedBuildFile, embedPhaseUUID) {
+      objs['PBXCopyFilesBuildPhase'] = objs['PBXCopyFilesBuildPhase'] || {};
+      let found = false;
+      for (const [key, value] of Object.entries(objs['PBXCopyFilesBuildPhase'])) {
+        if (key.endsWith('_comment')) continue;
+        if (typeof value === 'object' && value.name === '"Embed App Extensions"' && value.dstSubfolderSpec === 13) {
+          if (!value.files.includes(embedBuildFile)) value.files.push(embedBuildFile);
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        objs['PBXCopyFilesBuildPhase'][embedPhaseUUID] = {
+          isa: 'PBXCopyFilesBuildPhase',
+          buildActionMask: 2147483647,
+          dstPath: '""',
+          dstSubfolderSpec: 13,
+          files: [embedBuildFile],
+          name: '"Embed App Extensions"',
+          runOnlyForDeploymentPostprocessing: 0,
+        };
+        objs['PBXCopyFilesBuildPhase'][`${embedPhaseUUID}_comment`] = 'Embed App Extensions';
+        if (mainTargetObj && Array.isArray(mainTargetObj.buildPhases)) {
+          mainTargetObj.buildPhases.push(embedPhaseUUID);
+        }
       }
     }
 
-    if (!embedPhaseKey) {
-      objs['PBXCopyFilesBuildPhase'][embedPhaseUUID] = {
-        isa: 'PBXCopyFilesBuildPhase',
-        buildActionMask: 2147483647,
-        dstPath: '""',
-        dstSubfolderSpec: 13,
-        files: [embedBuildFile],
-        name: '"Embed App Extensions"',
-        runOnlyForDeploymentPostprocessing: 0,
+    // ── Monitor extension ──────────────────────────────────────────────────
+    if (!monitorExists) {
+      const swiftFileRef       = u();
+      const plistFileRef       = u();
+      const entitlementsRef    = u();
+      const productRef         = u();
+      const daFwRef            = u();
+      const msFwRef            = u();
+      const fcFwRef            = u();
+      const swiftBuildFile     = u();
+      const daFwBuildFile      = u();
+      const msFwBuildFile      = u();
+      const fcFwBuildFile      = u();
+      const embedBuildFile     = u();
+      const sourcesPhaseUUID   = u();
+      const fwPhaseUUID        = u();
+      const resourcesPhaseUUID = u();
+      const debugConfigUUID    = u();
+      const releaseConfigUUID  = u();
+      const configListUUID     = u();
+      const extTargetUUID      = u();
+      const extGroupUUID       = u();
+      const containerProxyUUID = u();
+      const targetDepUUID      = u();
+      const embedPhaseUUID     = u();
+
+      objs['PBXFileReference'] = objs['PBXFileReference'] || {};
+      objs['PBXFileReference'][swiftFileRef] = {
+        isa: 'PBXFileReference', lastKnownFileType: 'sourcecode.swift',
+        name: 'UnloqMonitor.swift', path: `${kExtName}/UnloqMonitor.swift`, sourceTree: '"<group>"',
       };
-      objs['PBXCopyFilesBuildPhase'][`${embedPhaseUUID}_comment`] = 'Embed App Extensions';
+      objs['PBXFileReference'][`${swiftFileRef}_comment`] = 'UnloqMonitor.swift';
+      objs['PBXFileReference'][plistFileRef] = {
+        isa: 'PBXFileReference', lastKnownFileType: 'text.plist.xml',
+        name: 'Info.plist', path: `${kExtName}/Info.plist`, sourceTree: '"<group>"',
+      };
+      objs['PBXFileReference'][`${plistFileRef}_comment`] = 'Info.plist';
+      objs['PBXFileReference'][entitlementsRef] = {
+        isa: 'PBXFileReference', lastKnownFileType: 'text.plist.entitlements',
+        name: 'UnloqMonitorExtension.entitlements',
+        path: `${kExtName}/UnloqMonitorExtension.entitlements`, sourceTree: '"<group>"',
+      };
+      objs['PBXFileReference'][`${entitlementsRef}_comment`] = 'UnloqMonitorExtension.entitlements';
+      objs['PBXFileReference'][productRef] = {
+        isa: 'PBXFileReference', explicitFileType: '"wrapper.app-extension"',
+        includeInIndex: 0, path: 'UnloqMonitor.appex', sourceTree: 'BUILT_PRODUCTS_DIR',
+      };
+      objs['PBXFileReference'][`${productRef}_comment`] = 'UnloqMonitor.appex';
+      objs['PBXFileReference'][daFwRef] = {
+        isa: 'PBXFileReference', lastKnownFileType: 'wrapper.framework',
+        name: 'DeviceActivity.framework',
+        path: 'System/Library/Frameworks/DeviceActivity.framework', sourceTree: 'SDKROOT',
+      };
+      objs['PBXFileReference'][`${daFwRef}_comment`] = 'DeviceActivity.framework';
+      objs['PBXFileReference'][msFwRef] = {
+        isa: 'PBXFileReference', lastKnownFileType: 'wrapper.framework',
+        name: 'ManagedSettings.framework',
+        path: 'System/Library/Frameworks/ManagedSettings.framework', sourceTree: 'SDKROOT',
+      };
+      objs['PBXFileReference'][`${msFwRef}_comment`] = 'ManagedSettings.framework';
+      objs['PBXFileReference'][fcFwRef] = {
+        isa: 'PBXFileReference', lastKnownFileType: 'wrapper.framework',
+        name: 'FamilyControls.framework',
+        path: 'System/Library/Frameworks/FamilyControls.framework', sourceTree: 'SDKROOT',
+      };
+      objs['PBXFileReference'][`${fcFwRef}_comment`] = 'FamilyControls.framework';
 
-      // Add the embed phase to main target's buildPhases
-      if (mainTargetObj && Array.isArray(mainTargetObj.buildPhases)) {
-        mainTargetObj.buildPhases.push(embedPhaseUUID);
+      objs['PBXBuildFile'] = objs['PBXBuildFile'] || {};
+      objs['PBXBuildFile'][swiftBuildFile] = { isa: 'PBXBuildFile', fileRef: swiftFileRef };
+      objs['PBXBuildFile'][`${swiftBuildFile}_comment`] = 'UnloqMonitor.swift in Sources';
+      objs['PBXBuildFile'][daFwBuildFile] = { isa: 'PBXBuildFile', fileRef: daFwRef };
+      objs['PBXBuildFile'][`${daFwBuildFile}_comment`] = 'DeviceActivity.framework in Frameworks';
+      objs['PBXBuildFile'][msFwBuildFile] = { isa: 'PBXBuildFile', fileRef: msFwRef };
+      objs['PBXBuildFile'][`${msFwBuildFile}_comment`] = 'ManagedSettings.framework in Frameworks';
+      objs['PBXBuildFile'][fcFwBuildFile] = { isa: 'PBXBuildFile', fileRef: fcFwRef };
+      objs['PBXBuildFile'][`${fcFwBuildFile}_comment`] = 'FamilyControls.framework in Frameworks';
+      objs['PBXBuildFile'][embedBuildFile] = {
+        isa: 'PBXBuildFile', fileRef: productRef,
+        settings: { ATTRIBUTES: ['CodeSignOnCopy', 'RemoveHeadersOnCopy'] },
+      };
+      objs['PBXBuildFile'][`${embedBuildFile}_comment`] = 'UnloqMonitor.appex in Embed App Extensions';
+
+      objs['PBXSourcesBuildPhase'] = objs['PBXSourcesBuildPhase'] || {};
+      objs['PBXSourcesBuildPhase'][sourcesPhaseUUID] = {
+        isa: 'PBXSourcesBuildPhase', buildActionMask: 2147483647,
+        files: [swiftBuildFile], runOnlyForDeploymentPostprocessing: 0,
+      };
+      objs['PBXSourcesBuildPhase'][`${sourcesPhaseUUID}_comment`] = 'Sources';
+
+      objs['PBXFrameworksBuildPhase'] = objs['PBXFrameworksBuildPhase'] || {};
+      objs['PBXFrameworksBuildPhase'][fwPhaseUUID] = {
+        isa: 'PBXFrameworksBuildPhase', buildActionMask: 2147483647,
+        files: [daFwBuildFile, msFwBuildFile, fcFwBuildFile], runOnlyForDeploymentPostprocessing: 0,
+      };
+      objs['PBXFrameworksBuildPhase'][`${fwPhaseUUID}_comment`] = 'Frameworks';
+
+      objs['PBXResourcesBuildPhase'] = objs['PBXResourcesBuildPhase'] || {};
+      objs['PBXResourcesBuildPhase'][resourcesPhaseUUID] = {
+        isa: 'PBXResourcesBuildPhase', buildActionMask: 2147483647,
+        files: [], runOnlyForDeploymentPostprocessing: 0,
+      };
+      objs['PBXResourcesBuildPhase'][`${resourcesPhaseUUID}_comment`] = 'Resources';
+
+      const monitorBuildSettings = {
+        CODE_SIGN_ENTITLEMENTS: `"${kExtName}/UnloqMonitorExtension.entitlements"`,
+        CODE_SIGN_STYLE: 'Automatic', CURRENT_PROJECT_VERSION: '1',
+        INFOPLIST_FILE: `"${kExtName}/Info.plist"`,
+        IPHONEOS_DEPLOYMENT_TARGET: '16.0',
+        LD_RUNPATH_SEARCH_PATHS: '"$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"',
+        PRODUCT_BUNDLE_IDENTIFIER: `"${kExtBundleId}"`,
+        PRODUCT_NAME: '"$(TARGET_NAME)"', SKIP_INSTALL: 'YES',
+        SWIFT_VERSION: '5.0', TARGETED_DEVICE_FAMILY: '"1,2"',
+      };
+      objs['XCBuildConfiguration'] = objs['XCBuildConfiguration'] || {};
+      objs['XCBuildConfiguration'][debugConfigUUID] = {
+        isa: 'XCBuildConfiguration', buildSettings: monitorBuildSettings, name: 'Debug',
+      };
+      objs['XCBuildConfiguration'][`${debugConfigUUID}_comment`] = 'Debug';
+      objs['XCBuildConfiguration'][releaseConfigUUID] = {
+        isa: 'XCBuildConfiguration', buildSettings: monitorBuildSettings, name: 'Release',
+      };
+      objs['XCBuildConfiguration'][`${releaseConfigUUID}_comment`] = 'Release';
+
+      objs['XCConfigurationList'] = objs['XCConfigurationList'] || {};
+      objs['XCConfigurationList'][configListUUID] = {
+        isa: 'XCConfigurationList',
+        buildConfigurations: [debugConfigUUID, releaseConfigUUID],
+        defaultConfigurationIsVisible: 0, defaultConfigurationName: 'Release',
+      };
+      objs['XCConfigurationList'][`${configListUUID}_comment`] =
+        `Build configuration list for PBXNativeTarget "${kExtName}"`;
+
+      objs['PBXGroup'][extGroupUUID] = {
+        isa: 'PBXGroup', children: [swiftFileRef, plistFileRef, entitlementsRef],
+        name: kExtName, sourceTree: '"<group>"',
+      };
+      objs['PBXGroup'][`${extGroupUUID}_comment`] = kExtName;
+      if (rootGroup && Array.isArray(rootGroup.children) && !rootGroup.children.includes(extGroupUUID)) {
+        rootGroup.children.push(extGroupUUID);
       }
+      for (const [key, value] of Object.entries(objs['PBXGroup'])) {
+        if (key.endsWith('_comment')) continue;
+        if (typeof value === 'object' && value.name === 'Products') {
+          if (Array.isArray(value.children) && !value.children.includes(productRef)) value.children.push(productRef);
+          break;
+        }
+      }
+
+      objs['PBXNativeTarget'] = objs['PBXNativeTarget'] || {};
+      objs['PBXNativeTarget'][extTargetUUID] = {
+        isa: 'PBXNativeTarget', buildConfigurationList: configListUUID,
+        buildPhases: [sourcesPhaseUUID, fwPhaseUUID, resourcesPhaseUUID],
+        buildRules: [], dependencies: [], name: kExtName, productName: kExtName,
+        productReference: productRef, productType: '"com.apple.product-type.app-extension"',
+      };
+      objs['PBXNativeTarget'][`${extTargetUUID}_comment`] = kExtName;
+      if (Array.isArray(projectObj.targets) && !projectObj.targets.includes(extTargetUUID)) {
+        projectObj.targets.push(extTargetUUID);
+      }
+
+      objs['PBXContainerItemProxy'] = objs['PBXContainerItemProxy'] || {};
+      objs['PBXContainerItemProxy'][containerProxyUUID] = {
+        isa: 'PBXContainerItemProxy', containerPortal: project.hash.project.rootObject,
+        proxyType: 1, remoteGlobalIDString: extTargetUUID, remoteInfo: `"${kExtName}"`,
+      };
+      objs['PBXContainerItemProxy'][`${containerProxyUUID}_comment`] = 'PBXContainerItemProxy';
+      objs['PBXTargetDependency'] = objs['PBXTargetDependency'] || {};
+      objs['PBXTargetDependency'][targetDepUUID] = {
+        isa: 'PBXTargetDependency', target: extTargetUUID, targetProxy: containerProxyUUID,
+      };
+      objs['PBXTargetDependency'][`${targetDepUUID}_comment`] = kExtName;
+      if (mainTargetObj && Array.isArray(mainTargetObj.dependencies)) {
+        mainTargetObj.dependencies.push(targetDepUUID);
+      }
+
+      addToEmbedPhase(embedBuildFile, embedPhaseUUID);
+    }
+
+    // ── Shield extension ───────────────────────────────────────────────────
+    if (!shieldExists) {
+      const shSwiftRef         = u();
+      const shPlistRef         = u();
+      const shEntRef           = u();
+      const shProductRef       = u();
+      const shMsuiFwRef        = u();
+      const shSwiftBuild       = u();
+      const shMsuiFwBuild      = u();
+      const shEmbedBuild       = u();
+      const shSourcesPhase     = u();
+      const shFwPhase          = u();
+      const shResourcesPhase   = u();
+      const shDebugConfig      = u();
+      const shReleaseConfig    = u();
+      const shConfigList       = u();
+      const shTargetUUID       = u();
+      const shGroupUUID        = u();
+      const shProxyUUID        = u();
+      const shDepUUID          = u();
+      const shEmbedPhaseUUID   = u();
+
+      objs['PBXFileReference'] = objs['PBXFileReference'] || {};
+      objs['PBXFileReference'][shSwiftRef] = {
+        isa: 'PBXFileReference', lastKnownFileType: 'sourcecode.swift',
+        name: 'UnloqShield.swift', path: `${kShieldExtName}/UnloqShield.swift`, sourceTree: '"<group>"',
+      };
+      objs['PBXFileReference'][`${shSwiftRef}_comment`] = 'UnloqShield.swift';
+      objs['PBXFileReference'][shPlistRef] = {
+        isa: 'PBXFileReference', lastKnownFileType: 'text.plist.xml',
+        name: 'Info.plist', path: `${kShieldExtName}/Info.plist`, sourceTree: '"<group>"',
+      };
+      objs['PBXFileReference'][`${shPlistRef}_comment`] = 'Info.plist';
+      objs['PBXFileReference'][shEntRef] = {
+        isa: 'PBXFileReference', lastKnownFileType: 'text.plist.entitlements',
+        name: 'UnloqShield.entitlements',
+        path: `${kShieldExtName}/UnloqShield.entitlements`, sourceTree: '"<group>"',
+      };
+      objs['PBXFileReference'][`${shEntRef}_comment`] = 'UnloqShield.entitlements';
+      objs['PBXFileReference'][shProductRef] = {
+        isa: 'PBXFileReference', explicitFileType: '"wrapper.app-extension"',
+        includeInIndex: 0, path: 'UnloqShield.appex', sourceTree: 'BUILT_PRODUCTS_DIR',
+      };
+      objs['PBXFileReference'][`${shProductRef}_comment`] = 'UnloqShield.appex';
+      objs['PBXFileReference'][shMsuiFwRef] = {
+        isa: 'PBXFileReference', lastKnownFileType: 'wrapper.framework',
+        name: 'ManagedSettingsUI.framework',
+        path: 'System/Library/Frameworks/ManagedSettingsUI.framework', sourceTree: 'SDKROOT',
+      };
+      objs['PBXFileReference'][`${shMsuiFwRef}_comment`] = 'ManagedSettingsUI.framework';
+
+      objs['PBXBuildFile'] = objs['PBXBuildFile'] || {};
+      objs['PBXBuildFile'][shSwiftBuild] = { isa: 'PBXBuildFile', fileRef: shSwiftRef };
+      objs['PBXBuildFile'][`${shSwiftBuild}_comment`] = 'UnloqShield.swift in Sources';
+      objs['PBXBuildFile'][shMsuiFwBuild] = { isa: 'PBXBuildFile', fileRef: shMsuiFwRef };
+      objs['PBXBuildFile'][`${shMsuiFwBuild}_comment`] = 'ManagedSettingsUI.framework in Frameworks';
+      objs['PBXBuildFile'][shEmbedBuild] = {
+        isa: 'PBXBuildFile', fileRef: shProductRef,
+        settings: { ATTRIBUTES: ['CodeSignOnCopy', 'RemoveHeadersOnCopy'] },
+      };
+      objs['PBXBuildFile'][`${shEmbedBuild}_comment`] = 'UnloqShield.appex in Embed App Extensions';
+
+      objs['PBXSourcesBuildPhase'] = objs['PBXSourcesBuildPhase'] || {};
+      objs['PBXSourcesBuildPhase'][shSourcesPhase] = {
+        isa: 'PBXSourcesBuildPhase', buildActionMask: 2147483647,
+        files: [shSwiftBuild], runOnlyForDeploymentPostprocessing: 0,
+      };
+      objs['PBXSourcesBuildPhase'][`${shSourcesPhase}_comment`] = 'Sources';
+
+      objs['PBXFrameworksBuildPhase'] = objs['PBXFrameworksBuildPhase'] || {};
+      objs['PBXFrameworksBuildPhase'][shFwPhase] = {
+        isa: 'PBXFrameworksBuildPhase', buildActionMask: 2147483647,
+        files: [shMsuiFwBuild], runOnlyForDeploymentPostprocessing: 0,
+      };
+      objs['PBXFrameworksBuildPhase'][`${shFwPhase}_comment`] = 'Frameworks';
+
+      objs['PBXResourcesBuildPhase'] = objs['PBXResourcesBuildPhase'] || {};
+      objs['PBXResourcesBuildPhase'][shResourcesPhase] = {
+        isa: 'PBXResourcesBuildPhase', buildActionMask: 2147483647,
+        files: [], runOnlyForDeploymentPostprocessing: 0,
+      };
+      objs['PBXResourcesBuildPhase'][`${shResourcesPhase}_comment`] = 'Resources';
+
+      const shieldBuildSettings = {
+        CODE_SIGN_ENTITLEMENTS: `"${kShieldExtName}/UnloqShield.entitlements"`,
+        CODE_SIGN_STYLE: 'Automatic', CURRENT_PROJECT_VERSION: '1',
+        INFOPLIST_FILE: `"${kShieldExtName}/Info.plist"`,
+        IPHONEOS_DEPLOYMENT_TARGET: '16.0',
+        LD_RUNPATH_SEARCH_PATHS: '"$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"',
+        PRODUCT_BUNDLE_IDENTIFIER: `"${kShieldBundleId}"`,
+        PRODUCT_NAME: '"$(TARGET_NAME)"', SKIP_INSTALL: 'YES',
+        SWIFT_VERSION: '5.0', TARGETED_DEVICE_FAMILY: '"1,2"',
+      };
+      objs['XCBuildConfiguration'] = objs['XCBuildConfiguration'] || {};
+      objs['XCBuildConfiguration'][shDebugConfig] = {
+        isa: 'XCBuildConfiguration', buildSettings: shieldBuildSettings, name: 'Debug',
+      };
+      objs['XCBuildConfiguration'][`${shDebugConfig}_comment`] = 'Debug';
+      objs['XCBuildConfiguration'][shReleaseConfig] = {
+        isa: 'XCBuildConfiguration', buildSettings: shieldBuildSettings, name: 'Release',
+      };
+      objs['XCBuildConfiguration'][`${shReleaseConfig}_comment`] = 'Release';
+
+      objs['XCConfigurationList'] = objs['XCConfigurationList'] || {};
+      objs['XCConfigurationList'][shConfigList] = {
+        isa: 'XCConfigurationList',
+        buildConfigurations: [shDebugConfig, shReleaseConfig],
+        defaultConfigurationIsVisible: 0, defaultConfigurationName: 'Release',
+      };
+      objs['XCConfigurationList'][`${shConfigList}_comment`] =
+        `Build configuration list for PBXNativeTarget "${kShieldExtName}"`;
+
+      objs['PBXGroup'][shGroupUUID] = {
+        isa: 'PBXGroup', children: [shSwiftRef, shPlistRef, shEntRef],
+        name: kShieldExtName, sourceTree: '"<group>"',
+      };
+      objs['PBXGroup'][`${shGroupUUID}_comment`] = kShieldExtName;
+      if (rootGroup && Array.isArray(rootGroup.children) && !rootGroup.children.includes(shGroupUUID)) {
+        rootGroup.children.push(shGroupUUID);
+      }
+      for (const [key, value] of Object.entries(objs['PBXGroup'])) {
+        if (key.endsWith('_comment')) continue;
+        if (typeof value === 'object' && value.name === 'Products') {
+          if (Array.isArray(value.children) && !value.children.includes(shProductRef)) value.children.push(shProductRef);
+          break;
+        }
+      }
+
+      objs['PBXNativeTarget'] = objs['PBXNativeTarget'] || {};
+      objs['PBXNativeTarget'][shTargetUUID] = {
+        isa: 'PBXNativeTarget', buildConfigurationList: shConfigList,
+        buildPhases: [shSourcesPhase, shFwPhase, shResourcesPhase],
+        buildRules: [], dependencies: [], name: kShieldExtName, productName: kShieldExtName,
+        productReference: shProductRef, productType: '"com.apple.product-type.app-extension"',
+      };
+      objs['PBXNativeTarget'][`${shTargetUUID}_comment`] = kShieldExtName;
+      if (Array.isArray(projectObj.targets) && !projectObj.targets.includes(shTargetUUID)) {
+        projectObj.targets.push(shTargetUUID);
+      }
+
+      objs['PBXContainerItemProxy'] = objs['PBXContainerItemProxy'] || {};
+      objs['PBXContainerItemProxy'][shProxyUUID] = {
+        isa: 'PBXContainerItemProxy', containerPortal: project.hash.project.rootObject,
+        proxyType: 1, remoteGlobalIDString: shTargetUUID, remoteInfo: `"${kShieldExtName}"`,
+      };
+      objs['PBXContainerItemProxy'][`${shProxyUUID}_comment`] = 'PBXContainerItemProxy';
+      objs['PBXTargetDependency'] = objs['PBXTargetDependency'] || {};
+      objs['PBXTargetDependency'][shDepUUID] = {
+        isa: 'PBXTargetDependency', target: shTargetUUID, targetProxy: shProxyUUID,
+      };
+      objs['PBXTargetDependency'][`${shDepUUID}_comment`] = kShieldExtName;
+      if (mainTargetObj && Array.isArray(mainTargetObj.dependencies)) {
+        mainTargetObj.dependencies.push(shDepUUID);
+      }
+
+      addToEmbedPhase(shEmbedBuild, shEmbedPhaseUUID);
     }
 
     return mod;
@@ -914,12 +1135,19 @@ const withFamilyControls = (config) => {
         fs.writeFileSync(bridgingHeaderPath, '#import <React/RCTBridgeModule.h>\n');
       }
 
-      // Extension files
+      // Monitor extension files
       const extDir = path.join(platformRoot, kExtName);
       if (!fs.existsSync(extDir)) fs.mkdirSync(extDir, { recursive: true });
       fs.writeFileSync(path.join(extDir, 'UnloqMonitor.swift'), DEVICE_ACTIVITY_MONITOR_SWIFT);
       fs.writeFileSync(path.join(extDir, 'Info.plist'), MONITOR_EXTENSION_PLIST);
       fs.writeFileSync(path.join(extDir, 'UnloqMonitorExtension.entitlements'), MONITOR_EXTENSION_ENTITLEMENTS);
+
+      // Shield extension files
+      const shieldDir = path.join(platformRoot, kShieldExtName);
+      if (!fs.existsSync(shieldDir)) fs.mkdirSync(shieldDir, { recursive: true });
+      fs.writeFileSync(path.join(shieldDir, 'UnloqShield.swift'), SHIELD_SWIFT);
+      fs.writeFileSync(path.join(shieldDir, 'Info.plist'), SHIELD_PLIST);
+      fs.writeFileSync(path.join(shieldDir, 'UnloqShield.entitlements'), SHIELD_ENTITLEMENTS);
 
       return mod;
     },
