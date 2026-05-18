@@ -241,6 +241,7 @@ export const create = mutation({
       v.literal("intermediate"),
       v.literal("advanced")
     ),
+    pdfStorageId: v.optional(v.id("_storage")),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -251,6 +252,99 @@ export const create = mutation({
       status: "generating",
       createdAt: Date.now(),
     });
+  },
+});
+
+// ── Folder mutations ──────────────────────────────────────────────────────────
+
+export const createFolder = mutation({
+  args: { name: v.string() },
+  handler: async (ctx, { name }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Must be signed in");
+    return ctx.db.insert("folders", { userId, name, createdAt: Date.now() });
+  },
+});
+
+export const listFolders = query({
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+    return ctx.db
+      .query("folders")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .order("desc")
+      .collect();
+  },
+});
+
+export const deleteFolder = mutation({
+  args: { folderId: v.id("folders") },
+  handler: async (ctx, { folderId }) => {
+    const userId = await getAuthUserId(ctx);
+    const folder = await ctx.db.get(folderId);
+    if (!folder || folder.userId !== userId) throw new Error("Not authorized");
+    // Detach courses from folder before deleting
+    const courses = await ctx.db
+      .query("courses")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    await Promise.all(
+      courses
+        .filter((c) => c.folderId === folderId)
+        .map((c) => ctx.db.patch(c._id, { folderId: undefined }))
+    );
+    await ctx.db.delete(folderId);
+  },
+});
+
+export const addToFolder = mutation({
+  args: { courseId: v.id("courses"), folderId: v.optional(v.id("folders")) },
+  handler: async (ctx, { courseId, folderId }) => {
+    const userId = await getAuthUserId(ctx);
+    const course = await ctx.db.get(courseId);
+    if (!course || course.userId !== userId) throw new Error("Not authorized");
+    await ctx.db.patch(courseId, { folderId });
+  },
+});
+
+// ── PDF URL ───────────────────────────────────────────────────────────────────
+
+export const getPdfUrl = query({
+  args: { courseId: v.id("courses") },
+  handler: async (ctx, { courseId }) => {
+    const course = await ctx.db.get(courseId);
+    if (!course?.pdfStorageId) return null;
+    return ctx.storage.getUrl(course.pdfStorageId);
+  },
+});
+
+// ── On-demand quiz/diagram patching ──────────────────────────────────────────
+
+export const patchLessonQuiz = internalMutation({
+  args: {
+    lessonId: v.id("lessons"),
+    quiz: v.array(v.object({
+      question: v.string(),
+      options: v.array(v.string()),
+      correctAnswer: v.string(),
+    })),
+  },
+  handler: async (ctx, { lessonId, quiz }) => {
+    await ctx.db.patch(lessonId, { quiz });
+  },
+});
+
+export const patchLessonDiagram = internalMutation({
+  args: {
+    lessonId: v.id("lessons"),
+    diagram: v.object({
+      root: v.string(),
+      branches: v.array(v.object({ name: v.string(), points: v.array(v.string()) })),
+    }),
+  },
+  handler: async (ctx, { lessonId, diagram }) => {
+    await ctx.db.patch(lessonId, { diagram });
   },
 });
 

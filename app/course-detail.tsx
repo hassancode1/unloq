@@ -1,10 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import React, { useEffect } from 'react';
+import Toast from 'react-native-toast-message';
+import React, { useEffect, useState } from 'react';
 import {
+  Modal,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -17,7 +21,7 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useQuery } from 'convex/react';
+import { useQuery, useMutation, useAction } from 'convex/react';
 import { api } from '../convex/_generated/api';
 import { Id } from '../convex/_generated/dataModel';
 import { useTheme } from '../hooks/useTheme';
@@ -27,334 +31,499 @@ import type { AppColors } from '../constants/Colors';
 type Props = {
   courseId: Id<'courses'>;
   onBack: () => void;
-  onStartLesson: () => void;
+  onOpenFlashcards: () => void;
+  onOpenQuiz: () => void;
+  onOpenDiagram: () => void;
+  onOpenPdf?: (url: string, title: string) => void;
 };
 
-function topicColor(title: string): { emoji: string; color: string } {
+function topicEmoji(title: string): string {
   const t = title.toLowerCase();
-  if (t.includes('math') || t.includes('calculus') || t.includes('algebra'))
-    return { emoji: '📐', color: '#7C3AED' };
-  if (t.includes('history'))
-    return { emoji: '🏛️', color: '#16A34A' };
-  if (t.includes('science') || t.includes('physics') || t.includes('chem'))
-    return { emoji: '⚗️', color: '#0EA5E9' };
-  if (t.includes('biology') || t.includes('bio'))
-    return { emoji: '🧬', color: '#0D9488' };
-  if (t.includes('english') || t.includes('writing'))
-    return { emoji: '✍️', color: '#EA580C' };
-  if (t.includes('code') || t.includes('program'))
-    return { emoji: '💻', color: '#6366F1' };
-  if (t.includes('law') || t.includes('legal') || t.includes('bar') || t.includes('mbe') || t.includes('mee'))
-    return { emoji: '⚖️', color: '#0EA5E9' };
-  if (t.includes('finance') || t.includes('econ'))
-    return { emoji: '📈', color: '#16A34A' };
-  return { emoji: '📚', color: '#6366F1' };
+  if (t.includes('math') || t.includes('calculus')) return '📐';
+  if (t.includes('history')) return '🏛️';
+  if (t.includes('science') || t.includes('physics') || t.includes('chem')) return '⚗️';
+  if (t.includes('biology') || t.includes('bio')) return '🧬';
+  if (t.includes('english') || t.includes('writing')) return '✍️';
+  if (t.includes('code') || t.includes('program')) return '💻';
+  if (t.includes('law') || t.includes('legal') || t.includes('bar')) return '⚖️';
+  if (t.includes('finance') || t.includes('econ')) return '📈';
+  if (t.includes('islam') || t.includes('quran') || t.includes('muslim')) return '☪️';
+  return '📚';
 }
 
-const DIFFICULTY_COLOR: Record<string, string> = {
-  beginner:     '#16A34A',
-  intermediate: '#D97706',
-  advanced:     '#7C3AED',
-};
+// ── Skeleton ──────────────────────────────────────────────────────────────────
 
-function SkeletonLoader({ C, insets, onBack }: { C: AppColors; insets: any; onBack: () => void }) {
-  const shimmer = useSharedValue(0);
+function Skeleton({ C, onBack }: { C: AppColors; onBack: () => void }) {
+  const op = useSharedValue(0.4);
   useEffect(() => {
-    shimmer.value = withRepeat(withTiming(1, { duration: 900, easing: Easing.inOut(Easing.ease) }), -1, true);
+    op.value = withRepeat(withTiming(1, { duration: 800, easing: Easing.inOut(Easing.ease) }), -1, true);
   }, []);
-  const shimStyle = useAnimatedStyle(() => ({ opacity: 0.5 + shimmer.value * 0.4 }));
-
+  const shimStyle = useAnimatedStyle(() => ({ opacity: op.value }));
   return (
-    <View style={[S.root, { backgroundColor: C.bg, paddingTop: insets.top }]}>
-      <View style={[S.header, { borderBottomColor: C.border }]}>
-        <TouchableOpacity style={[S.backBtn, { backgroundColor: C.surfaceAlt, borderColor: C.border }]} onPress={onBack}>
+    <View style={[S.root, { backgroundColor: C.bg }]}>
+      <View style={[S.headerBar, { borderBottomColor: C.border }]}>
+        <TouchableOpacity style={[S.iconBtn, { backgroundColor: C.surfaceAlt }]} onPress={onBack}>
           <Ionicons name="arrow-back" size={19} color={C.muted} />
         </TouchableOpacity>
       </View>
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-        <Animated.View style={[S.skeletonHero, { backgroundColor: C.borderStrong }, shimStyle]} />
-        <Animated.View style={[S.skeletonLine, { width: 160, backgroundColor: C.borderStrong }, shimStyle]} />
-        <Animated.View style={[S.skeletonLine, { width: 100, backgroundColor: C.borderStrong }, shimStyle]} />
-      </View>
+      <ScrollView contentContainerStyle={{ padding: Spacing.lg, gap: 14 }}>
+        <Animated.View style={[{ height: 34, borderRadius: 8, backgroundColor: C.borderStrong, width: '80%' }, shimStyle]} />
+        <Animated.View style={[{ height: 16, borderRadius: 6, backgroundColor: C.borderStrong, width: '45%' }, shimStyle]} />
+        {[1, 2, 3].map(i => (
+          <Animated.View key={i} style={[{ height: 72, borderRadius: 14, backgroundColor: C.borderStrong }, shimStyle]} />
+        ))}
+      </ScrollView>
     </View>
   );
 }
 
-export default function CourseDetailScreen({ courseId, onBack, onStartLesson }: Props) {
+// ── Feature tile (Duo-style shadow + custom icon) ────────────────────────────
+
+function Tile({ icon, label, sublabel, bg, color, border, shadow, onPress, disabled, loading, C }: {
+  icon: string; label: string; sublabel?: string;
+  bg: string; color: string; border: string; shadow: string;
+  onPress?: () => void; disabled?: boolean; loading?: boolean; C: AppColors;
+}) {
+  return (
+    <View style={[T.wrap, { opacity: disabled ? 0.42 : 1 }]}>
+      <View style={[T.shadow, { backgroundColor: shadow, borderRadius: 14 }]} />
+      <TouchableOpacity
+        style={[T.tile, { backgroundColor: bg, borderColor: border }]}
+        onPress={disabled ? undefined : onPress}
+        activeOpacity={disabled ? 1 : 0.82}
+      >
+        <View style={[T.iconCircle, { backgroundColor: color + '28' }]}>
+          {loading
+            ? <Ionicons name="sync-outline" size={20} color={color} />
+            : <Ionicons name={icon as any} size={20} color={color} />}
+        </View>
+        <View style={T.textCol}>
+          <Text style={[T.label, { color }]} numberOfLines={1}>{label}</Text>
+          {sublabel ? <Text style={[T.sublabel, { color: C.muted }]} numberOfLines={1}>{sublabel}</Text> : null}
+        </View>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const T = StyleSheet.create({
+  wrap:       { flex: 1, marginBottom: 4 },
+  shadow:     { position: 'absolute', bottom: -4, left: 0, right: 0, top: 0 },
+  tile:       { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 68, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 14, borderWidth: 1.5, transform: [{ translateY: -4 }] },
+  iconCircle: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  textCol:    { flex: 1 },
+  label:      { fontSize: 14, fontFamily: 'Nunito-Bold' },
+  sublabel:   { fontSize: 11, fontFamily: 'Nunito-Regular', marginTop: 2 },
+});
+
+// ── Section header ────────────────────────────────────────────────────────────
+
+function SectionHead({ label, C }: { label: string; C: AppColors }) {
+  return <Text style={[SH.label, { color: C.text }]}>{label}</Text>;
+}
+const SH = StyleSheet.create({ label: { fontSize: 18, fontFamily: 'Nunito-Bold' } });
+
+// ── Folder modal ──────────────────────────────────────────────────────────────
+
+function FolderModal({ visible, onClose, courseId, currentFolderId, C, F, fs }: {
+  visible: boolean; onClose: () => void;
+  courseId: Id<'courses'>; currentFolderId?: Id<'folders'>;
+  C: AppColors; F: any; fs: (n: number) => number;
+}) {
+  const [newName, setNewName] = useState('');
+  const folders = (useQuery(api.courses.listFolders) ?? []) as any[];
+  const createFolder = useMutation(api.courses.createFolder);
+  const addToFolder  = useMutation(api.courses.addToFolder);
+
+  const handleCreate = async () => {
+    if (!newName.trim()) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const folderId = await createFolder({ name: newName.trim() });
+    await addToFolder({ courseId, folderId: folderId as any });
+    setNewName('');
+    onClose();
+  };
+
+  const handleSelect = async (folderId: Id<'folders'> | undefined) => {
+    Haptics.selectionAsync();
+    await addToFolder({ courseId, folderId });
+    onClose();
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={FM.backdrop} onPress={onClose} />
+      <View style={[FM.sheet, { backgroundColor: C.surface }]}>
+        <View style={[FM.handle, { backgroundColor: C.border }]} />
+        <Text style={[FM.title, { fontFamily: F.bold, color: C.text }]}>Add to Folder</Text>
+
+        {currentFolderId && (
+          <TouchableOpacity style={FM.removeRow} onPress={() => handleSelect(undefined)}>
+            <Ionicons name="folder-open-outline" size={18} color={C.error} />
+            <Text style={[FM.removeTxt, { color: C.error, fontFamily: F.semiBold }]}>Remove from folder</Text>
+          </TouchableOpacity>
+        )}
+
+        {folders.map((f: any) => {
+          const active = f._id === currentFolderId;
+          return (
+            <TouchableOpacity
+              key={f._id}
+              style={[FM.folderRow, { backgroundColor: C.surfaceAlt, borderColor: active ? C.primary : C.border }]}
+              onPress={() => handleSelect(f._id)}
+            >
+              <Ionicons name="folder-outline" size={18} color={active ? C.primary : C.sub} />
+              <Text style={[FM.folderName, { fontFamily: F.semiBold, color: active ? C.primary : C.sub, flex: 1 }]}>{f.name}</Text>
+              {active && <Ionicons name="checkmark" size={16} color={C.primary} />}
+            </TouchableOpacity>
+          );
+        })}
+
+        <View style={FM.createRow}>
+          <TextInput
+            style={[FM.input, { backgroundColor: C.surfaceAlt, borderColor: C.border, color: C.text, fontFamily: F.regular }]}
+            placeholder="New folder name…"
+            placeholderTextColor={C.muted}
+            value={newName}
+            onChangeText={setNewName}
+            returnKeyType="done"
+            onSubmitEditing={handleCreate}
+          />
+          <TouchableOpacity
+            style={[FM.createBtn, { backgroundColor: C.primary, opacity: newName.trim() ? 1 : 0.4 }]}
+            onPress={handleCreate}
+            disabled={!newName.trim()}
+          >
+            <Ionicons name="add" size={20} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const FM = StyleSheet.create({
+  backdrop:   { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
+  sheet:      { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingBottom: 40, paddingTop: 12, gap: 8 },
+  handle:     { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 8 },
+  title:      { fontSize: 17, marginBottom: 4 },
+  removeRow:  { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, paddingHorizontal: 4 },
+  removeTxt:  { fontSize: 14 },
+  folderRow:  { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 13, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1 },
+  folderName: {},
+  createRow:  { flexDirection: 'row', gap: 8, marginTop: 4 },
+  input:      { flex: 1, borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14 },
+  createBtn:  { width: 46, height: 46, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+});
+
+// ── Main screen ───────────────────────────────────────────────────────────────
+
+export default function CourseDetailScreen({
+  courseId, onBack, onOpenFlashcards, onOpenQuiz, onOpenDiagram, onOpenPdf,
+}: Props) {
   const insets = useSafeAreaInsets();
-  const { C, fs, F } = useTheme();
+  const { C, fs, F, isDark } = useTheme();
 
-  const course  = useQuery(api.courses.get, { courseId }) as any;
+  const course     = useQuery(api.courses.get, { courseId }) as any;
   const rawLessons = useQuery(api.courses.getLessons, { courseId });
-  const lessons = (rawLessons ?? []) as any[];
+  const lessons    = (rawLessons ?? []) as any[];
+  const pdfUrl     = useQuery(api.courses.getPdfUrl, { courseId });
 
-  const completed   = lessons.filter((l) => l.completed).length;
-  const total       = lessons.length || course?.totalLessons || 0;
-  const pct         = total > 0 ? completed / total : 0;
-  const allDone     = total > 0 && completed === total;
-  const nextLesson  = lessons.find((l) => !l.completed);
-  const hasStarted  = completed > 0;
+  const generateQuiz    = useAction(api.ai.generateQuizForCourse);
+  const generateDiagram = useAction(api.ai.generateDiagramForCourse);
 
-  const { emoji, color } = topicColor(course?.title ?? '');
-  const diffColor = DIFFICULTY_COLOR[course?.difficulty ?? ''] ?? C.primary;
+  const [showFolder, setShowFolder]             = useState(false);
+  const [generatingQuiz, setGeneratingQuiz]     = useState(false);
+  const [generatingDiagram, setGeneratingDiagram] = useState(false);
+  const [quizReady, setQuizReady]               = useState(false);
 
-  const isLoading = course === undefined || rawLessons === undefined;
+  const isLoading    = course === undefined || rawLessons === undefined;
+  const isGenerating = course?.status === 'generating';
 
-  if (isLoading) {
-    return <SkeletonLoader C={C} insets={insets} onBack={onBack} />;
-  }
+  useEffect(() => {
+    if (quizReady && allQuiz > 0) {
+      setQuizReady(false);
+      onOpenQuiz();
+    }
+  }, [quizReady, allQuiz]);
+
+  const allCards   = lessons.reduce((n: number, l: any) => n + (l.flashcards?.length ?? 0), 0);
+  const allQuiz    = lessons.reduce((n: number, l: any) => n + (l.quiz?.length ?? 0), 0);
+  const hasDiagram = lessons.some((l: any) => l.diagram);
+
+  const dateStr = course?._creationTime
+    ? new Date(course._creationTime).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+    : '';
+
+  const allContent = lessons.flatMap((l: any) =>
+    (l.content ?? []).map((s: any) => ({ heading: s.heading, body: s.body }))
+  );
+
+  const handleGenerateQuiz = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setGeneratingQuiz(true);
+    try {
+      await generateQuiz({ courseId });
+      setQuizReady(true);
+    } catch (err: any) {
+      const msg = err?.data?.message ?? err?.message ?? '';
+      Toast.show({ type: 'error', text1: 'Quiz generation failed', text2: msg || 'Try again', visibilityTime: 4000 });
+    } finally {
+      setGeneratingQuiz(false);
+    }
+  };
+
+  const handleGenerateDiagram = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setGeneratingDiagram(true);
+    try {
+      await generateDiagram({ courseId });
+      onOpenDiagram();
+    } catch (err: any) {
+      const msg = err?.data?.message ?? err?.message ?? '';
+      Toast.show({ type: 'error', text1: 'Mind map generation failed', text2: msg || 'Try again', visibilityTime: 4000 });
+    } finally {
+      setGeneratingDiagram(false);
+    }
+  };
+
+  if (isLoading) return <Skeleton C={C} onBack={onBack} />;
+
+  // Tile color sets — hand-picked per mode with Duo shadow color
+  const flash = isDark
+    ? { bg: '#0D1F3C', color: '#60A5FA', border: '#1B3460', shadow: '#060E1E' }
+    : { bg: '#DBEAFE', color: '#1D4ED8', border: '#93C5FD', shadow: '#93C5FD' };
+  const quiz = isDark
+    ? { bg: '#2A0A14', color: '#FB7185', border: '#5A1525', shadow: '#150408' }
+    : { bg: '#FFE4E6', color: '#BE123C', border: '#FCA5A5', shadow: '#FCA5A5' };
+  const mindmap = isDark
+    ? { bg: '#1C1200', color: '#FCD34D', border: '#3A2600', shadow: '#0E0900' }
+    : { bg: '#FEF9C3', color: '#92400E', border: '#FDE68A', shadow: '#FDE68A' };
+  const pdf = isDark
+    ? { bg: '#041F1A', color: '#34D399', border: '#0A4035', shadow: '#020F0D' }
+    : { bg: '#D1FAE5', color: '#065F46', border: '#6EE7B7', shadow: '#6EE7B7' };
 
   return (
     <View style={[S.root, { backgroundColor: C.bg, paddingTop: insets.top }]}>
-      {/* ── Header ── */}
-      <View style={[S.header, { borderBottomColor: C.border }]}>
+
+      {/* Header */}
+      <View style={[S.headerBar, { borderBottomColor: C.border }]}>
         <TouchableOpacity
-          style={[S.backBtn, { backgroundColor: C.surfaceAlt, borderColor: C.border }]}
+          style={[S.iconBtn, { backgroundColor: C.surfaceAlt }]}
           onPress={() => { Haptics.selectionAsync(); onBack(); }}
-          activeOpacity={0.7}
         >
           <Ionicons name="arrow-back" size={19} color={C.muted} />
         </TouchableOpacity>
-        <Text style={[S.headerTitle, { fontFamily: F.semiBold, fontSize: fs(16), color: C.text }]} numberOfLines={1}>
-          {course?.title}
-        </Text>
-      </View>
-
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: 120 }}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* ── Hero ── */}
-        <Animated.View entering={FadeInDown.duration(260)} style={[S.hero, { backgroundColor: C.surface, borderBottomColor: C.border }]}>
-          <View style={[S.heroIcon, { backgroundColor: `${color}14`, borderColor: `${color}28` }]}>
-            <Text style={{ fontSize: 40 }}>{emoji}</Text>
-          </View>
-
-          <Text style={[S.heroTitle, { fontFamily: F.bold, fontSize: fs(22), color: C.text }]}>
-            {course?.title}
-          </Text>
-
-          {/* Badges row */}
-          <View style={S.badgeRow}>
-            {course?.difficulty && (
-              <View style={[S.badge, { backgroundColor: `${diffColor}14`, borderColor: `${diffColor}30` }]}>
-                <Ionicons name="bar-chart-outline" size={11} color={diffColor} />
-                <Text style={[S.badgeTxt, { fontFamily: F.semiBold, fontSize: fs(11), color: diffColor }]}>
-                  {course.difficulty.charAt(0).toUpperCase() + course.difficulty.slice(1)}
-                </Text>
-              </View>
-            )}
-            <View style={[S.badge, { backgroundColor: `${color}14`, borderColor: `${color}30` }]}>
-              <Ionicons name="layers-outline" size={11} color={color} />
-              <Text style={[S.badgeTxt, { fontFamily: F.semiBold, fontSize: fs(11), color }]}>
-                {total} lesson{total !== 1 ? 's' : ''}
-              </Text>
-            </View>
-            {allDone && (
-              <View style={[S.badge, { backgroundColor: `${C.success}14`, borderColor: `${C.success}30` }]}>
-                <Ionicons name="checkmark-circle" size={11} color={C.success} />
-                <Text style={[S.badgeTxt, { fontFamily: F.semiBold, fontSize: fs(11), color: C.success }]}>
-                  Complete
-                </Text>
-              </View>
-            )}
-          </View>
-
-          {/* Progress */}
-          {total > 0 && (
-            <View style={S.progressWrap}>
-              <View style={[S.progressBg, { backgroundColor: C.border }]}>
-                <View style={[S.progressFill, { width: `${Math.round(pct * 100)}%` as any, backgroundColor: allDone ? C.success : C.primary }]} />
-              </View>
-              <Text style={[S.progressTxt, { fontFamily: F.medium, fontSize: fs(12), color: C.muted }]}>
-                {completed} of {total} lessons complete
-              </Text>
-            </View>
-          )}
-        </Animated.View>
-
-        {/* ── Lesson list ── */}
-        {lessons.length > 0 && (
-          <Animated.View entering={FadeInDown.delay(80).duration(260)} style={S.section}>
-            <Text style={[S.sectionCap, { fontFamily: F.extraBold, fontSize: fs(10), color: C.muted }]}>
-              LESSONS
-            </Text>
-            <View style={[S.lessonList, { backgroundColor: C.surface, borderColor: C.border }]}>
-              {lessons.map((lesson: any, idx: number) => {
-                const isNext   = lesson._id === nextLesson?._id;
-                const isDone   = lesson.completed;
-                const isLocked = !isDone && !isNext && idx > 0 && !lessons[idx - 1]?.completed;
-
-                return (
-                  <TouchableOpacity
-                    key={lesson._id}
-                    style={[
-                      S.lessonRow,
-                      idx < lessons.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
-                    ]}
-                    activeOpacity={0.75}
-                    onPress={() => { Haptics.selectionAsync(); onStartLesson(); }}
-                  >
-                    {/* Number / status icon */}
-                    <View style={[
-                      S.lessonBullet,
-                      isDone  && { backgroundColor: `${C.success}18`, borderColor: `${C.success}35` },
-                      isNext  && { backgroundColor: `${C.primary}18`, borderColor: `${C.primary}35` },
-                      !isDone && !isNext && { backgroundColor: C.surfaceAlt, borderColor: C.border },
-                    ]}>
-                      {isDone ? (
-                        <Ionicons name="checkmark" size={14} color={C.success} />
-                      ) : (
-                        <Text style={[S.lessonNum, { fontFamily: F.bold, fontSize: fs(11), color: isNext ? C.primary : C.muted }]}>
-                          {idx + 1}
-                        </Text>
-                      )}
-                    </View>
-
-                    {/* Title + key concept */}
-                    <View style={{ flex: 1, gap: 2 }}>
-                      <Text style={[S.lessonTitle, {
-                        fontFamily: isNext ? F.semiBold : F.medium,
-                        fontSize: fs(14),
-                        color: isDone ? C.muted : isNext ? C.text : C.sub,
-                        textDecorationLine: isDone ? 'line-through' : 'none',
-                      }]} numberOfLines={2}>
-                        {lesson.title}
-                      </Text>
-                      {lesson.keyConcept ? (
-                        <Text style={[{ fontFamily: F.regular, fontSize: fs(11), color: C.muted }]} numberOfLines={1}>
-                          {lesson.keyConcept}
-                        </Text>
-                      ) : null}
-                    </View>
-
-                    {/* Right indicator */}
-                    {isNext && (
-                      <View style={[S.nextPill, { backgroundColor: `${C.primary}14` }]}>
-                        <Text style={[{ fontFamily: F.extraBold, fontSize: fs(9), color: C.primary, letterSpacing: 0.5 }]}>
-                          UP NEXT
-                        </Text>
-                      </View>
-                    )}
-                    {isDone && <Ionicons name="checkmark-circle" size={16} color={C.success} />}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </Animated.View>
-        )}
-      </ScrollView>
-
-      {/* ── Sticky CTA ── */}
-      <View style={[S.footer, { backgroundColor: C.bg, borderTopColor: C.border, paddingBottom: insets.bottom + Spacing.md }]}>
-        <TouchableOpacity
-          style={[S.ctaBtn, { backgroundColor: allDone ? C.success : C.primary }]}
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onStartLesson(); }}
-          activeOpacity={0.88}
-        >
-          <Ionicons
-            name={allDone ? 'refresh-outline' : hasStarted ? 'play' : 'play'}
-            size={18}
-            color="#fff"
-          />
-          <Text style={[S.ctaTxt, { fontFamily: F.bold, fontSize: fs(16) }]}>
-            {allDone ? 'Review Course' : hasStarted ? 'Continue Learning' : 'Start Learning'}
-          </Text>
+        <Text style={[S.headerEmoji]}>{topicEmoji(course?.title ?? '')}</Text>
+        <TouchableOpacity style={[S.iconBtn, { backgroundColor: C.surfaceAlt }]}>
+          <Ionicons name="ellipsis-horizontal" size={18} color={C.muted} />
         </TouchableOpacity>
       </View>
+
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={[S.scroll, { paddingBottom: insets.bottom + 100 }]} showsVerticalScrollIndicator={false}>
+
+        {/* Title block */}
+        <Animated.View entering={FadeInDown.duration(240)} style={{ gap: 10 }}>
+          <Text style={[S.title, { color: C.text }]}>{course?.title}</Text>
+          <View style={S.metaRow}>
+            <Text style={[S.metaDate, { color: C.muted, fontFamily: F.regular }]}>{dateStr}</Text>
+            <TouchableOpacity
+              style={[S.folderChip, { backgroundColor: C.primaryBg, borderColor: C.primaryRing }]}
+              onPress={() => { Haptics.selectionAsync(); setShowFolder(true); }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="folder-outline" size={13} color={C.primary} />
+              <Text style={[S.folderChipTxt, { color: C.primary, fontFamily: F.semiBold }]}>
+                {course?.folderId ? 'In Folder' : 'Add to Folder'}
+              </Text>
+              <Ionicons name="chevron-down" size={11} color={C.primary} />
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+
+        {/* Memory Practice */}
+        <Animated.View entering={FadeInDown.delay(50).duration(240)} style={S.section}>
+          <SectionHead label="Memory Practice" C={C} />
+          <View style={S.tileRow}>
+            <Tile
+              icon="albums-outline"
+              label="Flashcards"
+              sublabel={allCards > 0 ? `${allCards} cards` : 'None yet'}
+              bg={flash.bg} color={flash.color} border={flash.border} shadow={flash.shadow}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onOpenFlashcards(); }}
+              disabled={allCards === 0}
+              C={C}
+            />
+            <Tile
+              icon="clipboard-outline"
+              label="Quiz"
+              sublabel={allQuiz > 0 ? `${allQuiz} questions` : 'Tap to generate'}
+              bg={quiz.bg} color={quiz.color} border={quiz.border} shadow={quiz.shadow}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                if (allQuiz > 0) onOpenQuiz(); else handleGenerateQuiz();
+              }}
+              loading={generatingQuiz}
+              C={C}
+            />
+          </View>
+        </Animated.View>
+
+        {/* Visual */}
+        <Animated.View entering={FadeInDown.delay(90).duration(240)} style={S.section}>
+          <SectionHead label="Visual" C={C} />
+          <View style={S.tileRow}>
+            <Tile
+              icon="git-network-outline"
+              label="Mind Map"
+              sublabel={generatingDiagram ? 'Generating…' : hasDiagram ? 'Tap to explore' : 'Tap to generate'}
+              bg={mindmap.bg} color={mindmap.color} border={mindmap.border} shadow={mindmap.shadow}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                if (hasDiagram) onOpenDiagram(); else handleGenerateDiagram();
+              }}
+              disabled={generatingDiagram}
+              loading={generatingDiagram}
+              C={C}
+            />
+            <Tile
+              icon="document-text-outline"
+              label="PDF Preview"
+              sublabel={pdfUrl ? 'View source' : 'No PDF'}
+              bg={pdfUrl ? pdf.bg : C.surfaceAlt}
+              color={pdfUrl ? pdf.color : C.muted}
+              border={pdfUrl ? pdf.border : C.border}
+              shadow={pdfUrl ? pdf.shadow : C.border}
+              onPress={pdfUrl ? () => { Haptics.selectionAsync(); onOpenPdf?.(pdfUrl, course?.title ?? 'PDF'); } : undefined}
+              disabled={!pdfUrl}
+              C={C}
+            />
+          </View>
+        </Animated.View>
+
+        {/* Actions — coming soon */}
+        {/* <Animated.View entering={FadeInDown.delay(130).duration(240)} style={S.section}>
+          <SectionHead label="Actions" icon="compass-outline" iconColor={C.primary} C={C} />
+          <View style={{ gap: 8 }}>
+            <Tile emoji="🌐" label="Translate"  sublabel="Coming soon" bg={purpleTileBg} color={C.primary} border={purpleBorder} disabled C={C} />
+            <Tile emoji="✏️" label="Edit Notes" sublabel="Coming soon" bg={purpleTileBg} color={C.primary} border={purpleBorder} disabled C={C} />
+          </View>
+        </Animated.View> */}
+
+        {/* Smart Notes */}
+        <Animated.View entering={FadeInDown.delay(170).duration(240)} style={S.section}>
+          <Text style={[SH.label, { color: C.text }]}>Smart Notes</Text>
+
+          <View style={[S.notesCard, { backgroundColor: C.surface, borderColor: C.border }]}>
+            <Text style={[S.notesTitle, { color: C.primary, fontFamily: F.bold }]}>{course?.title}</Text>
+            {course?.description ? (
+              <Text style={[S.notesSub, { color: C.sub, fontFamily: F.regular }]}>{course.description}</Text>
+            ) : null}
+            {lessons[0]?.keyConcept ? (
+              <Text style={[S.notesSub, { color: C.muted, fontFamily: F.regular, fontStyle: 'italic', marginTop: 2 }]}>
+                {lessons[0].keyConcept}
+              </Text>
+            ) : null}
+
+            <View style={[S.notesDivider, { backgroundColor: C.border }]} />
+
+            {isGenerating && (
+              <View style={{ alignItems: 'center', paddingVertical: 28, gap: 10 }}>
+                <Text style={{ fontSize: 34 }}>⏳</Text>
+                <Text style={[{ fontSize: 14, fontFamily: F.semiBold, color: C.muted }]}>Notes are being generated…</Text>
+              </View>
+            )}
+
+            {!isGenerating && allContent.length === 0 && (
+              <View style={{ alignItems: 'center', paddingVertical: 28, gap: 10 }}>
+                <Text style={{ fontSize: 34 }}>📄</Text>
+                <Text style={[{ fontSize: 14, fontFamily: F.semiBold, color: C.muted }]}>No notes yet</Text>
+              </View>
+            )}
+
+            {allContent.map((s: any, i: number) => (
+              <View key={i} style={i > 0 ? { marginTop: 16 } : undefined}>
+                {s.heading ? (
+                  <Text style={[S.notesHeading, { color: C.text, fontFamily: F.semiBold }]}>{s.heading}</Text>
+                ) : null}
+                <Text style={[S.notesBody, { color: C.sub, fontFamily: F.regular }]}>{s.body}</Text>
+              </View>
+            ))}
+          </View>
+        </Animated.View>
+
+      </ScrollView>
+
+      {/* Sticky bottom bar — Duo-style shadow CTAs */}
+      <View style={[S.bottomBar, { backgroundColor: C.bg, borderTopColor: C.border, paddingBottom: insets.bottom + 8 }]}>
+        {/* Ask AI */}
+        <View style={S.duoWrap}>
+          <View style={[S.duoShadow, { backgroundColor: C.text }]} />
+          <View style={[S.duoBtn, { backgroundColor: C.surface, borderWidth: 1.5, borderColor: C.text, transform: [{ translateY: -4 }] }]}>
+            <Text style={{ fontSize: 18 }}>🐼</Text>
+            <Text style={[S.duoBtnTxt, { fontFamily: F.bold, color: C.text }]}>Ask AI</Text>
+            <View style={S.soonTag}><Text style={S.soonTagTxt}>Soon</Text></View>
+          </View>
+        </View>
+        {/* Feynman */}
+        <View style={S.duoWrap}>
+          <View style={[S.duoShadow, { backgroundColor: C.text }]} />
+          <View style={[S.duoBtn, { backgroundColor: C.surface, borderWidth: 1.5, borderColor: C.text, transform: [{ translateY: -4 }] }]}>
+            <Text style={{ fontSize: 18 }}>🐷</Text>
+            <Text style={[S.duoBtnTxt, { fontFamily: F.bold, color: C.text }]}>Feynman</Text>
+            <View style={S.soonTag}><Text style={S.soonTagTxt}>Soon</Text></View>
+          </View>
+        </View>
+      </View>
+
+      <FolderModal
+        visible={showFolder}
+        onClose={() => setShowFolder(false)}
+        courseId={courseId}
+        currentFolderId={course?.folderId}
+        C={C} F={F} fs={fs}
+      />
     </View>
   );
 }
 
 const S = StyleSheet.create({
-  root: { flex: 1 },
+  root:       { flex: 1 },
 
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: 12,
+  headerBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: Spacing.lg, paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  backBtn: {
-    width: 36, height: 36, borderRadius: 11,
-    borderWidth: StyleSheet.hairlineWidth,
-    justifyContent: 'center', alignItems: 'center',
-  },
-  headerTitle: { flex: 1 },
+  iconBtn:     { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
+  headerEmoji: { fontSize: 20 },
 
-  hero: {
-    alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.xl,
-    paddingBottom: Spacing.lg,
-    gap: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  heroIcon: {
-    width: 88, height: 88, borderRadius: 24,
-    borderWidth: 1,
-    justifyContent: 'center', alignItems: 'center',
-    marginBottom: 4,
-  },
-  heroTitle: { textAlign: 'center', lineHeight: 30 },
+  scroll: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg, gap: Spacing.lg },
 
-  badgeRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', justifyContent: 'center' },
-  badge: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  badgeTxt: {},
+  title:       { fontSize: 26, fontFamily: 'Nunito-ExtraBold', lineHeight: 34 },
+  metaRow:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  metaDate:    { fontSize: 12 },
+  folderChip:  { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 20, borderWidth: 1.5, paddingHorizontal: 12, paddingVertical: 6 },
+  folderChipTxt: { fontSize: 12 },
 
-  progressWrap: { width: '100%', gap: 6 },
-  progressBg: { height: 6, borderRadius: 3, overflow: 'hidden' },
-  progressFill: { height: '100%', borderRadius: 3 },
-  progressTxt: { textAlign: 'center' },
+  section:      { gap: 10 },
+  tileRow:      { flexDirection: 'row', gap: 10 },
 
-  section: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg, gap: Spacing.sm },
-  sectionCap: { letterSpacing: 1.4, paddingHorizontal: 2 },
+  notesCard:    { borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: 16 },
+  notesTitle:   { fontSize: 18, lineHeight: 26, marginBottom: 6 },
+  notesSub:     { fontSize: 13, lineHeight: 20 },
+  notesDivider: { height: StyleSheet.hairlineWidth, marginVertical: 14 },
+  notesHeading: { fontSize: 14, lineHeight: 20, marginBottom: 4 },
+  notesBody:    { fontSize: 13, lineHeight: 21 },
 
-  lessonList: {
-    borderRadius: 18,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
-  },
-  lessonRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 13,
-    gap: 12,
-  },
-  lessonBullet: {
-    width: 34, height: 34, borderRadius: 10,
-    borderWidth: 1,
-    justifyContent: 'center', alignItems: 'center',
-  },
-  lessonNum: {},
-  lessonTitle: { lineHeight: 19 },
-  nextPill: {
-    borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3,
-  },
+  bottomBar:    { flexDirection: 'row', gap: 10, paddingHorizontal: Spacing.lg, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
+  bottomBtn:    { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 50, borderRadius: 14 },
+  bottomBtnTxt: { fontSize: 15 },
 
-  footer: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  ctaBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    height: 54,
-    borderRadius: 16,
-  },
-  ctaTxt: { color: '#fff' },
-
-  skeletonHero: { width: 88, height: 88, borderRadius: 24 },
-  skeletonLine: { height: 14, borderRadius: 7 },
+  duoWrap:   { flex: 1, borderRadius: 14, marginBottom: 4 },
+  duoShadow: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 50, borderRadius: 14 },
+  duoBtn:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 50, borderRadius: 14 },
+  duoBtnTxt: { fontSize: 15, color: '#fff' },
+  soonTag:   { position: 'absolute', top: -6, right: 8, backgroundColor: 'rgba(0,0,0,0.35)', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
+  soonTagTxt:{ fontSize: 9, fontFamily: 'Nunito-Bold', color: '#fff', letterSpacing: 0.5 },
 });

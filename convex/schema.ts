@@ -5,6 +5,12 @@ import { authTables } from "@convex-dev/auth/server";
 export default defineSchema({
   ...authTables,
 
+  folders: defineTable({
+    userId: v.id("users"),
+    name: v.string(),
+    createdAt: v.number(),
+  }).index("by_user", ["userId"]),
+
   // Exam groups (e.g. "Bar Exam — MBE", "USMLE Step 1")
   groups: defineTable({
     name: v.string(),
@@ -39,6 +45,8 @@ export default defineSchema({
     sort_order: v.optional(v.number()),
     tags: v.optional(v.array(v.string())),
     completedLessons: v.optional(v.number()),
+    folderId: v.optional(v.id("folders")),
+    pdfStorageId: v.optional(v.id("_storage")),
   })
     .index("by_user", ["userId"])
     .index("by_published", ["published"])

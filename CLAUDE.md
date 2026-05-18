@@ -51,6 +51,13 @@ Zustand store at `store/useAppStore.ts` holds the entire app state:
 ### Key Notes
 
 - `hooks/` and `lib/` directories exist but are empty — reserved for future use
-- No backend integration yet; AI document parsing is not implemented
 - Portrait-only orientation enforced in `app.json`
 - Strict TypeScript enabled (`strict: true`)
+
+### Goal / Blocking Model
+
+- App blocks selected apps until the user completes their daily study session
+- **Duration-based**: the primary metric is `blockDurationHours` (from Zustand store), not a raw lesson count — do not show lesson-count badges on the home screen hero cards
+- `GoalConfig.lessonTarget` is still stored and used for `MissionCard` progress tracking but is secondary to duration
+- Home screen shows **2 gradient hero cards** (salmon = goal status, indigo = continue course) — no third card
+- "No apps blocked" banner taps through to `goalsetup` flow via `setFlow('goalsetup')`

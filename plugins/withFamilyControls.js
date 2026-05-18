@@ -11,7 +11,7 @@ const fs = require('fs');
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const kAppGroup = 'group.com.loqlearn.app';
-const kExtBundleId = 'com.sauceman122233.islamiyaunlock';
+const kExtBundleId = 'com.loqlearn.app.monitor';
 const kExtName = 'UnloqMonitor';
 
 // ─── Swift / ObjC source content ─────────────────────────────────────────────

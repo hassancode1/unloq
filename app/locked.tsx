@@ -1,128 +1,135 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+import Animated, {
+  FadeInDown,
+  FadeInUp,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../hooks/useTheme';
 import { useAppStore } from '../store/useAppStore';
 import { Spacing } from '../constants/spacing';
-import { hasSelection } from '../lib/familyControls';
-
 
 export default function LockedScreen() {
   const { C, F, fs } = useTheme();
   const insets = useSafeAreaInsets();
-  const { setFlow, goalConfig, dailyProgress } = useAppStore();
+  const { setFlow, blockDurationHours } = useAppStore();
 
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const todayDone = dailyProgress.date === todayStr ? dailyProgress.count : 0;
-  const target = goalConfig?.lessonTarget ?? 1;
-  const remaining = Math.max(0, target - todayDone);
+  // Pulsing glow rings
+  const outerScale = useSharedValue(1);
+  const innerScale = useSharedValue(1);
+  // Progress bar fill
+  const barWidth = useSharedValue(0);
+  // Button press scale
+  const btnScale = useSharedValue(1);
 
-  const [appsSelected, setAppsSelected] = useState(true);
   useEffect(() => {
-    hasSelection().then(setAppsSelected).catch(() => setAppsSelected(true));
+    outerScale.value = withRepeat(
+      withSequence(withTiming(1.18, { duration: 1600 }), withTiming(1, { duration: 1600 })),
+      -1, true,
+    );
+    innerScale.value = withRepeat(
+      withSequence(withTiming(1.10, { duration: 1200 }), withTiming(1, { duration: 1200 })),
+      -1, true,
+    );
+    barWidth.value = withTiming(0.65, { duration: 1800 });
   }, []);
+
+  const outerGlowStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: outerScale.value }],
+    opacity: 0.12 + (outerScale.value - 1) * 0.3,
+  }));
+  const innerGlowStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: innerScale.value }],
+    opacity: 0.18 + (innerScale.value - 1) * 0.4,
+  }));
+  const barStyle = useAnimatedStyle(() => ({
+    width: `${barWidth.value * 100}%` as any,
+  }));
+  const btnStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: btnScale.value }],
+  }));
 
   const handleStudyNow = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setFlow('home');
   };
 
-  const handleAddApps = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setFlow('goalsetup');
-  };
-
   return (
     <View style={[S.root, { backgroundColor: C.bg, paddingTop: insets.top, paddingBottom: insets.bottom }]}>
-      <Animated.View entering={FadeInUp.duration(400)} style={S.iconWrap}>
-        <View style={[S.lockCircle, { backgroundColor: `${appsSelected ? C.primary : C.muted}14`, borderColor: `${appsSelected ? C.primary : C.muted}28` }]}>
-          <Text style={S.lockEmoji}>{appsSelected ? '🔒' : '📱'}</Text>
-        </View>
+
+      {/* ── Glow rings + lock icon ── */}
+      <Animated.View entering={FadeInUp.duration(500)} style={S.iconArea}>
+        <Animated.View style={[S.outerGlow, { backgroundColor: C.primary }, outerGlowStyle]} />
+        <Animated.View style={[S.innerGlow, { backgroundColor: C.primary }, innerGlowStyle]} />
+        <LinearGradient
+          colors={['#667eea', '#764ba2']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={S.lockGradient}
+        >
+          <Ionicons name="lock-closed" size={38} color="#fff" />
+        </LinearGradient>
       </Animated.View>
 
-      {appsSelected ? (
-        <>
-          <Animated.View entering={FadeInDown.duration(400)} style={S.content}>
-            <Text style={[S.title, { fontFamily: F.extraBold, fontSize: fs(28), color: C.text }]}>
-              Apps are locked
-            </Text>
-            <Text style={[S.sub, { fontFamily: F.regular, fontSize: fs(15), color: C.sub }]}>
-              Complete{' '}
-              <Text style={{ fontFamily: F.bold, color: C.primary }}>
-                {remaining} more lesson{remaining !== 1 ? 's' : ''}
-              </Text>
-              {' '}to unlock your day
-            </Text>
+      {/* ── Content card ── */}
+      <Animated.View
+        entering={FadeInDown.delay(60).duration(460)}
+        style={[S.card, { backgroundColor: C.surface, borderColor: C.border }]}
+      >
+        <Text style={[S.title, { fontFamily: F.extraBold, fontSize: fs(26), color: C.text }]}>
+          Your apps are locked
+        </Text>
+        <Text style={[S.sub, { fontFamily: F.regular, fontSize: fs(15), color: C.sub }]}>
+          You committed to{' '}
+          <Text style={{ fontFamily: F.bold, color: C.primary }}>
+            {blockDurationHours === 0.5 ? '30 mins' : `${blockDurationHours}h`} of focused study
+          </Text>
+          {' '}today. Complete your session to unlock.
+        </Text>
 
-            {target > 0 && (
-              <View style={S.pipRow}>
-                {Array.from({ length: target }, (_, i) => (
-                  <View
-                    key={i}
-                    style={[
-                      S.pip,
-                      { backgroundColor: `${C.primary}28`, borderColor: `${C.primary}45` },
-                      i < todayDone && { backgroundColor: C.primary, borderColor: C.primary },
-                    ]}
-                  />
-                ))}
-              </View>
-            )}
+        {/* Progress bar */}
+        <View style={[S.trackBg, { backgroundColor: `${C.primary}18` }]}>
+          <Animated.View style={[S.trackFill, { backgroundColor: C.primary }, barStyle]} />
+        </View>
+        <Text style={[S.trackLabel, { fontFamily: F.semiBold, fontSize: fs(12), color: C.muted }]}>
+          Session in progress
+        </Text>
+      </Animated.View>
 
-            <Text style={[S.progress, { fontFamily: F.semiBold, fontSize: fs(13), color: C.muted }]}>
-              {todayDone} / {target} lessons done today
+      {/* ── CTA button ── */}
+      <Animated.View
+        entering={FadeInDown.delay(180).duration(460)}
+        style={[S.footer, { paddingBottom: Math.max(insets.bottom, Spacing.xl) }, btnStyle]}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          onPressIn={() => { btnScale.value = withSpring(0.97, { damping: 12 }); }}
+          onPressOut={() => { btnScale.value = withSpring(1, { damping: 12 }); }}
+          onPress={handleStudyNow}
+        >
+          <LinearGradient
+            colors={['#667eea', '#764ba2']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={S.btn}
+          >
+            <Text style={[S.btnTxt, { fontFamily: F.bold, fontSize: fs(16) }]}>
+              Start Studying
             </Text>
-          </Animated.View>
+            <Ionicons name="arrow-forward" size={18} color="#fff" />
+          </LinearGradient>
+        </TouchableOpacity>
+      </Animated.View>
 
-          <Animated.View entering={FadeInDown.delay(120).duration(400)} style={[S.footer, { paddingBottom: Math.max(insets.bottom, Spacing.xl) }]}>
-            <TouchableOpacity
-              style={[S.btn, { backgroundColor: C.primary }]}
-              activeOpacity={0.85}
-              onPress={handleStudyNow}
-            >
-              <Text style={[S.btnTxt, { fontFamily: F.bold, fontSize: fs(16) }]}>
-                Study Now
-              </Text>
-              <Text style={[S.btnArrow, { fontSize: fs(16) }]}>→</Text>
-            </TouchableOpacity>
-          </Animated.View>
-        </>
-      ) : (
-        <>
-          <Animated.View entering={FadeInDown.duration(400)} style={S.content}>
-            <Text style={[S.title, { fontFamily: F.extraBold, fontSize: fs(28), color: C.text }]}>
-              No Apps Blocked Yet
-            </Text>
-            <Text style={[S.sub, { fontFamily: F.regular, fontSize: fs(15), color: C.sub }]}>
-              Pick apps to block until you complete your lessons each day.
-            </Text>
-          </Animated.View>
-
-          <Animated.View entering={FadeInDown.delay(120).duration(400)} style={[S.footer, { paddingBottom: Math.max(insets.bottom, Spacing.xl), gap: Spacing.sm }]}>
-            <TouchableOpacity
-              style={[S.btn, { backgroundColor: C.primary }]}
-              activeOpacity={0.85}
-              onPress={handleAddApps}
-            >
-              <Text style={[S.btnTxt, { fontFamily: F.bold, fontSize: fs(16) }]}>
-                Add Apps to Block
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[S.btn, { backgroundColor: C.surfaceAlt, borderWidth: 1, borderColor: C.border }]}
-              activeOpacity={0.85}
-              onPress={handleStudyNow}
-            >
-              <Text style={[S.btnTxt, { fontFamily: F.semiBold, fontSize: fs(16), color: C.sub }]}>
-                Study Now
-              </Text>
-              <Text style={[S.btnArrow, { fontSize: fs(16), color: C.sub }]}>→</Text>
-            </TouchableOpacity>
-          </Animated.View>
-        </>
-      )}
     </View>
   );
 }
@@ -132,48 +139,67 @@ const S = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: Spacing.lg,
   },
-  iconWrap: {
-    marginBottom: Spacing.xl,
-  },
-  lockCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 1.5,
+  // Glow rings
+  iconArea: {
+    width: 180,
+    height: 180,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  lockEmoji: {
-    fontSize: 44,
+  outerGlow: {
+    position: 'absolute',
+    width: 180,
+    height: 180,
+    borderRadius: 90,
   },
-  content: {
+  innerGlow: {
+    position: 'absolute',
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+  },
+  lockGradient: {
+    width: 90,
+    height: 90,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Content card
+  card: {
+    width: '88%',
+    borderRadius: 24,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Spacing.lg,
     alignItems: 'center',
     gap: Spacing.sm,
-    paddingHorizontal: Spacing.xl,
   },
   title: {
     textAlign: 'center',
+    lineHeight: 32,
   },
   sub: {
     textAlign: 'center',
     lineHeight: 22,
-    marginTop: Spacing.xs,
+    marginTop: 2,
   },
-  pipRow: {
-    flexDirection: 'row',
-    gap: 6,
+  trackBg: {
+    width: '100%',
+    height: 4,
+    borderRadius: 2,
+    overflow: 'hidden',
     marginTop: Spacing.md,
   },
-  pip: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    borderWidth: 1.5,
+  trackFill: {
+    height: '100%',
+    borderRadius: 2,
   },
-  progress: {
-    marginTop: Spacing.xs,
+  trackLabel: {
+    letterSpacing: 0.4,
   },
+  // Button
   footer: {
     position: 'absolute',
     bottom: 0,
@@ -186,13 +212,10 @@ const S = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.sm,
-    borderRadius: 16,
-    paddingVertical: Spacing.md,
+    borderRadius: 18,
+    paddingVertical: 18,
   },
   btnTxt: {
-    color: '#fff',
-  },
-  btnArrow: {
     color: '#fff',
   },
 });

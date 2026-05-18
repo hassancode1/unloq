@@ -18,10 +18,8 @@ import Reanimated, {
   withRepeat,
   withTiming,
   withSpring,
-  withDelay,
   FadeIn,
   Easing,
-  runOnJS,
 } from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -37,7 +35,7 @@ const GREEN      = '#16A34A';
 const PRIMARY_DEEP = '#4338CA'; // shadow for DuoButton
 
 type ScreenView = 'list' | 'article' | 'diagram' | 'flashcards' | 'quiz';
-type Props = { courseId: Id<'courses'>; onBack: () => void };
+type Props = { courseId: Id<'courses'>; onBack: () => void; initialView?: 'flashcards' | 'quiz' | 'diagram' };
 
 // ── Duo-style button ──────────────────────────────────────────────────────────
 
@@ -174,6 +172,8 @@ const ar = StyleSheet.create({
 // ── Flashcard view ────────────────────────────────────────────────────────────
 // One card at a time, centred, tap-to-flip
 
+const SWIPE_THRESHOLD = 100;
+
 function FlashcardView({
   lesson, onFinish, C, fs, F,
 }: {
@@ -183,119 +183,161 @@ function FlashcardView({
   const [idx, setIdx]           = useState(0);
   const [showBack, setShowBack] = useState(false);
 
-  // UI-thread shared values — reliably readable/writable from both worklets and JS thread
-  const flipAnim  = useSharedValue(0);    // rotation degrees
-  const isFlipped = useSharedValue(false); // true = back face visible
+  // RN Animated for swipe — kept entirely separate from Reanimated
+  const translateX = useRef(new Animated.Value(0)).current;
 
-  const cardFlipStyle = useAnimatedStyle(() => ({
-    transform: [{ perspective: 900 }, { rotateY: `${flipAnim.value}deg` }],
-  }));
+  const card     = cards[idx];
+  const nextCard = cards[idx + 1];
+  const isLast   = idx === cards.length - 1;
+  const progressPct = cards.length > 0 ? (idx + 1) / cards.length : 0;
 
-  const flip = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const toBack = !isFlipped.value;
-    flipAnim.value = withTiming(90, { duration: 260, easing: Easing.in(Easing.ease) }, (done) => {
-      'worklet';
-      if (!done) return;
-      isFlipped.value = toBack;
-      runOnJS(setShowBack)(toBack);
-      flipAnim.value = -90;
-      flipAnim.value = withSpring(0, { damping: 18, stiffness: 180, overshootClamping: true });
+  // Derived animations
+  const rotate = translateX.interpolate({
+    inputRange: [-300, 0, 300], outputRange: ['-12deg', '0deg', '12deg'],
+  });
+  // Next card scales up as current slides away
+  const nextScale = translateX.interpolate({
+    inputRange: [-SWIPE_THRESHOLD, 0, SWIPE_THRESHOLD],
+    outputRange: [1, 0.93, 1], extrapolate: 'clamp',
+  });
+  // "Know it" label fades in on right swipe, "Again" on left
+  const knowOpacity = translateX.interpolate({
+    inputRange: [20, 80], outputRange: [0, 1], extrapolate: 'clamp',
+  });
+  const againOpacity = translateX.interpolate({
+    inputRange: [-80, -20], outputRange: [1, 0], extrapolate: 'clamp',
+  });
+
+  const advance = (dir: 'left' | 'right') => {
+    Haptics.selectionAsync();
+    const dest = dir === 'right' ? 600 : -600;
+    Animated.timing(translateX, { toValue: dest, duration: 220, useNativeDriver: true }).start(() => {
+      translateX.setValue(0);
+      setShowBack(false);
+      if (isLast) { onFinish(); } else { setIdx(i => i + 1); }
     });
   };
 
-  const next = () => {
-    Haptics.selectionAsync();
-    if (idxRef.current < cards.length - 1) {
-      // Reset flip state synchronously — both shared value and React state
-      isFlipped.value = false;
-      setShowBack(false);
-      flipAnim.value = 0;
-      setIdx(i => i + 1);
-    }
+  const snapBack = () => {
+    Animated.spring(translateX, { toValue: 0, useNativeDriver: true, tension: 120, friction: 8 }).start();
   };
 
-  const prev = () => {
-    Haptics.selectionAsync();
-    if (idxRef.current > 0) {
-      isFlipped.value = false;
-      setShowBack(false);
-      flipAnim.value = 0;
-      setIdx(i => i - 1);
-    }
+  const flip = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setShowBack(b => !b);
   };
 
-  // Refs so the PanResponder (created once) always calls the latest functions
-  const idxRef  = useRef(idx);
-  const flipRef = useRef(flip);
-  const nextRef = useRef(next);
-  const prevRef = useRef(prev);
-  useEffect(() => { idxRef.current = idx; }, [idx]);
-  useEffect(() => { flipRef.current = flip; nextRef.current = next; prevRef.current = prev; });
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 5 || Math.abs(gs.dy) > 5,
-      onPanResponderRelease: (_, gs) => {
-        const { dx, dy } = gs;
-        if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
-          if (dx < 0) nextRef.current();
-          else prevRef.current();
-        } else if (Math.abs(dx) < 12 && Math.abs(dy) < 12) {
-          flipRef.current();
-        }
-      },
-    })
-  ).current;
-
-  const card   = cards[idx];
-  const isLast = idx === cards.length - 1;
+  const panResponder = useRef(PanResponder.create({
+    // Only claim gesture once horizontal movement is clear
+    onMoveShouldSetPanResponder: (_, gs) =>
+      Math.abs(gs.dx) > 8 && Math.abs(gs.dx) > Math.abs(gs.dy),
+    onPanResponderGrant: () => translateX.stopAnimation(),
+    onPanResponderMove: (_, gs) => translateX.setValue(gs.dx),
+    onPanResponderRelease: (_, gs) => {
+      if (gs.dx > SWIPE_THRESHOLD || gs.vx > 0.6)       advance('right');
+      else if (gs.dx < -SWIPE_THRESHOLD || gs.vx < -0.6) advance('left');
+      else snapBack();
+    },
+    onPanResponderTerminate: snapBack,
+  })).current;
 
   return (
     <View style={{ flex: 1 }}>
-      {/* Progress dots */}
-      <View style={fc.dots}>
-        {cards.map((_, i) => (
-          <View key={i} style={[fc.dot, { backgroundColor: i === idx ? C.primary : C.border, width: i === idx ? 20 : 6 }]} />
-        ))}
+
+      {/* ── Progress ── */}
+      <View style={fc.progressWrap}>
+        <View style={[fc.progressTrack, { backgroundColor: C.surfaceAlt }]}>
+          <View style={[fc.progressFill, { width: `${progressPct * 100}%` as any, backgroundColor: C.primary }]} />
+        </View>
+        <Text style={[{ fontFamily: F.semiBold, fontSize: fs(12), color: C.muted }]}>
+          {idx + 1} / {cards.length}
+        </Text>
       </View>
 
-      {/* Card */}
-      <View style={fc.cardWrap}>
-        <Reanimated.View
-          style={[fc.card, { backgroundColor: showBack ? C.primary : C.surface, borderColor: showBack ? C.primary : C.border }, cardFlipStyle]}
+      {/* ── Card stack ── */}
+      <View style={fc.stackArea}>
+
+        {/* Next card — absolutely behind, slightly inset */}
+        {nextCard && (
+          <Animated.View style={[fc.card, fc.nextCard, {
+            backgroundColor: C.surface, borderColor: C.border,
+            transform: [{ scale: nextScale }],
+          }]}>
+            <Text style={[fc.sideLabel, { fontFamily: F.extraBold, fontSize: fs(10), color: C.muted }]}>QUESTION</Text>
+            <Text style={[fc.cardText, { fontFamily: F.semiBold, fontSize: fs(16), color: C.text }]} numberOfLines={4}>
+              {nextCard.front}
+            </Text>
+          </Animated.View>
+        )}
+
+        {/* Current card — absolutely on top, full area */}
+        <Animated.View
+          style={[fc.card, fc.currentCard, {
+            backgroundColor: showBack ? C.text : C.surface,
+            borderColor: showBack ? C.text : C.border,
+            transform: [{ translateX }, { rotate }],
+          }]}
           {...panResponder.panHandlers}
         >
-          <Text style={[fc.side, { fontFamily: F.extraBold, fontSize: fs(10), color: showBack ? 'rgba(255,255,255,0.55)' : C.muted }]}>
-            {showBack ? 'ANSWER' : `CARD ${idx + 1} OF ${cards.length}`}
-          </Text>
-          <Text style={[fc.cardText, { fontFamily: showBack ? F.regular : F.semiBold, fontSize: fs(19), color: showBack ? '#fff' : C.text }]}>
-            {showBack ? card?.back : card?.front}
-          </Text>
-          <Text style={[fc.hint, { fontFamily: F.regular, fontSize: fs(12), color: showBack ? 'rgba(255,255,255,0.45)' : C.muted }]}>
-            Tap to flip · Swipe to navigate
-          </Text>
-        </Reanimated.View>
+          {/* Swipe direction overlays */}
+          <Animated.View style={[fc.swipeTag, fc.swipeTagRight, { opacity: knowOpacity, borderColor: GREEN }]}>
+            <Text style={[fc.swipeTagTxt, { color: GREEN, fontFamily: F.extraBold }]}>KNOW IT</Text>
+          </Animated.View>
+          <Animated.View style={[fc.swipeTag, fc.swipeTagLeft, { opacity: againOpacity, borderColor: '#EF4444' }]}>
+            <Text style={[fc.swipeTagTxt, { color: '#EF4444', fontFamily: F.extraBold }]}>AGAIN</Text>
+          </Animated.View>
+
+          {/* Card content — tap anywhere to flip */}
+          <TouchableOpacity style={fc.cardInner} onPress={flip} activeOpacity={0.97}>
+            <Text style={[fc.sideLabel, { fontFamily: F.extraBold, fontSize: fs(10), color: showBack ? `${C.bg}55` : C.muted }]}>
+              {showBack ? 'ANSWER' : 'QUESTION'}
+            </Text>
+            <Text style={[fc.cardText, { fontFamily: showBack ? F.regular : F.semiBold, fontSize: fs(18), color: showBack ? C.bg : C.text }]}>
+              {showBack ? card?.back : card?.front}
+            </Text>
+            {!showBack && (
+              <View style={[fc.tapPill, { backgroundColor: showBack ? `${C.bg}15` : C.surfaceAlt }]}>
+                <Ionicons name="sync-outline" size={13} color={C.muted} />
+                <Text style={[{ fontFamily: F.semiBold, fontSize: fs(11), color: C.muted }]}>Tap to flip</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </Animated.View>
       </View>
 
-      {/* Nav + action */}
+      {/* ── Swipe guide ── */}
+      <View style={fc.guideRow}>
+        <View style={fc.guideItem}>
+          <Ionicons name="arrow-back" size={14} color={C.muted} />
+          <Text style={[fc.guideTxt, { fontFamily: F.semiBold, fontSize: fs(12), color: C.muted }]}>Again</Text>
+        </View>
+        <Text style={[{ fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>swipe to navigate</Text>
+        <View style={fc.guideItem}>
+          <Text style={[fc.guideTxt, { fontFamily: F.semiBold, fontSize: fs(12), color: C.muted }]}>Know it</Text>
+          <Ionicons name="arrow-forward" size={14} color={C.muted} />
+        </View>
+      </View>
+
+      {/* ── Footer buttons ── */}
       <Footer C={C}>
-        <View style={fc.navRow}>
-          <TouchableOpacity style={[fc.navBtn, { backgroundColor: C.surface, borderColor: C.border, opacity: idx === 0 ? 0.35 : 1 }]} onPress={prev} disabled={idx === 0}>
-            <Ionicons name="chevron-back" size={20} color={C.text} />
+        <View style={fc.actionRow}>
+          <TouchableOpacity
+            style={[fc.actionBtn, { backgroundColor: C.surfaceAlt, borderColor: C.border }]}
+            onPress={() => advance('left')}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="refresh-outline" size={18} color={C.text} />
+            <Text style={[fc.actionLabel, { fontFamily: F.bold, color: C.text, fontSize: fs(14) }]}>Again</Text>
           </TouchableOpacity>
-
-          <View style={{ flex: 1 }}>
-            {isLast ? (
-              <DuoButton label="Continue" color={C.primary} onPress={onFinish} icon={<Ionicons name="arrow-forward" size={18} color="#fff" />} />
-            ) : (
-              <DuoButton label="Next" color={C.primary} onPress={next} icon={<Ionicons name="arrow-forward" size={17} color="#fff" />} />
-            )}
-          </View>
-
-          <TouchableOpacity style={[fc.navBtn, { backgroundColor: C.surface, borderColor: C.border, opacity: isLast ? 0.35 : 1 }]} onPress={next} disabled={isLast}>
-            <Ionicons name="chevron-forward" size={20} color={C.text} />
+          <TouchableOpacity
+            style={[fc.actionBtn, { backgroundColor: C.text, borderColor: C.text }]}
+            onPress={() => advance('right')}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="checkmark" size={18} color={C.bg} />
+            <Text style={[fc.actionLabel, { fontFamily: F.bold, color: C.bg, fontSize: fs(14) }]}>
+              {isLast ? 'Finish' : 'Know it'}
+            </Text>
           </TouchableOpacity>
         </View>
       </Footer>
@@ -304,38 +346,116 @@ function FlashcardView({
 }
 
 const fc = StyleSheet.create({
-  dots:    { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 5, paddingVertical: 14 },
-  dot:     { height: 6, borderRadius: 3 },
-  cardWrap:{ flex: 1, paddingHorizontal: Spacing.lg, justifyContent: 'center' },
-  card:    {
-    borderRadius: 24, borderWidth: 1.5, padding: Spacing.xl,
-    minHeight: 220, justifyContent: 'center', alignItems: 'center', gap: 14,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08, shadowRadius: 16, elevation: 4,
+  progressWrap:  { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: Spacing.lg, paddingTop: 12, paddingBottom: 4 },
+  progressTrack: { flex: 1, height: 4, borderRadius: 2, overflow: 'hidden' },
+  progressFill:  { height: '100%', borderRadius: 2 },
+
+  stackArea:   { flex: 1, marginHorizontal: Spacing.lg, marginVertical: Spacing.sm },
+  card: {
+    position: 'absolute', top: 0, bottom: 0, left: 0, right: 0,
+    borderRadius: 24, borderWidth: StyleSheet.hairlineWidth,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07, shadowRadius: 12, elevation: 3,
   },
-  side:     { letterSpacing: 1.4, textAlign: 'center' },
-  cardText: { textAlign: 'center', lineHeight: 28 },
-  hint:     { textAlign: 'center' },
-  navRow:   { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  navBtn:   { width: 48, height: 52, borderRadius: 14, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
+  nextCard: {
+    top: 10, left: 10, right: 10, bottom: -6,
+    padding: Spacing.xl, alignItems: 'center', justifyContent: 'center', gap: Spacing.md,
+    overflow: 'hidden',
+  },
+  currentCard: {
+    padding: Spacing.xl, overflow: 'hidden',
+    alignItems: 'center', justifyContent: 'center', gap: Spacing.md,
+  },
+  cardInner:   { alignItems: 'center', gap: Spacing.md, width: '100%' },
+  sideLabel:   { letterSpacing: 1.6 },
+  cardText:    { textAlign: 'center', lineHeight: 28, width: '100%' },
+  tapPill:     { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, marginTop: 4 },
+
+  // Swipe direction stamps
+  swipeTag:      { position: 'absolute', top: 20, borderWidth: 2.5, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
+  swipeTagRight: { right: 20, transform: [{ rotate: '12deg' }] },
+  swipeTagLeft:  { left: 20, transform: [{ rotate: '-12deg' }] },
+  swipeTagTxt:   { fontSize: 13, letterSpacing: 1 },
+
+  guideRow:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.lg, paddingBottom: Spacing.sm },
+  guideItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  guideTxt:  {},
+
+  actionRow:   { flexDirection: 'row', gap: 10 },
+  actionBtn:   { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 54, borderRadius: 16, borderWidth: 1 },
+  actionLabel: {},
 });
 
 // ── Diagram view ──────────────────────────────────────────────────────────────
 
-const BRANCH_COLOURS = ['#6366F1', '#EC4899', '#F59E0B', '#10B981', '#3B82F6'];
+const NODE_COLORS = [
+  '#4ADE80', // root — green
+  '#F87171', // coral
+  '#A78BFA', // purple
+  '#60A5FA', // sky blue
+  '#FCD34D', // amber
+  '#34D399', // emerald
+  '#F472B6', // pink
+  '#FB923C', // orange
+];
 
-function ConnectorLine({ colour }: { colour: string }) {
+const NODE_EMOJIS = ['🧠', '❤️', '💡', '⭐', '🎯', '🔑', '💪', '✨', '🌟', '📌'];
+
+// Multi-colored bundle of flexible wire-like cables between nodes
+function WireBundle({ colors }: { colors: string[] }) {
+  const W = 72; const H = 68; const cx = W / 2;
+  const count = Math.min(colors.length, 5);
   return (
-    <Svg width={20} height={28} style={{ alignSelf: 'center' }}>
-      <Path
-        d="M 10 0 C 10 10 10 18 10 28"
-        stroke={colour}
-        strokeWidth={2}
-        strokeOpacity={0.35}
-        fill="none"
-        strokeLinecap="round"
-      />
+    <Svg width={W} height={H} style={{ alignSelf: 'center' }}>
+      {Array.from({ length: count }, (_, i) => {
+        const t = count <= 1 ? 0 : (i / (count - 1)) * 2 - 1; // -1..1
+        const startX = cx + t * (count * 5.5);
+        // Cubic bezier: vertical tangent at start, gently converge to center
+        const cp1x = startX;
+        const cp1y = H * 0.32;
+        const cp2x = cx + t * 3;
+        const cp2y = H * 0.74;
+        return (
+          <Path
+            key={i}
+            d={`M ${startX} 0 C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${cx} ${H}`}
+            stroke={colors[i % colors.length]}
+            strokeWidth={2.4}
+            strokeOpacity={0.82}
+            fill="none"
+            strokeLinecap="round"
+          />
+        );
+      })}
     </Svg>
+  );
+}
+
+function DiagramGeneratingView({ C, fs, F }: { C: AppColors; fs: (n: number) => number; F: any }) {
+  const op = useSharedValue(0.4);
+  useEffect(() => {
+    op.value = withRepeat(withTiming(1, { duration: 900, easing: Easing.inOut(Easing.ease) }), -1, true);
+  }, []);
+  const shimStyle = useAnimatedStyle(() => ({ opacity: op.value }));
+
+  return (
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 20 }}>
+      <Reanimated.Text style={[{ fontSize: 52 }, shimStyle]}>🗺️</Reanimated.Text>
+      <View style={{ alignItems: 'center', gap: 6 }}>
+        <Reanimated.Text style={[{ fontSize: fs(16), fontFamily: F.bold, color: C.text }, shimStyle]}>
+          Building mind map…
+        </Reanimated.Text>
+        <Text style={{ fontSize: fs(13), fontFamily: F.regular, color: C.muted }}>
+          This usually takes a few seconds
+        </Text>
+      </View>
+      {/* Mini wire preview animation */}
+      <Reanimated.View style={[{ flexDirection: 'row', gap: 6, marginTop: 8 }, shimStyle]}>
+        {['#4ADE80', '#F87171', '#A78BFA', '#60A5FA', '#FCD34D'].map((c, i) => (
+          <View key={i} style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: c }} />
+        ))}
+      </Reanimated.View>
+    </View>
   );
 }
 
@@ -345,76 +465,90 @@ function DiagramView({
   lesson: any; onFinish: () => void; C: AppColors; fs: (n: number) => number; F: any;
 }) {
   const diagram = lesson.diagram as { root: string; branches: { name: string; points: string[] }[] } | undefined;
+  const [scale, setScale] = useState(1);
   if (!diagram) return null;
+
+  const allColors = NODE_COLORS.slice(0, Math.min(diagram.branches.length + 1, NODE_COLORS.length));
 
   return (
     <>
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[dm.scroll, { paddingBottom: 120 }]}
+        contentContainerStyle={dm.scroll}
         showsVerticalScrollIndicator={false}
+        showsHorizontalScrollIndicator={false}
       >
-        {/* Root node */}
-        <Reanimated.View entering={FadeInDown.duration(400).springify()}>
-          <LinearGradient
-            colors={['#6366F1', '#8B5CF6']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={dm.rootCard}
-          >
-            <Ionicons name="git-branch-outline" size={24} color="rgba(255,255,255,0.75)" />
-            <Text style={[dm.rootText, { fontFamily: F.bold, fontSize: fs(20), color: '#fff' }]}>
-              {diagram.root}
-            </Text>
-          </LinearGradient>
-        </Reanimated.View>
+        <View style={[dm.canvas, { transform: [{ scale }] }]}>
 
-        {/* Branches */}
-        {diagram.branches.map((branch, bi) => {
-          const accent = BRANCH_COLOURS[bi % BRANCH_COLOURS.length];
-          const branchDelay = (bi + 1) * 120;
-          return (
-            <View key={bi} style={dm.branchGroup}>
-              <ConnectorLine colour={accent} />
+          {/* Root node */}
+          <View style={dm.nodeWrap}>
+            <View style={dm.emojiBadge}>
+              <Text style={{ fontSize: 18 }}>{NODE_EMOJIS[0]}</Text>
+            </View>
+            <Reanimated.View entering={FadeInDown.duration(350).springify()}>
+              <View style={[dm.node, { backgroundColor: NODE_COLORS[0], shadowColor: NODE_COLORS[0] }]}>
+                <Text style={[dm.nodeText, { fontFamily: F.bold, fontSize: fs(16) }]} numberOfLines={3}>
+                  {diagram.root}
+                </Text>
+              </View>
+            </Reanimated.View>
+          </View>
 
-              <Reanimated.View
-                entering={FadeInDown.delay(branchDelay).duration(350).springify()}
-                style={[
-                  dm.branchCard,
-                  {
-                    backgroundColor: C.surface,
-                    borderColor: C.border,
-                    borderLeftColor: accent,
-                    shadowColor: accent,
-                  },
-                ]}
-              >
-                {/* Branch header */}
-                <View style={[dm.branchHeader, { borderBottomColor: C.border }]}>
-                  <View style={[dm.branchDot, { backgroundColor: accent }]} />
-                  <Text style={[dm.branchName, { fontFamily: F.semiBold, fontSize: fs(14), color: C.text }]}>
-                    {branch.name}
-                  </Text>
+          {/* Branch nodes */}
+          {diagram.branches.map((branch, bi) => {
+            const color     = NODE_COLORS[(bi + 1) % NODE_COLORS.length];
+            const emoji     = NODE_EMOJIS[(bi + 1) % NODE_EMOJIS.length];
+            const delay     = (bi + 1) * 100;
+            const wireClrs  = allColors.slice(0, bi + 2);
+            return (
+              <View key={bi} style={dm.nodeWrap}>
+                {/* Wire bundle */}
+                <WireBundle colors={wireClrs} />
+
+                {/* Emoji badge */}
+                <View style={dm.emojiBadge}>
+                  <Text style={{ fontSize: 16 }}>{emoji}</Text>
                 </View>
 
-                {/* Points */}
-                {branch.points.map((point, pi) => (
-                  <Reanimated.View
-                    key={pi}
-                    entering={FadeInDown.delay(branchDelay + (pi + 1) * 60).duration(300)}
-                    style={dm.pointRow}
-                  >
-                    <Text style={[dm.pointBullet, { color: accent, fontFamily: F.bold, fontSize: fs(14) }]}>•</Text>
-                    <Text style={[dm.pointText, { fontFamily: F.regular, fontSize: fs(13), color: C.sub, lineHeight: fs(13) * 1.65 }]}>
-                      {point}
+                {/* Node pill */}
+                <Reanimated.View entering={FadeInDown.delay(delay).duration(320).springify()}>
+                  <View style={[dm.node, { backgroundColor: color, shadowColor: color }]}>
+                    <Text style={[dm.nodeText, { fontFamily: F.bold, fontSize: fs(15) }]} numberOfLines={3}>
+                      {branch.name}
                     </Text>
+                  </View>
+                </Reanimated.View>
+
+                {/* Points beneath node */}
+                {branch.points.length > 0 && (
+                  <Reanimated.View entering={FadeInDown.delay(delay + 80).duration(280)} style={[dm.pointsCard, { backgroundColor: C.surface, borderColor: C.border }]}>
+                    {branch.points.map((pt, pi) => (
+                      <Text key={pi} style={[dm.pointTxt, { color: C.sub, fontFamily: F.regular, fontSize: fs(12) }]}>
+                        · {pt}
+                      </Text>
+                    ))}
                   </Reanimated.View>
-                ))}
-              </Reanimated.View>
-            </View>
-          );
-        })}
+                )}
+              </View>
+            );
+          })}
+
+          <View style={{ height: 120 }} />
+        </View>
       </ScrollView>
+
+      {/* Zoom controls */}
+      <View style={dm.zoomBar}>
+        <TouchableOpacity style={dm.zoomBtn} onPress={() => setScale(1)} activeOpacity={0.8}>
+          <Ionicons name="scan-outline" size={17} color="#fff" />
+        </TouchableOpacity>
+        <TouchableOpacity style={dm.zoomBtn} onPress={() => setScale(s => Math.min(parseFloat((s + 0.2).toFixed(1)), 2.0))} activeOpacity={0.8}>
+          <Ionicons name="add" size={22} color="#fff" />
+        </TouchableOpacity>
+        <TouchableOpacity style={dm.zoomBtn} onPress={() => setScale(s => Math.max(parseFloat((s - 0.2).toFixed(1)), 0.4))} activeOpacity={0.8}>
+          <Ionicons name="remove" size={22} color="#fff" />
+        </TouchableOpacity>
+      </View>
 
       <Footer C={C}>
         <DuoButton
@@ -429,21 +563,51 @@ function DiagramView({
 }
 
 const dm = StyleSheet.create({
-  scroll:       { padding: Spacing.lg, paddingBottom: 0 },
-  rootCard:     { borderRadius: 20, padding: Spacing.lg, alignItems: 'center', gap: 10 },
-  rootText:     { textAlign: 'center' },
-  branchGroup:  { alignItems: 'center' },
-  branchCard:   {
-    width: '100%', borderRadius: 14, borderWidth: 1, borderLeftWidth: 3,
-    overflow: 'hidden',
-    shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.07, shadowRadius: 10, elevation: 3,
+  scroll:     { alignItems: 'center', paddingTop: 28 },
+  canvas:     { alignItems: 'center', width: '100%' },
+
+  nodeWrap:   { alignItems: 'center', width: '100%' },
+  emojiBadge: {
+    width: 38, height: 38, borderRadius: 19,
+    backgroundColor: '#fff',
+    justifyContent: 'center', alignItems: 'center',
+    marginBottom: -10, zIndex: 2,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12, shadowRadius: 6, elevation: 4,
   },
-  branchHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: Spacing.md, borderBottomWidth: StyleSheet.hairlineWidth },
-  branchDot:    { width: 9, height: 9, borderRadius: 5 },
-  branchName:   { flex: 1 },
-  pointRow:     { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingHorizontal: Spacing.md, paddingVertical: 7 },
-  pointBullet:  { lineHeight: 22, flexShrink: 0 },
-  pointText:    { flex: 1 },
+  node: {
+    width: 210,
+    paddingVertical: 18, paddingHorizontal: 22,
+    borderRadius: 32,
+    alignItems: 'center',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.22, shadowRadius: 14, elevation: 8,
+  },
+  nodeText:   { color: '#fff', textAlign: 'center', lineHeight: 22 },
+
+  pointsCard: {
+    marginTop: 8, width: 230,
+    borderRadius: 14, borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 14, paddingVertical: 10, gap: 4,
+  },
+  pointTxt:   { lineHeight: 18 },
+
+  zoomBar: {
+    flexDirection: 'row',
+    gap: 8,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(10,10,20,0.85)',
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 8,
+  },
+  zoomBtn: {
+    width: 46, height: 46,
+    borderRadius: 13,
+    backgroundColor: '#1E1E32',
+    justifyContent: 'center', alignItems: 'center',
+  },
 });
 
 // ── Quiz view ─────────────────────────────────────────────────────────────────
@@ -648,7 +812,7 @@ const lv = StyleSheet.create({
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 
-export default function LessonPlayer({ courseId, onBack }: Props) {
+export default function LessonPlayer({ courseId, onBack, initialView }: Props) {
   const insets = useSafeAreaInsets();
   const { C, fs, F } = useTheme();
   const { incrementDailyProgress } = useAppStore();
@@ -709,6 +873,82 @@ export default function LessonPlayer({ courseId, onBack }: Props) {
 
   if (course === undefined || lessonsRaw === undefined) {
     return <LoadingView C={C} onBack={onBack} />;
+  }
+
+  // ── Course-level views (all lessons aggregated) ───────────────────────────
+
+  if (initialView === 'flashcards') {
+    const allCards = lessons.flatMap((l: any) => l.flashcards ?? []).filter((c: any) => c?.front && c?.back);
+    const syntheticLesson = { flashcards: allCards, title: course?.title ?? '' };
+    return (
+      <View style={[S.root, { backgroundColor: C.bg, paddingTop: insets.top }]}>
+        <View style={[S.header, { borderBottomColor: C.border }]}>
+          <TouchableOpacity style={[S.backBtn, { backgroundColor: C.surface, borderColor: C.border }]} onPress={onBack} activeOpacity={0.7}>
+            <Ionicons name="arrow-back" size={20} color={C.muted} />
+          </TouchableOpacity>
+          <View style={S.headerInfo}>
+            <Text style={[S.headerSup, { fontFamily: F.extraBold, fontSize: fs(10), color: C.muted }]}>FLASHCARDS</Text>
+            <Text style={[S.headerTitle, { fontFamily: F.bold, fontSize: fs(17), color: C.text }]} numberOfLines={1}>{course?.title ?? ''}</Text>
+          </View>
+        </View>
+        {allCards.length === 0 ? (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+            <Text style={{ fontSize: 40 }}>🃏</Text>
+            <Text style={[{ fontFamily: F.semiBold, fontSize: fs(15), color: C.muted }]}>No flashcards yet</Text>
+          </View>
+        ) : (
+          <FlashcardView lesson={syntheticLesson} onFinish={onBack} C={C} fs={fs} F={F} />
+        )}
+      </View>
+    );
+  }
+
+  if (initialView === 'quiz') {
+    const allQuestions = lessons.flatMap((l: any) => l.quiz ?? []).filter((q: any) => q?.question && q?.options?.length);
+    const syntheticLesson = { quiz: allQuestions, title: course?.title ?? '' };
+    return (
+      <View style={[S.root, { backgroundColor: C.bg, paddingTop: insets.top }]}>
+        <View style={[S.header, { borderBottomColor: C.border }]}>
+          <TouchableOpacity style={[S.backBtn, { backgroundColor: C.surface, borderColor: C.border }]} onPress={onBack} activeOpacity={0.7}>
+            <Ionicons name="arrow-back" size={20} color={C.muted} />
+          </TouchableOpacity>
+          <View style={S.headerInfo}>
+            <Text style={[S.headerSup, { fontFamily: F.extraBold, fontSize: fs(10), color: C.muted }]}>QUIZ</Text>
+            <Text style={[S.headerTitle, { fontFamily: F.bold, fontSize: fs(17), color: C.text }]} numberOfLines={1}>{course?.title ?? ''}</Text>
+          </View>
+        </View>
+        {allQuestions.length === 0 ? (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+            <Text style={{ fontSize: 40 }}>📝</Text>
+            <Text style={[{ fontFamily: F.semiBold, fontSize: fs(15), color: C.muted }]}>No quiz questions yet</Text>
+          </View>
+        ) : (
+          <QuizView lesson={syntheticLesson} onFinish={onBack} C={C} fs={fs} F={F} />
+        )}
+      </View>
+    );
+  }
+
+  if (initialView === 'diagram') {
+    const firstWithDiagram = lessons.find((l: any) => l.diagram);
+    return (
+      <View style={[S.root, { backgroundColor: C.bg, paddingTop: insets.top }]}>
+        <View style={[S.header, { borderBottomColor: C.border }]}>
+          <TouchableOpacity style={[S.backBtn, { backgroundColor: C.surface, borderColor: C.border }]} onPress={onBack} activeOpacity={0.7}>
+            <Ionicons name="arrow-back" size={20} color={C.muted} />
+          </TouchableOpacity>
+          <View style={S.headerInfo}>
+            <Text style={[S.headerSup, { fontFamily: F.extraBold, fontSize: fs(10), color: C.muted }]}>MIND MAP</Text>
+            <Text style={[S.headerTitle, { fontFamily: F.bold, fontSize: fs(17), color: C.text }]} numberOfLines={1}>{course?.title ?? ''}</Text>
+          </View>
+        </View>
+        {!firstWithDiagram ? (
+          <DiagramGeneratingView C={C} fs={fs} F={F} />
+        ) : (
+          <DiagramView lesson={firstWithDiagram} onFinish={onBack} C={C} fs={fs} F={F} />
+        )}
+      </View>
+    );
   }
 
   // ── Shared header ─────────────────────────────────────────────────────────

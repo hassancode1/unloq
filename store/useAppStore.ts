@@ -33,6 +33,7 @@ interface AppState {
   onboardingRole: string | null;
   semesterGoal: string | null;
   hoursLost: string | null;
+  blockDurationHours: number;
 
   setFlow: (flow: AppFlow) => void;
   setRevenueCatReady: (ready: boolean) => void;
@@ -46,6 +47,7 @@ interface AppState {
   setOnboardingRole: (role: string) => void;
   setSemesterGoal: (goal: string) => void;
   setHoursLost: (h: string) => void;
+  setBlockDurationHours: (hours: number) => void;
 }
 
 function todayStr() {
@@ -66,6 +68,7 @@ export const useAppStore = create<AppState>()(
       onboardingRole: null,
       semesterGoal: null,
       hoursLost: null,
+      blockDurationHours: 2,
 
       setFlow: (flow) => set({ flow }),
       setRevenueCatReady: (ready) => set({ revenueCatReady: ready }),
@@ -89,6 +92,7 @@ export const useAppStore = create<AppState>()(
       setOnboardingRole: (role) => set({ onboardingRole: role }),
       setSemesterGoal: (goal) => set({ semesterGoal: goal }),
       setHoursLost: (h) => set({ hoursLost: h }),
+      setBlockDurationHours: (hours) => set({ blockDurationHours: hours }),
       toggleDarkMode: () => set((s) => ({ darkMode: !s.darkMode })),
       increaseFontScale: () =>
         set((s) => ({
@@ -119,6 +123,7 @@ export const useAppStore = create<AppState>()(
         onboardingRole: s.onboardingRole,
         semesterGoal: s.semesterGoal,
         hoursLost: s.hoursLost,
+        blockDurationHours: s.blockDurationHours,
       }),
     },
   ),

@@ -15,9 +15,12 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.loqlearn.app",
       "buildNumber": "47",
-      "minimumOsVersion": "15.0",
+      "minimumOsVersion": "16.0",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "Unloq uses the camera to let you capture notes and documents for your study sessions.",
+        "NSMicrophoneUsageDescription": "Unloq uses the microphone to record audio when capturing study material.",
+        "NSPhotoLibraryUsageDescription": "Unloq accesses your photo library so you can upload images as study material."
       }
     },
     "android": {

@@ -40,11 +40,11 @@ function buildUserPrompt(
     : "";
 
   const flashcardsInstruction = includeFlashcards
-    ? `\nFLASHCARDS (exactly 4): "front" = a key term, concept, or short question from the document. "back" = the answer based on the document (1–3 sentences).`
+    ? `\nFLASHCARDS (exactly 8): "front" = a key term, concept, or short question from the document. "back" = the answer based on the document (1–3 sentences).`
     : "";
 
   const quizInstruction = includeQuiz
-    ? `\nQUIZ (exactly 4 questions, ${quizDepth}): Each question tests a specific fact from the document. One correct option, three plausible distractors.`
+    ? `\nQUIZ (exactly 8 questions, ${quizDepth}): Each question tests a specific fact from the document. One correct option, three plausible distractors.`
     : "";
 
   const diagramInstruction = includeDiagram
@@ -134,11 +134,11 @@ function buildExamUserPrompt(
     : "";
 
   const flashcardsInstruction = includeFlashcards
-    ? "\n\nFLASHCARDS (4–6): Front = rule-recall prompt. Back = the complete black-letter rule, stated precisely."
+    ? "\n\nFLASHCARDS (exactly 8): Front = rule-recall prompt. Back = the complete black-letter rule, stated precisely."
     : "";
 
   const quizInstruction = includeQuiz
-    ? "\n\nQUIZ (4 questions): Each question = a fact-pattern scenario. One correct answer, three plausible distractors based on common exam mistakes."
+    ? "\n\nQUIZ (exactly 8 questions): Each question = a fact-pattern scenario. One correct answer, three plausible distractors based on common exam mistakes."
     : "";
 
   const diagramInstruction = includeDiagram
@@ -356,6 +356,38 @@ async function callGeminiVideo(
       });
       return result.response.text().trim();
     }
+  });
+}
+
+async function callGeminiImage(
+  imageBase64: string,
+  lessonCount: number,
+  difficulty: string,
+  apiKey: string,
+  userPrompt?: string,
+  includeFlashcards = true,
+  includeQuiz = true,
+  includeDiagram = false,
+): Promise<string> {
+  const { GoogleGenerativeAI } = await import("@google/generative-ai");
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+  return withGeminiRetry(async () => {
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [
+        { inlineData: { mimeType: "image/jpeg", data: imageBase64 } },
+        { text:
+          "The image above contains text, notes, or educational content. Read everything visible in the image carefully.\n\n" +
+          buildSystemPrompt() + "\n\n" +
+          buildUserPrompt(lessonCount, difficulty, userPrompt, includeFlashcards, includeQuiz, includeDiagram)
+        },
+      ]}],
+      generationConfig: {
+        responseMimeType: "application/json",
+        thinkingConfig: { thinkingBudget: 0 },
+      } as any,
+    });
+    return result.response.text().trim();
   });
 }
 
@@ -659,10 +691,7 @@ export const adminGenerateCourse = action({
         const blob = await ctx.storage.get(args.pdfStorageId);
         if (!blob) throw new Error("PDF not found in storage.");
         const arrayBuffer = await blob.arrayBuffer();
-        const bytes = new Uint8Array(arrayBuffer);
-        let binary = "";
-        bytes.forEach((b) => (binary += String.fromCharCode(b)));
-        const pdfBase64 = btoa(binary);
+        const pdfBase64 = Buffer.from(arrayBuffer).toString('base64');
         raw = await callGeminiExamPdf(pdfBase64, args.course_topic, args.lesson_count, difficultyLower, geminiKey, args.prompt, includeFlashcards, includeQuiz, includeDiagram);
       } else {
         // No PDF: generate exam prep content from AI knowledge on the topic
@@ -746,6 +775,7 @@ export const generateCourse = action({
   args: {
     courseId: v.id("courses"),
     pdfBase64: v.optional(v.string()),
+    imageBase64: v.optional(v.string()),
     pdfStorageId: v.optional(v.id("_storage")),
     transcript: v.optional(v.string()),
     youtubeUrl: v.optional(v.string()),
@@ -763,7 +793,7 @@ export const generateCourse = action({
   },
   handler: async (
     ctx,
-    { courseId, pdfBase64, pdfStorageId, transcript, youtubeUrl, courseTopic, lessonCount, difficulty, userPrompt, ...flags },
+    { courseId, pdfBase64, imageBase64, pdfStorageId, transcript, youtubeUrl, courseTopic, lessonCount, difficulty, userPrompt, ...flags },
   ) => {
     const includeFlashcards = flags.includeFlashcards !== false;
     const includeQuiz       = flags.includeQuiz !== false;
@@ -778,18 +808,15 @@ export const generateCourse = action({
           "No AI API key set. Add GEMINI_API_KEY in Convex env vars.",
         );
 
-      if (!pdfBase64 && !pdfStorageId && !transcript && !youtubeUrl && !courseTopic)
-        throw new Error("A content source (PDF, YouTube, transcript, or topic) must be provided.");
+      if (!pdfBase64 && !imageBase64 && !pdfStorageId && !transcript && !youtubeUrl && !courseTopic)
+        throw new Error("A content source (PDF, image, YouTube, transcript, or topic) must be provided.");
 
       // Resolve pdfStorageId → pdfBase64 if needed
       if (pdfStorageId && !pdfBase64) {
         const blob = await ctx.storage.get(pdfStorageId);
         if (!blob) throw new Error("Uploaded PDF not found in storage.");
         const arrayBuffer = await blob.arrayBuffer();
-        const bytes = new Uint8Array(arrayBuffer);
-        let binary = "";
-        bytes.forEach((b) => (binary += String.fromCharCode(b)));
-        pdfBase64 = btoa(binary);
+        pdfBase64 = Buffer.from(arrayBuffer).toString('base64');
       }
 
       let raw: string;
@@ -798,6 +825,8 @@ export const generateCourse = action({
         raw = await callGeminiText(transcript, lessonCount, difficulty, geminiKey, userPrompt, includeFlashcards, includeQuiz, includeDiagram);
       } else if (youtubeUrl) {
         raw = await callGeminiVideo(youtubeUrl, lessonCount, difficulty, geminiKey, userPrompt, includeFlashcards, includeQuiz, includeDiagram);
+      } else if (imageBase64) {
+        raw = await callGeminiImage(imageBase64, lessonCount, difficulty, geminiKey, userPrompt, includeFlashcards, includeQuiz, includeDiagram);
       } else if (pdfBase64) {
         raw = await callGemini(pdfBase64, lessonCount, difficulty, geminiKey, userPrompt, includeFlashcards, includeQuiz, includeDiagram);
       } else {
@@ -890,18 +919,140 @@ export const generateCourse = action({
     } catch (err) {
       console.error("generateCourse failed:", err);
       try {
-        await ctx.runMutation(internal.courses.updateStatus, {
-          courseId,
-          status: "error",
-        });
+        await ctx.runMutation(internal.courses.updateStatus, { courseId, status: "error" });
         await ctx.runMutation(api.courses.remove, { courseId });
       } catch (cleanupErr) {
-        console.error(
-          "cleanup failed (course left as error status):",
-          cleanupErr,
-        );
+        console.error("cleanup failed (course left as error status):", cleanupErr);
+      }
+      const errMsg = (err as any)?.message ?? "";
+      if (errMsg.includes("exceeds the supported page limit") || errMsg.includes("page limit")) {
+        throw new Error("PDF_TOO_LONG: Your PDF has too many pages (Gemini supports up to 1000). Try uploading a specific chapter or a shorter section.");
       }
       throw err;
     }
+  },
+});
+
+// ── On-demand: generate quiz for all lessons of a course ──────────────────────
+
+export const generateQuizForCourse = action({
+  args: { courseId: v.id("courses") },
+  handler: async (ctx, { courseId }) => {
+    const geminiKey = process.env.GEMINI_API_KEY;
+    if (!geminiKey) throw new Error("No AI API key set.");
+
+    const lessons = await ctx.runQuery(api.courses.getLessons, { courseId });
+    if (!lessons?.length) throw new Error("No lessons found.");
+
+    const { GoogleGenerativeAI } = await import("@google/generative-ai");
+    const genAI = new GoogleGenerativeAI(geminiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+    let totalSaved = 0;
+
+    for (const lesson of lessons as any[]) {
+      if ((lesson.quiz ?? []).length > 0) continue;
+
+      const prompt = `Generate exactly 8 multiple-choice quiz questions for this lesson.
+Lesson title: ${lesson.title}
+Key concept: ${lesson.keyConcept}
+Content: ${(lesson.content ?? []).map((s: any) => `${s.heading}: ${s.body}`).join('\n')}
+
+Rules:
+- Each question must be a short fact-pattern or scenario based on the lesson content.
+- Provide exactly 4 answer options. The correctAnswer must be copied EXACTLY (character-for-character) from one of the options.
+- Return ONLY a valid JSON array, no markdown, no explanation.
+
+[{"question":"...","options":["Full answer text A","Full answer text B","Full answer text C","Full answer text D"],"correctAnswer":"Full answer text A"}]`;
+
+      try {
+        const result = await model.generateContent({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: {
+            responseMimeType: "application/json",
+            thinkingConfig: { thinkingBudget: 0 },
+          } as any,
+        });
+        const raw = result.response.text().trim();
+        const parsed = JSON.parse(raw);
+        const quiz = (Array.isArray(parsed) ? parsed : [])
+          .filter((q: any) => q?.question && Array.isArray(q.options) && q.options.length === 4 && q.correctAnswer)
+          .map((q: any) => ({
+            question: String(q.question),
+            options: q.options.map(String),
+            correctAnswer: String(q.correctAnswer),
+          }));
+
+        if (quiz.length > 0) {
+          await ctx.runMutation(internal.courses.patchLessonQuiz, { lessonId: lesson._id, quiz });
+          totalSaved += quiz.length;
+        }
+      } catch (e) {
+        console.error("Quiz generation failed for lesson", lesson._id, e);
+      }
+    }
+
+    if (totalSaved === 0) {
+      throw new Error("Quiz generation failed — no questions were saved. Please try again.");
+    }
+  },
+});
+
+// ── On-demand: generate mind map diagrams for all lessons of a course ─────────
+
+export const generateDiagramForCourse = action({
+  args: { courseId: v.id("courses") },
+  handler: async (ctx, { courseId }) => {
+    const geminiKey = process.env.GEMINI_API_KEY;
+    if (!geminiKey) throw new Error("No AI API key set.");
+
+    const lessons = await ctx.runQuery(api.courses.getLessons, { courseId });
+    console.log("[diagram] lessons fetched:", lessons?.length ?? 0);
+    if (!lessons?.length) throw new Error("No lessons found.");
+
+    const todo = (lessons as any[]).filter((l: any) => !l.diagram);
+    console.log("[diagram] lessons needing diagram:", todo.length);
+
+    await Promise.all(
+      todo.map(async (lesson: any) => {
+        console.log("[diagram] starting lesson:", lesson._id, lesson.title);
+        const prompt = `Create a mind map for this lesson.
+Lesson title: ${lesson.title}
+Key concept: ${lesson.keyConcept}
+Content: ${(lesson.content ?? []).map((s: any) => `${s.heading}: ${s.body}`).join('\n')}
+
+Return ONLY a JSON object:
+{"root":"central concept (max 6 words)","branches":[{"name":"subtopic","points":["detail 1","detail 2"]}]}
+Include 3-5 branches, each with 2-3 points.`;
+
+        try {
+          console.log("[diagram] calling Gemini for:", lesson._id);
+          const resp = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + geminiKey, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.6, maxOutputTokens: 1024 } }),
+          });
+          console.log("[diagram] Gemini status:", resp.status, "for:", lesson._id);
+          const json = await resp.json();
+          console.log("[diagram] Gemini raw response for", lesson._id, ":", JSON.stringify(json).slice(0, 300));
+          const raw = json.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+          const cleaned = raw.replace(/^```json\n?/, "").replace(/^```\n?/, "").replace(/```\n?$/, "").trim();
+          console.log("[diagram] cleaned JSON for", lesson._id, ":", cleaned.slice(0, 200));
+          const diagram = JSON.parse(cleaned);
+
+          if (diagram?.root && Array.isArray(diagram.branches) && diagram.branches.length > 0) {
+            console.log("[diagram] saving diagram for:", lesson._id, "branches:", diagram.branches.length);
+            await ctx.runMutation(internal.courses.patchLessonDiagram, { lessonId: lesson._id, diagram });
+            console.log("[diagram] saved diagram for:", lesson._id);
+          } else {
+            console.warn("[diagram] invalid diagram shape for:", lesson._id, diagram);
+          }
+        } catch (e) {
+          console.error("[diagram] FAILED for lesson", lesson._id, e);
+        }
+      })
+    );
+
+    console.log("[diagram] all done for course:", courseId);
   },
 });

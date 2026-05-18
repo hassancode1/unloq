@@ -8,6 +8,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -35,10 +36,15 @@ const WEEKDAY_DAYS = [1, 2, 3, 4, 5];
 type GoalFrequency = 'daily' | 'weekdays' | 'custom';
 type Step          = 'frequency' | 'session' | 'apps';
 
-const LESSON_OPTIONS = [
-  { count: 1, label: 'Light',   desc: '1 lesson/day',  emoji: '🌱' },
-  { count: 3, label: 'Focused', desc: '3 lessons/day', emoji: '🔥' },
-  { count: 5, label: 'Intense', desc: '5 lessons/day', emoji: '⚡' },
+const BLOCK_DURATION_OPTIONS = [
+  { hours: 0.5, label: '30 mins', emoji: '⚡', desc: 'Quick sprint' },
+  { hours: 1,   label: '1 hour',  emoji: '⏱️', desc: 'Light session' },
+  { hours: 2,   label: '2 hours', emoji: '🔒', desc: 'Steady commitment' },
+  { hours: 3,   label: '3 hours', emoji: '💪', desc: 'Deep focus' },
+  { hours: 4,   label: '4 hours', emoji: '🔥', desc: 'Serious discipline' },
+  { hours: 6,   label: '6 hours', emoji: '🔥', desc: 'Serious discipline' },
+  { hours: 8,   label: '8 hours', emoji: '💀', desc: 'Full lock mode' },
+  { hours: -1,  label: 'Custom',  emoji: '✏️', desc: 'Set your own hours' },
 ];
 
 
@@ -181,18 +187,23 @@ type Props = { onComplete: () => void; onBack?: () => void };
 export default function GoalSetupScreen({ onComplete, onBack }: Props) {
   const insets = useSafeAreaInsets();
   const setGoalConfig = useAppStore((s) => s.setGoalConfig);
+  const setBlockDurationHoursStore = useAppStore((s) => s.setBlockDurationHours);
   const { C, fs, F } = useTheme();
   const styles = React.useMemo(() => makeStyles(C), [C]);
 
   const [step, setStep]               = useState<Step>('frequency');
   const [frequency, setFrequency]     = useState<GoalFrequency>('daily');
   const [customDays, setCustomDays]   = useState<number[]>([1, 3, 5]);
-  const [lessonTarget, setLessonTarget] = useState(1);
   const defaultTime = new Date(); defaultTime.setHours(9, 0, 0, 0);
   const [lockDate, setLockDate]       = useState(defaultTime);
+  const [blockDurationHours, setBlockDurationHours] = useState(2);
+  const [customHoursInput, setCustomHoursInput] = useState('');
   const [appsSelected, setAppsSelected] = useState(false);
   const [blockedCount, setBlockedCount] = useState(0);
   const [pickerLoading, setPickerLoading] = useState(false);
+
+  const isCustomDuration = blockDurationHours === -1;
+  const resolvedHours = isCustomDuration ? (parseInt(customHoursInput, 10) || 0) : blockDurationHours;
 
   const totalSteps = 3;
   const stepIndex  = step === 'frequency' ? 0 : step === 'session' ? 1 : 2;
@@ -259,11 +270,12 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
     const cfg = {
       frequency,
       customDays,
-      lessonTarget,
+      lessonTarget: 1,
       lockTime: toTimeString(lockDate),
       examDate: null,
     };
     setGoalConfig(cfg);
+    setBlockDurationHoursStore(resolvedHours);
     try {
       const scheduled = await scheduleStudyReminders(cfg);
       if (!scheduled) showNotificationPermissionAlert();
@@ -271,7 +283,7 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
       console.error('[Notifications] Failed to schedule reminders:', e);
     }
     onComplete();
-  }, [frequency, customDays, lessonTarget, lockDate, setGoalConfig, onComplete]);
+  }, [frequency, customDays, resolvedHours, lockDate, setGoalConfig, onComplete]);
 
   const StepDots = () => (
     <View style={styles.stepDots}>
@@ -389,40 +401,79 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <Animated.View entering={FadeInDown.duration(300)} style={styles.header}>
             <View style={styles.badge}>
-              <Text style={styles.badgeEmoji}>📚</Text>
-              <Text style={styles.badgeText}>Daily Goal</Text>
+              <Text style={styles.badgeEmoji}>⏰</Text>
+              <Text style={styles.badgeText}>Block Settings</Text>
             </View>
-            <Text style={styles.title}>How many lessons{'\n'}to unlock apps?</Text>
-            <Text style={styles.subtitle}>Apps unlock as soon as you hit your target.</Text>
+            <Text style={styles.title}>How long should{'\n'}apps stay locked?</Text>
+            <Text style={styles.subtitle}>
+              Pick a duration and set a daily reminder time.
+            </Text>
           </Animated.View>
 
-          {/* Lesson count */}
+          {/* Block duration tiles */}
           <Animated.View entering={FadeInDown.delay(80).duration(300)}>
-            <Text style={styles.sectionLabel}>LESSONS PER DAY</Text>
-            <View style={[styles.tileRow, { marginTop: 10 }]}>
-              {LESSON_OPTIONS.map((opt) => {
-                const selected = lessonTarget === opt.count;
+            <Text style={styles.sectionLabel}>BLOCK DURATION</Text>
+            <View style={[styles.tileRow, { marginTop: 10, flexWrap: 'wrap', gap: Spacing.sm }]}>
+              {BLOCK_DURATION_OPTIONS.map((opt, i) => {
+                const selected = blockDurationHours === opt.hours;
                 return (
-                  <TouchableOpacity
-                    key={opt.count}
-                    style={[styles.tile, selected && styles.tileActive]}
-                    onPress={() => { Haptics.selectionAsync(); setLessonTarget(opt.count); }}
-                    activeOpacity={0.75}
+                  <Animated.View
+                    key={opt.hours}
+                    entering={FadeInDown.delay(60 + i * 30).duration(250)}
+                    style={{ width: '48%' }}
                   >
-                    <Text style={styles.tileEmoji}>{opt.emoji}</Text>
-                    <Text style={[styles.tileLabel, selected && styles.tileLabelActive]}>{opt.label}</Text>
-                    <Text style={[styles.tileDesc, selected && styles.tileDescActive]}>{opt.desc}</Text>
-                  </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.tile, selected && styles.tileActive]}
+                      onPress={() => { Haptics.selectionAsync(); setBlockDurationHours(opt.hours); }}
+                      activeOpacity={0.75}
+                    >
+                      <Text style={styles.tileEmoji}>{opt.emoji}</Text>
+                      <Text style={[styles.tileLabel, selected && styles.tileLabelActive]}>{opt.label}</Text>
+                      <Text style={[styles.tileDesc, selected && styles.tileDescActive]}>{opt.desc}</Text>
+                    </TouchableOpacity>
+                  </Animated.View>
                 );
               })}
             </View>
           </Animated.View>
 
-          {/* Reminder / lock time */}
-          <Animated.View entering={FadeInDown.delay(160).duration(300)}>
+          {/* Custom hours input */}
+          {isCustomDuration && (
+            <Animated.View entering={FadeInDown.duration(250)} style={styles.pickerInfoCard}>
+              <View style={styles.pickerInfoRow}>
+                <View style={[styles.pickerInfoIcon, { backgroundColor: `${C.primary}14`, borderColor: `${C.primary}28` }]}>
+                  <Text style={{ fontSize: 28 }}>✏️</Text>
+                </View>
+                <View style={{ flex: 1, gap: 4 }}>
+                  <Text style={[styles.pickerInfoTitle, { fontFamily: F.bold, color: C.text }]}>
+                    Custom duration
+                  </Text>
+                  <TextInput
+                    style={[{
+                      fontFamily: F.regular, fontSize: fs(15), color: C.text,
+                      borderWidth: 1.5, borderColor: customHoursInput ? C.primary : C.border,
+                      borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8,
+                    }]}
+                    placeholder="e.g. 5"
+                    placeholderTextColor={C.muted}
+                    keyboardType="number-pad"
+                    value={customHoursInput}
+                    onChangeText={setCustomHoursInput}
+                    maxLength={2}
+                  />
+                  <Text style={[styles.pickerInfoSub, { fontFamily: F.regular, color: C.muted }]}>
+                    hours per day
+                  </Text>
+                </View>
+              </View>
+            </Animated.View>
+          )}
+
+          {/* Reminder time */}
+          <Animated.View entering={FadeInDown.delay(200).duration(300)}>
             <View style={[styles.sectionHeader, { marginBottom: 10 }]}>
               <Text style={styles.sectionLabel}>REMINDER TIME</Text>
-              <Text style={styles.sectionSub}>We'll remind you at this time on your goal days.</Text>
+              <Text style={styles.sectionSub}>We'll remind you to study at this time.</Text>
             </View>
             <View style={styles.pickerCard}>
               <View style={styles.pickerRow}>
@@ -442,13 +493,17 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
             </View>
           </Animated.View>
 
-          <Animated.View entering={FadeInDown.delay(240).duration(300)} style={{ gap: Spacing.sm }}>
+          <Animated.View entering={FadeInDown.delay(280).duration(300)} style={{ gap: Spacing.sm }}>
             <StepDots />
-            <DuoButton label="Next: Choose apps →" onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setStep('apps');
-              loadSelectionInfo();
-            }} />
+            <DuoButton
+              label="Next: Choose apps →"
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setStep('apps');
+                loadSelectionInfo();
+              }}
+              disabled={isCustomDuration && resolvedHours < 1}
+            />
             <TouchableOpacity onPress={() => setStep('frequency')} style={styles.backBtn}>
               <Text style={styles.backBtnText}>← Back</Text>
             </TouchableOpacity>
@@ -458,7 +513,7 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
     );
   }
 
-  // ── Step 3: App blocker ───────────────────────────────────────────────────
+  // ── Step 4: App blocker ───────────────────────────────────────────────────
   return (
     <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       {onBack && (
@@ -528,7 +583,7 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
 
         <Animated.View entering={FadeInDown.delay(240).duration(300)} style={{ gap: Spacing.sm }}>
           <StepDots />
-          <DuoButton label="Start Unloqing 🔓" onPress={handleSave} disabled={!appsSelected} />
+          <DuoButton label="Start Unloqing 🔓" onPress={handleSave} />
           <TouchableOpacity onPress={() => setStep('session')} style={styles.backBtn}>
             <Text style={styles.backBtnText}>← Back</Text>
           </TouchableOpacity>
