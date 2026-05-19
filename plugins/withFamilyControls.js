@@ -16,6 +16,10 @@ const kExtName = 'UnloqMonitor';
 const kShieldExtName = 'UnloqShield';
 const kShieldBundleId = 'com.loqlearn.app.shield';
 
+// Set to true once Apple approves the Family Controls entitlement for com.loqlearn.app
+const INCLUDE_MONITOR = false;
+const INCLUDE_SHIELD = false;
+
 // ─── Swift / ObjC source content ─────────────────────────────────────────────
 
 const FAMILY_CONTROLS_SWIFT = `\
@@ -132,14 +136,16 @@ class FamilyControlsModule: NSObject {
     _ resolve: @escaping RCTPromiseResolveBlock,
     rejecter reject: @escaping RCTPromiseRejectBlock
   ) {
-    resolve(!savedSelection.applicationTokens.isEmpty)
+    let sel = savedSelection
+    resolve(!sel.applicationTokens.isEmpty || !sel.categoryTokens.isEmpty)
   }
 
   @objc func getBlockedCount(
     _ resolve: @escaping RCTPromiseResolveBlock,
     rejecter reject: @escaping RCTPromiseRejectBlock
   ) {
-    resolve(savedSelection.applicationTokens.count)
+    let sel = savedSelection
+    resolve(sel.applicationTokens.count + sel.categoryTokens.count)
   }
 
   @objc func blockApps(
@@ -528,8 +534,6 @@ const MONITOR_EXTENSION_ENTITLEMENTS = `\
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>com.apple.developer.family-controls</key>
-    <true/>
     <key>com.apple.security.application-groups</key>
     <array>
         <string>${kAppGroup}</string>
@@ -772,7 +776,7 @@ const withFamilyControls = (config) => {
     }
 
     // ── Monitor extension ──────────────────────────────────────────────────
-    if (!monitorExists) {
+    if (INCLUDE_MONITOR && !monitorExists) {
       const swiftFileRef       = u();
       const plistFileRef       = u();
       const entitlementsRef    = u();
@@ -950,7 +954,7 @@ const withFamilyControls = (config) => {
     }
 
     // ── Shield extension ───────────────────────────────────────────────────
-    if (!shieldExists) {
+    if (INCLUDE_SHIELD && !shieldExists) {
       const shSwiftRef         = u();
       const shPlistRef         = u();
       const shEntRef           = u();
@@ -1135,19 +1139,23 @@ const withFamilyControls = (config) => {
         fs.writeFileSync(bridgingHeaderPath, '#import <React/RCTBridgeModule.h>\n');
       }
 
-      // Monitor extension files
-      const extDir = path.join(platformRoot, kExtName);
-      if (!fs.existsSync(extDir)) fs.mkdirSync(extDir, { recursive: true });
-      fs.writeFileSync(path.join(extDir, 'UnloqMonitor.swift'), DEVICE_ACTIVITY_MONITOR_SWIFT);
-      fs.writeFileSync(path.join(extDir, 'Info.plist'), MONITOR_EXTENSION_PLIST);
-      fs.writeFileSync(path.join(extDir, 'UnloqMonitorExtension.entitlements'), MONITOR_EXTENSION_ENTITLEMENTS);
+      // Monitor extension files (disabled until Apple approves DeviceActivity entitlement for com.loqlearn.app.monitor)
+      if (INCLUDE_MONITOR) {
+        const extDir = path.join(platformRoot, kExtName);
+        if (!fs.existsSync(extDir)) fs.mkdirSync(extDir, { recursive: true });
+        fs.writeFileSync(path.join(extDir, 'UnloqMonitor.swift'), DEVICE_ACTIVITY_MONITOR_SWIFT);
+        fs.writeFileSync(path.join(extDir, 'Info.plist'), MONITOR_EXTENSION_PLIST);
+        fs.writeFileSync(path.join(extDir, 'UnloqMonitorExtension.entitlements'), MONITOR_EXTENSION_ENTITLEMENTS);
+      }
 
-      // Shield extension files
-      const shieldDir = path.join(platformRoot, kShieldExtName);
-      if (!fs.existsSync(shieldDir)) fs.mkdirSync(shieldDir, { recursive: true });
-      fs.writeFileSync(path.join(shieldDir, 'UnloqShield.swift'), SHIELD_SWIFT);
-      fs.writeFileSync(path.join(shieldDir, 'Info.plist'), SHIELD_PLIST);
-      fs.writeFileSync(path.join(shieldDir, 'UnloqShield.entitlements'), SHIELD_ENTITLEMENTS);
+      // Shield extension files (disabled until Apple approves Family Controls entitlement for com.loqlearn.app)
+      if (INCLUDE_SHIELD) {
+        const shieldDir = path.join(platformRoot, kShieldExtName);
+        if (!fs.existsSync(shieldDir)) fs.mkdirSync(shieldDir, { recursive: true });
+        fs.writeFileSync(path.join(shieldDir, 'UnloqShield.swift'), SHIELD_SWIFT);
+        fs.writeFileSync(path.join(shieldDir, 'Info.plist'), SHIELD_PLIST);
+        fs.writeFileSync(path.join(shieldDir, 'UnloqShield.entitlements'), SHIELD_ENTITLEMENTS);
+      }
 
       return mod;
     },

@@ -27,7 +27,7 @@ function pdfHtml(base64: string): string {
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-html,body{width:100%;height:100%;overflow:hidden;background:#525659}
+html,body{width:100%;height:100%;overflow:auto;background:#525659}
 embed{display:block;width:100%;height:100%}
 </style>
 </head>

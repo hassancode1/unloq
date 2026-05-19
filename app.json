@@ -14,7 +14,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.loqlearn.app",
-      "buildNumber": "48",
+      "buildNumber": "50",
       "minimumOsVersion": "16.0",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,

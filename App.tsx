@@ -66,8 +66,20 @@ function computeShouldLock(
       : goalConfig.customDays.includes(day);
   if (!isGoalDay) return false;
 
+  // Only lock after the user's chosen lock time each day
+  const parts = goalConfig.lockTime?.split(':').map(Number) ?? [];
+  const lockHour = parts[0] ?? 0;
+  const lockMin  = parts[1] ?? 0;
+  const now = new Date();
+  const isAfterLockTime =
+    !isNaN(lockHour) && !isNaN(lockMin) && (
+      now.getHours() > lockHour ||
+      (now.getHours() === lockHour && now.getMinutes() >= lockMin)
+    );
+  if (!isAfterLockTime) return false;
+
   // Daily goal already met → don't lock
-  const todayDate = new Date().toISOString().slice(0, 10);
+  const todayDate = now.toISOString().slice(0, 10);
   const todayDone = dailyProgress.date === todayDate ? dailyProgress.count : 0;
   return todayDone < goalConfig.lessonTarget;
 }

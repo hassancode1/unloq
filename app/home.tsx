@@ -1,3 +1,4 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Purchases from 'react-native-purchases';
@@ -19,9 +20,6 @@ import {
 import Animated, {
   FadeIn,
   FadeInDown,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useConvexAuth } from 'convex/react';
@@ -32,8 +30,8 @@ import { Id } from '../convex/_generated/dataModel';
 import { useTheme } from '../hooks/useTheme';
 import { useEntitlement } from '../hooks/useEntitlement';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
-import { hasSelection } from '../lib/familyControls';
-import { useAppStore, type GoalConfig } from '../store/useAppStore';
+import { hasSelection, getBlockedCount } from '../lib/familyControls';
+import { useAppStore } from '../store/useAppStore';
 import { Spacing } from '../constants/spacing';
 import type { AppColors } from '../constants/Colors';
 import { CardGradients } from '../constants/Colors';
@@ -49,22 +47,6 @@ import CreateModal, { type CreateOptionKey } from '../components/CreateModal';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-const ROLE_KEYWORDS: Record<string, string[]> = {
-  "Bar Exam / Law school":        ["law", "bar", "mbe", "mee", "legal", "constitutional", "tort", "contracts"],
-  "Medical student (boards)":     ["medical", "usmle", "anatomy", "physiology", "pharmacology", "pathology"],
-  "Academic exam prep":           ["sat", "act", "gre", "gmat", "exam", "academic"],
-  "Professional skills / career": ["business", "finance", "leadership", "management", "career"],
-  "Language learning":            ["language", "spanish", "french", "english", "mandarin"],
-  "Self-improvement / curiosity": [],
-};
-
-function courseMatchesRole(course: any, role: string | null): boolean {
-  if (!role) return true;
-  const keywords = ROLE_KEYWORDS[role] ?? [];
-  if (keywords.length === 0) return false;
-  const haystack = `${course.title} ${course.description ?? ''} ${course.course_topic ?? ''} ${(course.tags ?? []).join(' ')}`.toLowerCase();
-  return keywords.some(kw => haystack.includes(kw));
-}
 
 function topicColor(title: string): { emoji: string; color: string } {
   const t = title.toLowerCase();
@@ -87,19 +69,6 @@ function topicColor(title: string): { emoji: string; color: string } {
   return { emoji: '📚', color: '#6366F1' };
 }
 
-function isTodayGoalDay(cfg: GoalConfig): boolean {
-  const day = new Date().getDay();
-  if (cfg.frequency === 'daily') return true;
-  if (cfg.frequency === 'weekdays') return day >= 1 && day <= 5;
-  return cfg.customDays.includes(day);
-}
-
-function fmtLockTime(t: string) {
-  const [h, m] = t.split(':').map(Number);
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  const h12 = h % 12 === 0 ? 12 : h % 12;
-  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
-}
 
 
 // ── No apps blocked banner ────────────────────────────────────────────────────
@@ -121,390 +90,61 @@ function NoAppsBlockedBanner({ width, isDark, onSetup }: {
   );
 }
 
-// ── Daily mission card ────────────────────────────────────────────────────────
+// ── Apps locked banner ────────────────────────────────────────────────────────
 
-function MissionCard({ goalConfig, todayDone, C, fs, F }: {
-  goalConfig: GoalConfig; todayDone: number; C: AppColors; fs: (n: number) => number; F: any;
+function AppsLockedBanner({ width, blockedCount, blockDurationHours, todayDone, lessonTarget, isDark, onStudy }: {
+  width: number; blockedCount: number; blockDurationHours: number;
+  todayDone: number; lessonTarget: number; isDark: boolean; onStudy: () => void;
 }) {
-  const goalDay = isTodayGoalDay(goalConfig);
-  const goalMet = todayDone >= goalConfig.lessonTarget;
-  const pct     = goalConfig.lessonTarget > 0
-    ? Math.min(1, todayDone / goalConfig.lessonTarget) : 0;
-
-  if (!goalDay) {
-    return (
-      <Animated.View entering={FadeInDown.duration(280)} style={[missionStyles.card, { backgroundColor: C.surfaceAlt, borderColor: C.border }]}>
-        <Text style={{ fontSize: 26 }}>😌</Text>
-        <View style={{ flex: 1 }}>
-          <Text style={[missionStyles.title, { fontFamily: F.semiBold, fontSize: fs(15), color: C.text }]}>Rest day</Text>
-          <Text style={[missionStyles.sub, { fontFamily: F.regular, fontSize: fs(12), color: C.muted }]}>No lessons required today</Text>
-        </View>
-      </Animated.View>
-    );
-  }
-
+  const durationLabel = blockDurationHours === 0.5 ? '30 min' : `${blockDurationHours}h`;
+  const pct = lessonTarget > 0 ? Math.min(1, todayDone / lessonTarget) : 0;
+  const pctLabel = `${Math.round(pct * 100)}%`;
   return (
-    <Animated.View
-      entering={FadeInDown.duration(280)}
-      style={[missionStyles.card, {
-        backgroundColor: goalMet ? `${C.success}0F` : `${C.primary}0C`,
-        borderColor: goalMet ? `${C.success}30` : `${C.primary}28`,
-      }]}
-    >
-      <View style={[missionStyles.iconWrap, { backgroundColor: goalMet ? `${C.success}18` : `${C.primary}18` }]}>
-        <Ionicons
-          name={goalMet ? 'lock-open-outline' : 'lock-closed-outline'}
-          size={20}
-          color={goalMet ? C.success : C.primary}
-        />
-      </View>
-      <View style={{ flex: 1, gap: 6 }}>
-        <View style={missionStyles.row}>
-          <Text style={[missionStyles.title, { fontFamily: F.semiBold, fontSize: fs(15), color: C.text }]}>
-            {goalMet ? 'Apps unlocked' : 'Apps locked'}
-          </Text>
-          <Text style={[{ fontFamily: F.bold, fontSize: fs(13), color: goalMet ? C.success : C.primary }]}>
-            {todayDone}/{goalConfig.lessonTarget}
+    <TouchableOpacity activeOpacity={0.85} onPress={onStudy} style={{ width, height: 155, borderRadius: 20, overflow: 'hidden', opacity: isDark ? 0.85 : 1 }}>
+      <LinearGradient
+        colors={[...CardGradients.indigo] as [string, string]}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+        style={{ flex: 1, padding: 18, justifyContent: 'space-between' }}
+      >
+        {/* Top row — title + count badge */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingRight: 100 }}>
+          <Text style={{ color: '#fff', fontSize: 17, fontFamily: 'Nunito-ExtraBold', lineHeight: 22 }}>
+            Focus Mode Active
           </Text>
         </View>
-        <View style={[missionStyles.trackBg, { backgroundColor: goalMet ? `${C.success}25` : `${C.primary}20` }]}>
-          <View style={[missionStyles.trackFill, { width: `${Math.round(pct * 100)}%` as any, backgroundColor: goalMet ? C.success : C.primary }]} />
-        </View>
-        <Text style={[missionStyles.sub, { fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>
-          {goalMet
-            ? 'Daily goal complete · great work'
-            : `${goalConfig.lessonTarget - todayDone} more lesson${goalConfig.lessonTarget - todayDone !== 1 ? 's' : ''} · locks at ${fmtLockTime(goalConfig.lockTime)}`}
-        </Text>
-      </View>
-    </Animated.View>
-  );
-}
 
-const missionStyles = StyleSheet.create({
-  card: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    paddingHorizontal: Spacing.md, paddingVertical: 14,
-    borderRadius: 16, borderWidth: StyleSheet.hairlineWidth,
-  },
-  iconWrap: { width: 42, height: 42, borderRadius: 13, justifyContent: 'center', alignItems: 'center' },
-  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  title: { lineHeight: 20 },
-  sub: { lineHeight: 16 },
-  trackBg: { height: 5, borderRadius: 3, overflow: 'hidden' },
-  trackFill: { height: '100%', borderRadius: 3 },
-});
-
-
-// ── Group accordion card (kept for potential future use) ─────────────────────
-
-function GroupCard({ group, onCourseSelect, C, fs, F, initialOpen = false, isPremium, freeCourseId }: {
-  group: { name: string; courses: any[] };
-  onCourseSelect: (id: Id<'courses'>) => void;
-  C: AppColors; fs: (n: number) => number; F: any;
-  initialOpen?: boolean;
-  isPremium: boolean;
-  freeCourseId: string | null;
-}) {
-  const [open, setOpen] = useState(initialOpen);
-  const rotation = useSharedValue(initialOpen ? 1 : 0);
-  const chevronAnim = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${rotation.value * 180}deg` }],
-  }));
-
-  const toggle = () => {
-    Haptics.selectionAsync();
-    const next = !open;
-    rotation.value = withSpring(next ? 1 : 0, { damping: 14, stiffness: 160 });
-    setOpen(next);
-  };
-
-  const { emoji, color } = topicColor(group.name);
-  const totalLessons = group.courses.reduce((s: number, c: any) => s + (c.totalLessons ?? 0), 0);
-
-  return (
-    <View style={[accordionStyles.card, { backgroundColor: C.surface, borderColor: open ? `${color}35` : C.border }]}>
-      {/* ── Header (always visible) ── */}
-      <TouchableOpacity style={accordionStyles.header} onPress={toggle} activeOpacity={0.75}>
-        <View style={[accordionStyles.iconWrap, { backgroundColor: `${color}14`, borderColor: `${color}28` }]}>
-          <Text style={{ fontSize: 22 }}>{emoji}</Text>
-        </View>
-        <View style={{ flex: 1, gap: 3 }}>
-          <Text style={[{ fontFamily: F.semiBold, fontSize: fs(15), color: C.text, lineHeight: 20 }]} numberOfLines={2}>
-            {group.name}
+        {/* Bottom section — subtitle + progress */}
+        <View style={{ paddingRight: 110, gap: 8 }}>
+          <Text style={{ color: 'rgba(255,255,255,0.82)', fontSize: 12, fontFamily: 'Nunito-SemiBold' }}>
+            {blockedCount} app{blockedCount !== 1 ? 's' : ''} locked · study for {durationLabel}
           </Text>
-          <Text style={[{ fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>
-            {group.courses.length} course{group.courses.length !== 1 ? 's' : ''} · {totalLessons} lessons
-          </Text>
-        </View>
-        <Animated.View style={chevronAnim}>
-          <Ionicons name="chevron-down" size={18} color={C.muted} />
-        </Animated.View>
-      </TouchableOpacity>
-
-      {/* ── Expanded course rows ── */}
-      {open && (
-        <Animated.View entering={FadeInDown.duration(180)} style={[accordionStyles.courseList, { borderTopColor: C.border }]}>
-          {group.courses.map((course: any, ci: number) => {
-            const { color: cColor } = topicColor(course.title);
-            const locked = !isPremium && course._id !== freeCourseId;
-            return (
-              <TouchableOpacity
-                key={course._id}
-                style={[
-                  accordionStyles.courseRow,
-                  ci < group.courses.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
-                  locked && { opacity: 0.6 },
-                ]}
-                activeOpacity={0.72}
-                onPress={async () => {
-                  if (locked) {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                    await RevenueCatUI.presentPaywall();
-                  } else {
-                    Haptics.selectionAsync();
-                    onCourseSelect(course._id);
-                  }
-                }}
-              >
-                <View style={[accordionStyles.courseDot, { backgroundColor: `${cColor}18`, borderColor: `${cColor}35` }]}>
-                  <Ionicons name={locked ? 'lock-closed' : 'book-outline'} size={13} color={locked ? C.muted : cColor} />
-                </View>
-                <View style={{ flex: 1, gap: 2 }}>
-                  <Text style={[{ fontFamily: F.semiBold, fontSize: fs(13), color: locked ? C.muted : C.text }]} numberOfLines={1}>
-                    {course.title}
-                  </Text>
-                  <Text style={[{ fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>
-                    {locked ? 'Premium' : `${course.totalLessons} lessons`}
-                  </Text>
-                </View>
-                <Ionicons name={locked ? 'lock-closed-outline' : 'chevron-forward'} size={14} color={C.muted} />
-              </TouchableOpacity>
-            );
-          })}
-        </Animated.View>
-      )}
-    </View>
-  );
-}
-
-const accordionStyles = StyleSheet.create({
-  card: { borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: Spacing.md },
-  iconWrap: { width: 48, height: 48, borderRadius: 13, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
-  courseList: { borderTopWidth: StyleSheet.hairlineWidth },
-  courseRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: Spacing.md, paddingVertical: 13 },
-  courseDot: { width: 32, height: 32, borderRadius: 9, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
-});
-
-// ── Courses content (unified: my courses + suggested) ────────────────────────
-
-function CoursesContent({ onUpload, onCourseSelect, suggestedCourses, isPremium, C, fs, F }: {
-  onUpload: () => void;
-  onCourseSelect: (id: Id<'courses'>) => void;
-  suggestedCourses: any[];
-  isPremium: boolean;
-  C: AppColors;
-  fs: (n: number) => number;
-  F: any;
-}) {
-  const styles = React.useMemo(() => makeSharedStyles(C), [C]);
-  const rawCourses = useQuery(api.courses.listMine);
-  const isLoading = rawCourses === undefined;
-  const removeCourse = useMutation(api.courses.remove);
-
-  const personalCourses = ((rawCourses ?? []) as any[]).filter((c: any) => c.status === 'ready');
-
-  const handleCoursePress = async (course: any) => {
-    if (course.status === 'error') {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      await removeCourse({ courseId: course._id as Id<'courses'> });
-      onUpload();
-    } else {
-      Haptics.selectionAsync();
-      onCourseSelect(course._id as Id<'courses'>);
-    }
-  };
-
-  const handleLongPress = (course: any) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    Alert.alert(course.title, 'What would you like to do?', [
-      {
-        text: 'Delete Course', style: 'destructive',
-        onPress: () => Alert.alert('Delete Course', 'This will permanently delete the course and all its lessons.', [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Delete', style: 'destructive',
-            onPress: async () => {
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-              await removeCourse({ courseId: course._id as Id<'courses'> });
-            },
-          },
-        ]),
-      },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
-  };
-
-  if (isLoading) {
-    return (
-      <Animated.View entering={FadeInDown.duration(260)} style={{ gap: 10 }}>
-        {[1, 2, 3].map((i) => (
-          <View key={i} style={[styles.skeletonCard, { backgroundColor: C.surface, borderColor: C.border }]}>
-            <View style={[styles.skeletonIcon, { backgroundColor: C.borderStrong }]} />
-            <View style={{ flex: 1, gap: 8 }}>
-              <View style={[styles.skeletonLine, { width: '55%', backgroundColor: C.borderStrong }]} />
-              <View style={[styles.skeletonLine, { width: '35%', backgroundColor: C.borderStrong }]} />
+          {/* Progress bar row */}
+          <View style={{ gap: 5 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 10, fontFamily: 'Nunito-SemiBold' }}>
+                {todayDone}/{lessonTarget} lessons
+              </Text>
+              <Text style={{ color: '#fff', fontSize: 11, fontFamily: 'Nunito-Bold' }}>
+                {pctLabel}
+              </Text>
+            </View>
+            <View style={{ height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.2)' }}>
+              <View style={{
+                height: '100%', borderRadius: 4,
+                backgroundColor: '#fff',
+                width: `${Math.round(pct * 100)}%`,
+                shadowColor: '#fff', shadowOpacity: 0.6, shadowRadius: 4,
+              }} />
             </View>
           </View>
-        ))}
-      </Animated.View>
-    );
-  }
-
-  return (
-    <Animated.View entering={FadeInDown.duration(260)} style={{ gap: 12 }}>
-      {/* Upload card */}
-      <TouchableOpacity
-        style={[styles.uploadCard, { backgroundColor: C.surface, borderColor: C.border }]}
-        activeOpacity={0.78}
-        onPress={onUpload}
-      >
-        <View style={[styles.uploadIcon, { backgroundColor: `${C.primary}12`, borderColor: `${C.primary}22` }]}>
-          <Text style={{ fontSize: 22 }}>📄</Text>
         </View>
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text style={[{ fontFamily: F.semiBold, fontSize: fs(14), color: C.text }]}>
-            Add study material
-          </Text>
-          <Text style={[{ fontFamily: F.regular, fontSize: fs(12), color: C.sub }]}>
-            PDF · AI generates your lessons
-          </Text>
-        </View>
-        <View style={[styles.arrowBtn, { backgroundColor: `${C.primary}14` }]}>
-          <Ionicons name="add" size={16} color={C.primary} />
-        </View>
-      </TouchableOpacity>
-
-      {/* My courses section */}
-      {personalCourses.length > 0 && (
-        <>
-          {suggestedCourses.length > 0 && (
-            <Text style={[{ fontFamily: F.semiBold, fontSize: fs(11), color: C.muted, letterSpacing: 0.8, textTransform: 'uppercase', paddingHorizontal: 2 }]}>
-              Your Courses
-            </Text>
-          )}
-          <View style={[{ backgroundColor: C.surface, borderColor: C.border, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' }]}>
-            {personalCourses.map((course: any, idx: number) => {
-              const { emoji, color } = topicColor(course.title);
-              return (
-                <TouchableOpacity
-                  key={course._id}
-                  style={[
-                    styles.courseRow,
-                    idx < personalCourses.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
-                  ]}
-                  activeOpacity={0.72}
-                  onPress={() => handleCoursePress(course)}
-                  onLongPress={() => handleLongPress(course)}
-                  delayLongPress={400}
-                >
-                  <View style={[styles.courseIcon, { backgroundColor: `${color}14`, borderColor: `${color}28` }]}>
-                    <Text style={{ fontSize: 20 }}>{emoji}</Text>
-                  </View>
-                  <View style={styles.courseInfo}>
-                    <Text style={[{ fontFamily: F.semiBold, fontSize: fs(14), color: C.text, lineHeight: 19 }]} numberOfLines={2}>
-                      {course.title}
-                    </Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <View style={[{ borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2, backgroundColor: `${color}14` }]}>
-                        <Text style={[{ fontSize: fs(10), fontFamily: F.semiBold, color }]}>{course.totalLessons} lessons</Text>
-                      </View>
-                      <Text style={[{ fontSize: fs(11), fontFamily: F.regular, color: C.muted, flex: 1 }]} numberOfLines={1}>
-                        {course.docName}
-                      </Text>
-                    </View>
-                  </View>
-                  <Ionicons name="chevron-forward" size={15} color={C.muted} />
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </>
-      )}
-
-      {/* Suggested courses section */}
-      {suggestedCourses.length > 0 && (
-        <Animated.View entering={FadeInDown.delay(80).duration(260)} style={{ gap: 8 }}>
-          <Text style={[{ fontFamily: F.semiBold, fontSize: fs(11), color: C.muted, letterSpacing: 0.8, textTransform: 'uppercase', paddingHorizontal: 2 }]}>
-            Suggested for You
-          </Text>
-          <View style={[{ backgroundColor: C.surface, borderColor: C.border, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' }]}>
-            {suggestedCourses.map((course: any, ci: number) => {
-              const { emoji, color } = topicColor(course.title);
-              const locked = !isPremium && ci > 0;
-              return (
-                <TouchableOpacity
-                  key={course._id}
-                  style={[
-                    styles.courseRow,
-                    ci < suggestedCourses.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
-                    locked && { opacity: 0.6 },
-                  ]}
-                  activeOpacity={0.72}
-                  onPress={async () => {
-                    if (locked) {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                      await RevenueCatUI.presentPaywall();
-                    } else {
-                      Haptics.selectionAsync();
-                      onCourseSelect(course._id as Id<'courses'>);
-                    }
-                  }}
-                >
-                  <View style={[styles.courseIcon, { backgroundColor: `${color}14`, borderColor: `${color}28` }]}>
-                    <Text style={{ fontSize: 20 }}>{locked ? '🔒' : emoji}</Text>
-                  </View>
-                  <View style={styles.courseInfo}>
-                    <Text style={[{ fontFamily: F.semiBold, fontSize: fs(14), color: locked ? C.muted : C.text, lineHeight: 19 }]} numberOfLines={2}>
-                      {course.title}
-                    </Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      {!locked && (
-                        <View style={[{ borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2, backgroundColor: `${color}14` }]}>
-                          <Text style={[{ fontSize: fs(10), fontFamily: F.semiBold, color }]}>{course.totalLessons} lessons</Text>
-                        </View>
-                      )}
-                      <View style={[{ borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2, backgroundColor: `${C.primary}10` }]}>
-                        <Text style={[{ fontSize: fs(10), fontFamily: F.semiBold, color: C.primary }]}>From Unloq</Text>
-                      </View>
-                      {locked && (
-                        <Text style={[{ fontSize: fs(11), fontFamily: F.regular, color: C.muted }]}>Premium</Text>
-                      )}
-                    </View>
-                  </View>
-                  <Ionicons name={locked ? 'lock-closed-outline' : 'chevron-forward'} size={15} color={C.muted} />
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </Animated.View>
-      )}
-
-      {/* Empty state — shown only if no courses at all */}
-      {personalCourses.length === 0 && suggestedCourses.length === 0 && (
-        <Animated.View entering={FadeInDown.delay(60).duration(260)} style={styles.empty}>
-          <View style={[styles.emptyIcon, { backgroundColor: C.primaryBg, borderColor: C.border }]}>
-            <Text style={{ fontSize: 34 }}>📄</Text>
-          </View>
-          <Text style={[styles.emptyTitle, { fontSize: fs(17), fontFamily: F.semiBold, color: C.text }]}>
-            No courses yet
-          </Text>
-          <Text style={[styles.emptySub, { fontSize: fs(13), fontFamily: F.regular, color: C.sub }]}>
-            Upload a PDF or YouTube link and AI will generate lessons for you.
-          </Text>
-        </Animated.View>
-      )}
-    </Animated.View>
+      </LinearGradient>
+      <Image
+        source={require('../assets/lock-banner.png')}
+        style={{ position: 'absolute', right: -20, bottom: -10, width: 160, height: 200, transform: [{ rotate: '15deg' }] }}
+        resizeMode="contain"
+      />
+    </TouchableOpacity>
   );
 }
 
@@ -515,26 +155,26 @@ function HomeTabContent({ onUpload, onCourseSelect, onSeeAll, onGoalSetup, C, fs
   C: AppColors; fs: (n: number) => number; F: any; isDark: boolean;
 }) {
   const styles = React.useMemo(() => makeSharedStyles(C), [C]);
-  const { goalConfig, dailyProgress, onboardingRole } = useAppStore();
+  const { goalConfig, dailyProgress, blockDurationHours } = useAppStore();
   const { isPremium } = useEntitlement();
   const viewer = useQuery(api.users.currentUser);
   const rawCourses = useQuery(api.courses.listMine);
   const isCoursesLoading = rawCourses === undefined;
   const personalCourses = (rawCourses ?? []) as any[];
   const [appsSelected, setAppsSelected] = useState(true);
+  const [blockedCount, setBlockedCount] = useState(0);
 
   React.useEffect(() => {
     hasSelection().then(setAppsSelected).catch(() => setAppsSelected(true));
+    getBlockedCount().then(setBlockedCount).catch(() => setBlockedCount(0));
   }, []);
 
   const todayStr  = new Date().toISOString().slice(0, 10);
   const todayDone = dailyProgress.date === todayStr ? dailyProgress.count : 0;
   const lessonTarget = goalConfig?.lessonTarget ?? 1;
-  const goalMet = todayDone >= lessonTarget;
   const firstName = viewer?.name?.split(' ')[0] ?? 'Learner';
 
   const cardWidth = Dimensions.get('window').width - Spacing.lg * 2;
-  const recentCourses = personalCourses.slice(0, 3);
   const continueCourse = personalCourses.find((c: any) => c.status === 'ready');
 
   const hour = new Date().getHours();
@@ -586,19 +226,30 @@ function HomeTabContent({ onUpload, onCourseSelect, onSeeAll, onGoalSetup, C, fs
 
       {/* ── Gradient cards ── */}
       <View style={{ paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, gap: 12 }}>
-        <GradientCard
-          width={cardWidth}
-          title="Create a note"
-          subtitle="Upload a PDF and AI generates your lessons"
-          gradientColors={CardGradients.salmon}
-          onPress={onUpload}
-          actionLabel="Get started"
-          isDark={isDark}
-          imageSource={require('../assets/create-note-mascot.png')}
-        />
+        {(() => {
+          const noteCount = personalCourses.length;
+          const atLimit = !isPremium && noteCount >= FREE_NOTE_LIMIT;
+          const noteBadge = !isPremium
+            ? atLimit ? `${FREE_NOTE_LIMIT}/${FREE_NOTE_LIMIT} notes — upgrade`
+                      : `${noteCount}/${FREE_NOTE_LIMIT} notes`
+            : undefined;
+          return (
+            <GradientCard
+              width={cardWidth}
+              title="Create a note"
+              subtitle={atLimit ? 'Upgrade to add unlimited notes' : 'Upload a PDF and AI generates your lessons'}
+              gradientColors={CardGradients.salmon}
+              onPress={onUpload}
+              actionLabel={atLimit ? 'Upgrade ✨' : 'Get started'}
+              badge={noteBadge}
+              isDark={isDark}
+              imageSource={require('../assets/create-note-mascot.png')}
+            />
+          );
+        })()}
         {!appsSelected
           ? <NoAppsBlockedBanner width={cardWidth} isDark={isDark} onSetup={onGoalSetup} />
-          : goalConfig && <MissionCard goalConfig={goalConfig} todayDone={todayDone} C={C} fs={fs} F={F} />
+          : <AppsLockedBanner width={cardWidth} blockedCount={blockedCount} blockDurationHours={blockDurationHours} todayDone={todayDone} lessonTarget={lessonTarget} isDark={isDark} onStudy={onSeeAll} />
         }
       </View>
 
@@ -898,6 +549,7 @@ function LibraryTab({ onCourseSelect, onUpload, C, fs, F }: {
   const isLibLoading = rawLibCourses === undefined;
   const personalCourses = (rawLibCourses ?? []) as any[];
   const folders = (useQuery(api.courses.listFolders) ?? []) as any[];
+  const { isPremium } = useEntitlement();
 
   const activeFolderName = (folders as any[]).find((f: any) => f._id === activeFolderId)?.name ?? null;
 
@@ -912,17 +564,26 @@ function LibraryTab({ onCourseSelect, onUpload, C, fs, F }: {
     <View style={{ flex: 1 }}>
       <View style={[headerStyles.bar, { borderBottomColor: C.border }]}>
         <Text style={[{ fontFamily: F.bold, fontSize: fs(24), color: C.text }]}>My Library</Text>
-        <TouchableOpacity
-          onPress={() => { Haptics.selectionAsync(); setShowFolderPicker(true); }}
-          activeOpacity={0.75}
-          style={[libStyles.folderChip, { backgroundColor: C.surface, borderColor: C.border }]}
-        >
-          <Ionicons name="folder" size={15} color="#7C6FF7" />
-          <Text style={[libStyles.folderChipTxt, { color: C.text, maxWidth: 90 }]} numberOfLines={1}>
-            {activeFolderName ?? 'All Notes'}
-          </Text>
-          <Ionicons name="chevron-down" size={12} color={C.muted} />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          {!isPremium && (
+            <View style={{ backgroundColor: C.surface, borderColor: C.border, borderWidth: 1, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 }}>
+              <Text style={{ fontFamily: F.semiBold, fontSize: fs(12), color: C.muted }}>
+                {personalCourses.length}/{FREE_NOTE_LIMIT} notes
+              </Text>
+            </View>
+          )}
+          <TouchableOpacity
+            onPress={() => { Haptics.selectionAsync(); setShowFolderPicker(true); }}
+            activeOpacity={0.75}
+            style={[libStyles.folderChip, { backgroundColor: C.surface, borderColor: C.border }]}
+          >
+            <Ionicons name="folder" size={15} color="#7C6FF7" />
+            <Text style={[libStyles.folderChipTxt, { color: C.text, maxWidth: 90 }]} numberOfLines={1}>
+              {activeFolderName ?? 'All Notes'}
+            </Text>
+            <Ionicons name="chevron-down" size={12} color={C.muted} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={{ paddingHorizontal: Spacing.lg, paddingTop: Spacing.md }}>
@@ -983,7 +644,7 @@ function LibraryTab({ onCourseSelect, onUpload, C, fs, F }: {
                 <TouchableOpacity
                   style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 14 }}
                   activeOpacity={0.85}
-                  onPress={() => { Haptics.selectionAsync(); if (!isGenerating) onCourseSelect(course._id as Id<'courses'>); }}
+                  onPress={() => { Haptics.selectionAsync(); onCourseSelect(course._id as Id<'courses'>); }}
                   onLongPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setContextMenuCourse(course); }}
                   delayLongPress={400}
                 >
@@ -1169,12 +830,17 @@ const headerStyles = StyleSheet.create({
 
 // ── Root ─────────────────────────────────────────────────────────────────────
 
+const FREE_NOTE_LIMIT = 3;
+
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { C, fs, F, isDark } = useTheme();
   const { isAuthenticated } = useConvexAuth();
   const { setFlow } = useAppStore();
   const { isConnected, networkLoading } = useNetworkStatus();
+  const { isPremium } = useEntitlement();
+  const rawAllCourses = useQuery(api.courses.listMine);
+  const noteCount = (rawAllCourses ?? []).length;
   const [activeTab, setActiveTab] = useState<HomeTab>('home');
   const [showUpload, setShowUpload] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -1185,15 +851,37 @@ export default function HomeScreen() {
   const [playerMode, setPlayerMode] = useState<'flashcards' | 'quiz' | 'diagram' | undefined>(undefined);
   const [pdfView, setPdfView] = useState<{ url: string; title: string } | null>(null);
 
+  const showUpgradeWall = async () => {
+    try {
+      await RevenueCatUI.presentPaywall();
+    } catch {}
+  };
+
+  const guardNoteLimit = (): boolean => {
+    if (isPremium || noteCount < FREE_NOTE_LIMIT) return true;
+    Alert.alert(
+      `${FREE_NOTE_LIMIT}/${FREE_NOTE_LIMIT} notes used`,
+      'Upgrade to Unloq Pro to create unlimited notes.',
+      [
+        { text: 'Upgrade', onPress: showUpgradeWall },
+        { text: 'Cancel', style: 'cancel' },
+      ],
+    );
+    return false;
+  };
+
   const handleCreateOption = (opt: CreateOptionKey) => {
     setShowCreateModal(false);
+    if (!guardNoteLimit()) return;
     const tab = opt === 'youtube' ? 'youtube' : opt === 'text' ? 'text' : opt === 'capture' ? 'capture' : 'pdf';
     setCreateSourceTab(tab);
     if (isAuthenticated) { setShowUpload(true); } else { setShowAuthModal(true); }
   };
 
   const handleCreatePress = () => {
-    if (isAuthenticated) { setShowCreateModal(true); } else { setShowAuthModal(true); }
+    if (!isAuthenticated) { setShowAuthModal(true); return; }
+    if (!guardNoteLimit()) return;
+    setShowCreateModal(true);
   };
 
   if (showUpload) return (

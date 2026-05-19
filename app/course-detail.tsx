@@ -363,6 +363,7 @@ export default function CourseDetailScreen({
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 if (allQuiz > 0) onOpenQuiz(); else handleGenerateQuiz();
               }}
+              disabled={generatingQuiz}
               loading={generatingQuiz}
               C={C}
             />

@@ -1,21 +1,14 @@
-import * as DocumentPicker from "expo-document-picker";
-import * as FileSystem from "expo-file-system";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useCallback, useState } from "react";
 import {
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { useMutation, useAction, useConvexAuth } from "convex/react";
-import { api } from "../convex/_generated/api";
+import RevenueCatUI from "react-native-purchases-ui";
 import { useAppStore } from "../store/useAppStore";
 import Animated, {
   FadeIn,
@@ -53,10 +46,10 @@ const F = {
 };
 
 // ── Flow ───────────────────────────────────────────────────────────────────────
-type ScreenId = "welcome" | "q_goal" | "q_distraction" | "q_hours" | "q_course";
+type ScreenId = "welcome" | "q_goal" | "feynman" | "ai_notes" | "q_hours";
 
-const FLOW: ScreenId[] = ["welcome", "q_goal", "q_distraction", "q_hours", "q_course"];
-const QUESTION_SCREENS: ScreenId[] = ["q_goal", "q_distraction", "q_hours", "q_course"];
+const FLOW: ScreenId[] = ["welcome", "q_goal", "feynman", "ai_notes", "q_hours"];
+const QUESTION_SCREENS: ScreenId[] = ["q_goal", "feynman", "ai_notes", "q_hours"];
 
 // ── CTAButton ──────────────────────────────────────────────────────────────────
 function CTAButton({
@@ -127,6 +120,32 @@ function OptionCard({
       <Text style={[optStyles.label, selected && optStyles.labelSelected]}>{label}</Text>
       {selected && <Ionicons name="checkmark" size={18} color={C.cta} />}
     </TouchableOpacity>
+  );
+}
+
+// Static info card — same visual as OptionCard but not pressable
+function InfoCard({
+  label,
+  sublabel,
+  iconName,
+  accent,
+}: {
+  label: string;
+  sublabel?: string;
+  iconName: keyof typeof Ionicons.glyphMap;
+  accent?: string;
+}) {
+  const color = accent ?? C.cta;
+  return (
+    <View style={[optStyles.card, { borderColor: color + "30", backgroundColor: color + "08" }]}>
+      <View style={[optStyles.iconBox, { backgroundColor: color + "18" }]}>
+        <Ionicons name={iconName} size={20} color={color} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={[optStyles.label, { color: C.title }]}>{label}</Text>
+        {sublabel ? <Text style={{ fontSize: 12, fontFamily: F.regular, color: C.sub, marginTop: 1 }}>{sublabel}</Text> : null}
+      </View>
+    </View>
   );
 }
 
@@ -258,36 +277,65 @@ function QGoalScreen({ onNext, onSelect }: { onNext: () => void; onSelect: (role
   );
 }
 
-// ── Q: Distraction ─────────────────────────────────────────────────────────────
-const DISTRACTIONS: { iconName: keyof typeof Ionicons.glyphMap; label: string }[] = [
-  { iconName: "phone-portrait-outline", label: "Social media / Reels" },
-  { iconName: "game-controller-outline", label: "Games" },
-  { iconName: "newspaper-outline",      label: "News / Reddit" },
-  { iconName: "play-circle-outline",    label: "YouTube" },
-  { iconName: "chatbubbles-outline",    label: "Messaging apps" },
-  { iconName: "infinite-outline",       label: "Everything honestly" },
-];
-
-function QDistractionScreen({ onNext }: { onNext: () => void }) {
-  const [sel, setSel] = useState<string | null>(null);
+// ── Feynman Technique ──────────────────────────────────────────────────────────
+function FeynmanScreen({ onNext }: { onNext: () => void }) {
   return (
     <Animated.View entering={FadeInDown.duration(300)} style={qs.root}>
-      <Text style={qs.title}>What pulls you{"\n"}away from learning?</Text>
-      {DISTRACTIONS.map((d) => (
-        <OptionCard
-          key={d.label}
-          iconName={d.iconName}
-          label={d.label}
-          selected={sel === d.label}
-          onPress={() => { Haptics.selectionAsync(); setSel(d.label); }}
-        />
-      ))}
-      <View style={{ marginTop: 4 }}>
-        <CTAButton label="Continue" onPress={onNext} disabled={!sel} />
+      <View style={{ marginBottom: 6 }}>
+        <View style={infoStyles.badge}>
+          <Text style={infoStyles.badgeText}>How you'll learn</Text>
+        </View>
+      </View>
+      <Text style={qs.title}>The Feynman{"\n"}Technique</Text>
+      <Text style={[qs.sub, { marginBottom: 16 }]}>The fastest way to truly master anything</Text>
+
+      <InfoCard iconName="book-outline"    label="Study the material"              sublabel="Read and absorb the key ideas" accent="#6366F1" />
+      <InfoCard iconName="create-outline"  label="Explain it simply"               sublabel="Teach it back in plain language" accent="#8B5CF6" />
+      <InfoCard iconName="search-outline"  label="Find your gaps"                  sublabel="Notice what you can't explain yet" accent="#EC4899" />
+      <InfoCard iconName="refresh-outline" label="Go back and fill those gaps"     sublabel="Review until you've got it solid" accent="#F59E0B" />
+
+      <View style={{ marginTop: 8 }}>
+        <CTAButton label="Got it →" onPress={onNext} />
       </View>
     </Animated.View>
   );
 }
+
+// ── AI Generated Notes ─────────────────────────────────────────────────────────
+function AiNotesScreen({ onNext }: { onNext: () => void }) {
+  return (
+    <Animated.View entering={FadeInDown.duration(300)} style={qs.root}>
+      <View style={{ marginBottom: 6 }}>
+        <View style={infoStyles.badge}>
+          <Text style={infoStyles.badgeText}>Powered by AI</Text>
+        </View>
+      </View>
+      <Text style={qs.title}>AI builds your{"\n"}lessons instantly</Text>
+      <Text style={[qs.sub, { marginBottom: 16 }]}>Upload any PDF, YouTube link, or topic</Text>
+
+      <InfoCard iconName="document-text-outline"      label="Smart Notes"   sublabel="Key concepts summarised for you" accent="#6366F1" />
+      <InfoCard iconName="albums-outline"             label="Flashcards"    sublabel="Active recall to lock in memory" accent="#8B5CF6" />
+      <InfoCard iconName="checkmark-circle-outline"   label="Quiz"          sublabel="Test your understanding instantly" accent="#10B981" />
+
+      <View style={{ marginTop: 8 }}>
+        <CTAButton label="Let's go →" onPress={onNext} />
+      </View>
+    </Animated.View>
+  );
+}
+
+const infoStyles = StyleSheet.create({
+  badge: {
+    alignSelf: "flex-start",
+    backgroundColor: C.selected,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: C.selectedBorder + "40",
+  },
+  badgeText: { fontSize: 12, fontFamily: F.semi, color: C.cta },
+});
 
 // ── Q: Hours ───────────────────────────────────────────────────────────────────
 const HOURS_OPTIONS: { iconName: keyof typeof Ionicons.glyphMap; label: string; value: string }[] = [
@@ -325,187 +373,6 @@ const qs = StyleSheet.create({
   sub: { fontSize: 14, fontFamily: F.semi, color: C.sub, marginBottom: 12, marginTop: -12 },
 });
 
-// ── Q: Course ──────────────────────────────────────────────────────────────────
-function QCourseScreen({ onNext, role }: { onNext: () => void; role: string | null }) {
-  const { isAuthenticated } = useConvexAuth();
-  const createCourse   = useMutation(api.courses.create);
-  const generateCourse = useAction(api.ai.generateCourse);
-  const getUploadUrl   = useMutation(api.courses.generateUploadUrl);
-
-  const [topic, setTopic]     = useState("");
-  const [docName, setDocName] = useState<string | null>(null);
-  const [docUri, setDocUri]   = useState<string | null>(null);
-  const [busy, setBusy]       = useState(false);
-  const [done, setDone]       = useState(false);
-
-  const roleLabel = role ?? "your courses";
-
-  const pickDocument = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: "application/pdf",
-        copyToCacheDirectory: true,
-      });
-      if (result.canceled) return;
-      const asset = result.assets[0];
-      setDocName(asset.name);
-      setDocUri(asset.uri);
-      if (!topic) setTopic(asset.name.replace(/\.pdf$/i, ""));
-    } catch {}
-  };
-
-  const handleCreate = async () => {
-    if (!topic.trim() || busy) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setBusy(true);
-    try {
-      if (docUri && docName) {
-        const fileInfo = await FileSystem.getInfoAsync(docUri);
-        const MAX = 20 * 1024 * 1024;
-        if ((fileInfo as any).size > MAX) { setBusy(false); return; }
-        const uploadUrl = await getUploadUrl();
-        const res = await FileSystem.uploadAsync(uploadUrl, docUri, {
-          httpMethod: "POST",
-          mimeType: "application/pdf",
-        });
-        const { storageId } = JSON.parse(res.body);
-        const courseId = await createCourse({
-          title: topic.trim(), description: "", docName,
-          sourceType: "pdf", totalLessons: 5, difficulty: "intermediate",
-        });
-        generateCourse({ courseId, pdfStorageId: storageId, lessonCount: 5, difficulty: "intermediate", includeFlashcards: true, includeQuiz: true, includeDiagram: false }).catch(() => {});
-      } else {
-        const courseId = await createCourse({
-          title: topic.trim(), description: "", docName: topic.trim(),
-          totalLessons: 5, difficulty: "intermediate",
-        });
-        generateCourse({ courseId, courseTopic: topic.trim(), lessonCount: 5, difficulty: "intermediate", includeFlashcards: true, includeQuiz: true, includeDiagram: false }).catch(() => {});
-      }
-      setDone(true);
-      setTimeout(onNext, 1400);
-    } catch { setBusy(false); }
-  };
-
-  if (done) {
-    return (
-      <Animated.View entering={FadeIn.duration(400)} style={qcs.doneRoot}>
-        <LinearGradient colors={["#D1FAE5", "#6EE7B7"]} style={qcs.doneCircle}>
-          <Ionicons name="checkmark" size={48} color={C.green} />
-        </LinearGradient>
-        <Text style={qcs.doneTitle}>Course added!</Text>
-        <Text style={qcs.doneSub}>It'll be ready by the time you get there.</Text>
-      </Animated.View>
-    );
-  }
-
-  return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={qcs.root}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={qcs.readyBadge}>
-          <Text style={qcs.readyCheck}>✓</Text>
-          <Text style={qcs.readyTxt} numberOfLines={2}>
-            {roleLabel} courses are ready for you
-          </Text>
-        </View>
-
-        <Text style={qcs.title}>Add your own{"\n"}study material</Text>
-        <Text style={qcs.sub}>
-          Optional — personalised courses are already waiting. Add your own notes or lecture if you have one.
-        </Text>
-
-        {isAuthenticated ? (
-          <>
-            <View style={qcs.inputWrap}>
-              <TextInput
-                style={qcs.input}
-                placeholder="What's the topic? (e.g. Tort Law)"
-                placeholderTextColor={C.sub}
-                value={topic}
-                onChangeText={setTopic}
-                returnKeyType="done"
-              />
-            </View>
-
-            <TouchableOpacity style={qcs.pdfBtn} onPress={pickDocument} activeOpacity={0.8}>
-              <Text style={qcs.pdfIcon}>{docUri ? "📄" : "📎"}</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={qcs.pdfLabel}>
-                  {docUri ? docName ?? "PDF selected" : "Attach a PDF (optional)"}
-                </Text>
-                {!docUri && <Text style={qcs.pdfSub}>Leave empty to generate from topic name</Text>}
-              </View>
-              {docUri && <Text style={qcs.pdfChange}>Change</Text>}
-            </TouchableOpacity>
-
-            <View style={{ marginTop: 8 }}>
-              <CTAButton
-                label={busy ? "Adding…" : "Add course"}
-                onPress={handleCreate}
-                disabled={!topic.trim() || busy}
-              />
-            </View>
-          </>
-        ) : (
-          <View style={qcs.authNote}>
-            <Text style={qcs.authNoteText}>
-              Sign in from the home screen to add your own courses anytime.
-            </Text>
-          </View>
-        )}
-
-        <TouchableOpacity onPress={onNext} style={qcs.skipBtn} activeOpacity={0.7}>
-          <Text style={qcs.skipTxt}>Skip for now  →</Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </KeyboardAvoidingView>
-  );
-}
-
-const qcs = StyleSheet.create({
-  root: { paddingHorizontal: 24, paddingTop: 8, paddingBottom: 24, gap: 14 },
-  readyBadge: {
-    flexDirection: "row", alignItems: "center", gap: 8,
-    backgroundColor: "#DCFCE7", borderRadius: 30,
-    paddingHorizontal: 14, paddingVertical: 8,
-    alignSelf: "flex-start", marginBottom: 4,
-  },
-  readyCheck: { fontSize: 14, color: "#15803D", fontFamily: F.bold },
-  readyTxt:   { fontSize: 13, fontFamily: F.semi, color: "#15803D", flexShrink: 1 },
-  title: { fontSize: 28, fontFamily: F.extraBold, color: C.title, lineHeight: 36 },
-  sub:   { fontSize: 14, fontFamily: F.semi, color: C.sub, lineHeight: 21 },
-  inputWrap: {
-    backgroundColor: C.card, borderRadius: 14, borderWidth: 1.5,
-    borderColor: C.cardBorder, paddingHorizontal: 16, paddingVertical: 14,
-  },
-  input: { fontSize: 15, fontFamily: F.semi, color: C.title },
-  pdfBtn: {
-    flexDirection: "row", alignItems: "center", gap: 12,
-    backgroundColor: C.card, borderRadius: 14, borderWidth: 1.5,
-    borderColor: C.cardBorder, paddingHorizontal: 16, paddingVertical: 14,
-  },
-  pdfIcon:   { fontSize: 20 },
-  pdfLabel:  { fontSize: 14, fontFamily: F.semi, color: C.title },
-  pdfSub:    { fontSize: 12, fontFamily: F.regular, color: C.sub, marginTop: 2 },
-  pdfChange: { fontSize: 13, fontFamily: F.semi, color: C.cta },
-  authNote: {
-    backgroundColor: C.selected, borderRadius: 14,
-    borderWidth: 1.5, borderColor: C.selectedBorder, padding: 14,
-  },
-  authNoteText: { fontSize: 14, fontFamily: F.semi, color: C.sub, lineHeight: 20, textAlign: "center" },
-  skipBtn: { alignSelf: "center", paddingVertical: 10, marginTop: 4 },
-  skipTxt: { fontSize: 15, fontFamily: F.semi, color: C.sub },
-  doneRoot: { flex: 1, alignItems: "center", justifyContent: "center", gap: 16, paddingHorizontal: 24 },
-  doneCircle: { width: 96, height: 96, borderRadius: 48, justifyContent: "center", alignItems: "center" },
-  doneTitle: { fontSize: 32, fontFamily: F.extraBold, color: C.title },
-  doneSub:   { fontSize: 15, fontFamily: F.semi, color: C.sub, textAlign: "center" },
-});
-
 // ── Main ───────────────────────────────────────────────────────────────────────
 type Props = { onComplete: () => void };
 
@@ -513,41 +380,48 @@ export default function OnboardingScreen({ onComplete }: Props) {
   const insets = useSafeAreaInsets();
   const [idx, setIdx] = useState(0);
   const screen = FLOW[idx];
-  const { onboardingRole, setOnboardingRole, setHoursLost } = useAppStore();
+  const { setOnboardingRole, setHoursLost } = useAppStore();
+
+  const finish = useCallback(async () => {
+    try {
+      await RevenueCatUI.presentPaywall();
+    } catch {}
+    onComplete();
+  }, [onComplete]);
 
   const next = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (idx === FLOW.length - 1) {
-      onComplete();
+      finish();
     } else {
       setIdx((i) => i + 1);
     }
-  }, [idx, onComplete]);
+  }, [idx, finish]);
 
   const showProgress = screen !== "welcome";
   const progressStep = QUESTION_SCREENS.indexOf(screen) + 1;
 
   return (
-    <View style={[root.wrap, { backgroundColor: C.bg }]}>
+    <View style={[rootStyles.wrap, { backgroundColor: C.bg }]}>
       <View style={{ height: insets.top }} />
 
       {showProgress && (
         <Animated.View
           entering={FadeIn.duration(200)}
           exiting={FadeOut.duration(200)}
-          style={root.topBar}
+          style={rootStyles.topBar}
         >
           <ProgressBar step={progressStep} total={QUESTION_SCREENS.length} />
           <Ionicons name="book-outline" size={22} color={C.cta} />
         </Animated.View>
       )}
 
-      <View style={root.content} key={screen}>
-        {screen === "welcome"       && <WelcomeScreen onNext={next} />}
-        {screen === "q_goal"        && <QGoalScreen onNext={next} onSelect={setOnboardingRole} />}
-        {screen === "q_distraction" && <QDistractionScreen onNext={next} />}
-        {screen === "q_hours"       && <QHoursScreen onNext={next} onSelect={setHoursLost} />}
-        {screen === "q_course"      && <QCourseScreen onNext={onComplete} role={onboardingRole} />}
+      <View style={rootStyles.content} key={screen}>
+        {screen === "welcome"   && <WelcomeScreen  onNext={next} />}
+        {screen === "q_goal"    && <QGoalScreen    onNext={next} onSelect={setOnboardingRole} />}
+        {screen === "feynman"   && <FeynmanScreen   onNext={next} />}
+        {screen === "ai_notes"  && <AiNotesScreen   onNext={next} />}
+        {screen === "q_hours"   && <QHoursScreen   onNext={next} onSelect={setHoursLost} />}
       </View>
 
       <View style={{ height: insets.bottom + 8 }} />
@@ -555,7 +429,7 @@ export default function OnboardingScreen({ onComplete }: Props) {
   );
 }
 
-const root = StyleSheet.create({
+const rootStyles = StyleSheet.create({
   wrap: { flex: 1 },
   topBar: {
     flexDirection: "row", alignItems: "center", gap: 12,

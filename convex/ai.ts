@@ -40,11 +40,11 @@ function buildUserPrompt(
     : "";
 
   const flashcardsInstruction = includeFlashcards
-    ? `\nFLASHCARDS (exactly 8): "front" = a key term, concept, or short question from the document. "back" = the answer based on the document (1–3 sentences).`
+    ? `\nFLASHCARDS (exactly 4): "front" = a key term, concept, or short question from the document. "back" = the answer based on the document (1–3 sentences).`
     : "";
 
   const quizInstruction = includeQuiz
-    ? `\nQUIZ (exactly 8 questions, ${quizDepth}): Each question tests a specific fact from the document. One correct option, three plausible distractors.`
+    ? `\nQUIZ (exactly 4 questions, ${quizDepth}): Each question tests a specific fact from the document. One correct option, three plausible distractors.`
     : "";
 
   const diagramInstruction = includeDiagram
@@ -134,11 +134,11 @@ function buildExamUserPrompt(
     : "";
 
   const flashcardsInstruction = includeFlashcards
-    ? "\n\nFLASHCARDS (exactly 8): Front = rule-recall prompt. Back = the complete black-letter rule, stated precisely."
+    ? "\n\nFLASHCARDS (exactly 4): Front = rule-recall prompt. Back = the complete black-letter rule, stated precisely."
     : "";
 
   const quizInstruction = includeQuiz
-    ? "\n\nQUIZ (exactly 8 questions): Each question = a fact-pattern scenario. One correct answer, three plausible distractors based on common exam mistakes."
+    ? "\n\nQUIZ (exactly 4 questions): Each question = a fact-pattern scenario. One correct answer, three plausible distractors based on common exam mistakes."
     : "";
 
   const diagramInstruction = includeDiagram
@@ -953,7 +953,7 @@ export const generateQuizForCourse = action({
     for (const lesson of lessons as any[]) {
       if ((lesson.quiz ?? []).length > 0) continue;
 
-      const prompt = `Generate exactly 8 multiple-choice quiz questions for this lesson.
+      const prompt = `Generate exactly 4 multiple-choice quiz questions for this lesson.
 Lesson title: ${lesson.title}
 Key concept: ${lesson.keyConcept}
 Content: ${(lesson.content ?? []).map((s: any) => `${s.heading}: ${s.body}`).join('\n')}
