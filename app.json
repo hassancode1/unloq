@@ -14,7 +14,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.loqlearn.app",
-      "buildNumber": "50",
+      "buildNumber": "51",
       "minimumOsVersion": "16.0",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
@@ -40,7 +40,8 @@
       "@react-native-community/datetimepicker",
       "./plugins/withFamilyControls",
       "expo-apple-authentication",
-      "expo-web-browser"
+      "expo-web-browser",
+      ["expo-speech-recognition", { "microphonePermission": "Allow Unloq to listen while you teach concepts back to your crew." }]
     ],
     "extra": {
       "eas": {

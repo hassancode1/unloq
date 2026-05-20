@@ -1,6 +1,9 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
 import { Image, ImageSourcePropType, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Animated, {
+  useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming, Easing,
+} from 'react-native-reanimated';
 
 interface Props {
   title: string;
@@ -12,6 +15,38 @@ interface Props {
   imageSource?: ImageSourcePropType;
   actionLabel?: string;
   width?: number;
+}
+
+function AnimatedMascot({ source }: { source: ImageSourcePropType }) {
+  const float = useSharedValue(0);
+  const scale = useSharedValue(1);
+
+  React.useEffect(() => {
+    float.value = withRepeat(
+      withSequence(
+        withTiming(-6, { duration: 1600, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0,  { duration: 1600, easing: Easing.inOut(Easing.ease) }),
+      ), -1, false,
+    );
+    scale.value = withRepeat(
+      withSequence(
+        withTiming(1.04, { duration: 1800, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1.00, { duration: 1800, easing: Easing.inOut(Easing.ease) }),
+      ), -1, false,
+    );
+  }, []);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: float.value }, { scale: scale.value }, { rotate: '15deg' }],
+  }));
+
+  return (
+    <Animated.Image
+      source={source}
+      style={[styles.mascot, animStyle]}
+      resizeMode="contain"
+    />
+  );
 }
 
 export default function GradientCard({
@@ -46,13 +81,7 @@ export default function GradientCard({
         </View>
       </LinearGradient>
 
-      {imageSource && (
-        <Image
-          source={imageSource}
-          style={styles.mascot}
-          resizeMode="contain"
-        />
-      )}
+      {imageSource && <AnimatedMascot source={imageSource} />}
     </TouchableOpacity>
   );
 }
@@ -118,6 +147,5 @@ const styles = StyleSheet.create({
     bottom: -10,
     width: 160,
     height: 200,
-    transform: [{ rotate: '15deg' }],
   },
 });

@@ -1056,3 +1056,59 @@ Include 3-5 branches, each with 2-3 points.`;
     console.log("[diagram] all done for course:", courseId);
   },
 });
+
+// ── Feynman: evaluate a user's verbal explanation of a topic ──────────────────
+
+export const evaluateFeynmanExplanation = action({
+  args: {
+    topicTitle:      v.string(),
+    topicSummary:    v.string(),
+    userExplanation: v.string(),
+    characterAge:    v.number(),
+  },
+  handler: async (_ctx, { topicTitle, topicSummary, userExplanation, characterAge }) => {
+    const anthropicKey = process.env.ANTHROPIC_API_KEY;
+    if (!anthropicKey) throw new Error("No Anthropic API key set.");
+
+    const Anthropic = (await import("@anthropic-ai/sdk")).default;
+    const client = new Anthropic({ apiKey: anthropicKey });
+
+    const system = `You are an expert learning coach evaluating a student's understanding of a topic using the Feynman Technique. The student attempted to explain the topic to someone who is ${characterAge} years old. Your job is to score how well they covered the key concepts and give brief, encouraging feedback.`;
+
+    const userMsg = `TOPIC: ${topicTitle}
+
+KEY CONTENT (ground truth):
+${topicSummary}
+
+STUDENT'S EXPLANATION:
+${userExplanation}
+
+Evaluate the explanation. Return ONLY valid JSON with no markdown:
+{
+  "score": <integer 0-100, based on % of key concepts correctly explained>,
+  "feedback": "<2-3 sentence encouraging feedback — what they got right, what was missing>",
+  "gaps": ["<key concept they missed or got wrong>", ...]
+}`;
+
+    const message = await client.messages.create({
+      model: "claude-3-5-haiku-20241022",
+      max_tokens: 512,
+      system,
+      messages: [{ role: "user", content: userMsg }],
+    });
+
+    const block = message.content.find((b: any) => b.type === "text");
+    const raw = (block as any)?.text?.trim() ?? "{}";
+    const cleaned = raw.replace(/^```json\n?/, "").replace(/^```\n?/, "").replace(/```\n?$/, "").trim();
+    try {
+      const result = JSON.parse(cleaned);
+      return {
+        score:    Math.max(0, Math.min(100, Number(result.score) || 0)),
+        feedback: String(result.feedback ?? "Good effort! Keep practising."),
+        gaps:     Array.isArray(result.gaps) ? result.gaps.map(String) : [],
+      };
+    } catch {
+      return { score: 0, feedback: "Could not evaluate your explanation. Please try again.", gaps: [] };
+    }
+  },
+});

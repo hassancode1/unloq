@@ -21,6 +21,13 @@ import {
 import Animated, {
   FadeIn,
   FadeInDown,
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  withSequence,
+  Easing,
+  interpolate,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useConvexAuth } from 'convex/react';
@@ -45,6 +52,7 @@ import AuthModal from './auth-modal';
 import BottomTabBar, { type HomeTab } from '../components/BottomTabBar';
 import GradientCard from '../components/GradientCard';
 import CreateModal, { type CreateOptionKey } from '../components/CreateModal';
+import FeynmanScreen from './feynman';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -87,6 +95,33 @@ function NoAppsBlockedBanner({ width, isDark, onSetup }: {
       actionLabel="Set up Goal"
       isDark={isDark}
       imageSource={require('../assets/lock-banner.png')}
+    />
+  );
+}
+
+// ── Apps locked mascot (animated) ────────────────────────────────────────────
+
+function AppsLockedMascot() {
+  const float = useSharedValue(0);
+  const scale = useSharedValue(1);
+  React.useEffect(() => {
+    float.value = withRepeat(withSequence(
+      withTiming(-6, { duration: 1600, easing: Easing.inOut(Easing.ease) }),
+      withTiming(0,  { duration: 1600, easing: Easing.inOut(Easing.ease) }),
+    ), -1, false);
+    scale.value = withRepeat(withSequence(
+      withTiming(1.04, { duration: 1800, easing: Easing.inOut(Easing.ease) }),
+      withTiming(1.00, { duration: 1800, easing: Easing.inOut(Easing.ease) }),
+    ), -1, false);
+  }, []);
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: float.value }, { scale: scale.value }, { rotate: '15deg' }],
+  }));
+  return (
+    <Animated.Image
+      source={require('../assets/lock-banner.png')}
+      style={[{ position: 'absolute', right: -20, bottom: -10, width: 160, height: 200 }, animStyle]}
+      resizeMode="contain"
     />
   );
 }
@@ -140,12 +175,80 @@ function AppsLockedBanner({ width, blockedCount, blockDurationHours, todayDone, 
           </View>
         </View>
       </LinearGradient>
-      <Image
-        source={require('../assets/lock-banner.png')}
-        style={{ position: 'absolute', right: -20, bottom: -10, width: 160, height: 200, transform: [{ rotate: '15deg' }] }}
-        resizeMode="contain"
-      />
+      <AppsLockedMascot />
     </TouchableOpacity>
+  );
+}
+
+// ── Home mascot ───────────────────────────────────────────────────────────────
+
+function HomeMascot() {
+  const rot1  = useSharedValue(0);
+  const rot2  = useSharedValue(0);
+  const rot3  = useSharedValue(0);
+  const pulse = useSharedValue(1);
+  const float = useSharedValue(0);
+
+  React.useEffect(() => {
+    rot1.value  = withRepeat(withTiming(360,  { duration: 3800, easing: Easing.linear }), -1, false);
+    rot2.value  = withRepeat(withTiming(-360, { duration: 5500, easing: Easing.linear }), -1, false);
+    rot3.value  = withRepeat(withTiming(360,  { duration: 8000, easing: Easing.linear }), -1, false);
+    pulse.value = withRepeat(withSequence(
+      withTiming(1.06, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
+      withTiming(1.00, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
+    ), -1, false);
+    float.value = withRepeat(withSequence(
+      withTiming(-7, { duration: 1800, easing: Easing.inOut(Easing.ease) }),
+      withTiming(0,  { duration: 1800, easing: Easing.inOut(Easing.ease) }),
+    ), -1, false);
+  }, []);
+
+  const ring1Style = useAnimatedStyle(() => ({ transform: [{ rotate: `${rot1.value}deg` }] }));
+  const ring2Style = useAnimatedStyle(() => ({ transform: [{ rotate: `${rot2.value}deg` }] }));
+  const ring3Style = useAnimatedStyle(() => ({ transform: [{ rotate: `${rot3.value}deg` }] }));
+  const pulseStyle = useAnimatedStyle(() => ({ transform: [{ scale: pulse.value }] }));
+  const floatStyle = useAnimatedStyle(() => ({ transform: [{ translateY: float.value }] }));
+
+  const imgSize = 76; const r1 = 52; const r2 = 64; const r3 = 75; const total = (r3 + 5) * 2;
+
+  return (
+    <Animated.View entering={FadeInDown.delay(40).duration(320)} style={{ alignItems: 'center', paddingTop: 10, paddingBottom: 10 }}>
+      <Animated.View style={[{ width: total, height: total, alignItems: 'center', justifyContent: 'center' }, floatStyle]}>
+
+        {/* Ring 3 — outermost slow CW */}
+        <Animated.View style={[{ position: 'absolute', width: r3 * 2, height: r3 * 2, borderRadius: r3, alignItems: 'center', justifyContent: 'center' }, ring3Style]}>
+          <View style={{ position: 'absolute', width: r3 * 2, height: r3 * 2, borderRadius: r3,
+            borderWidth: 1.5, borderTopColor: '#A78BFA55', borderRightColor: 'transparent',
+            borderBottomColor: '#A78BFA44', borderLeftColor: 'transparent' }} />
+          <View style={{ position: 'absolute', top: 2, width: 6, height: 6, borderRadius: 3, backgroundColor: '#E9D5FF', shadowColor: '#C4B5FD', shadowRadius: 6, shadowOpacity: 1 }} />
+        </Animated.View>
+
+        {/* Ring 2 — middle CCW */}
+        <Animated.View style={[{ position: 'absolute', width: r2 * 2, height: r2 * 2, borderRadius: r2, alignItems: 'center', justifyContent: 'center' }, ring2Style]}>
+          <View style={{ position: 'absolute', width: r2 * 2, height: r2 * 2, borderRadius: r2,
+            borderWidth: 2, borderTopColor: 'transparent', borderRightColor: '#8B5CF6BB',
+            borderBottomColor: 'transparent', borderLeftColor: '#7C3AEDAA' }} />
+          <View style={{ position: 'absolute', right: 1, width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#DDD6FE', shadowColor: '#A78BFA', shadowRadius: 8, shadowOpacity: 1 }} />
+        </Animated.View>
+
+        {/* Ring 1 — inner fast CW */}
+        <Animated.View style={[{ position: 'absolute', width: r1 * 2, height: r1 * 2, borderRadius: r1, alignItems: 'center', justifyContent: 'center' }, ring1Style]}>
+          <View style={{ position: 'absolute', width: r1 * 2, height: r1 * 2, borderRadius: r1,
+            borderWidth: 2.5, borderTopColor: '#9333EACC', borderRightColor: 'transparent',
+            borderBottomColor: '#7C3AEDAA', borderLeftColor: 'transparent' }} />
+          <View style={{ position: 'absolute', top: 0, width: 8, height: 8, borderRadius: 4, backgroundColor: '#F5F3FF', shadowColor: '#9333EA', shadowRadius: 10, shadowOpacity: 1 }} />
+        </Animated.View>
+
+        {/* Purple circle + image */}
+        <Animated.View style={[{ width: imgSize + 8, height: imgSize + 8, borderRadius: (imgSize + 8) / 2,
+          backgroundColor: '#5B21B6', alignItems: 'center', justifyContent: 'center',
+          shadowColor: '#7C3AED', shadowRadius: 18, shadowOpacity: 0.7, shadowOffset: { width: 0, height: 0 },
+        }, pulseStyle]}>
+          <Image source={require('../assets/Fyenman-mascot.png')} style={{ width: imgSize, height: imgSize, borderRadius: imgSize / 2 }} resizeMode="cover" />
+        </Animated.View>
+
+      </Animated.View>
+    </Animated.View>
   );
 }
 
@@ -164,6 +267,7 @@ function HomeTabContent({ onUpload, onCourseSelect, onSeeAll, onGoalSetup, C, fs
   const personalCourses = (rawCourses ?? []) as any[];
   const [appsSelected, setAppsSelected] = useState(true);
   const [blockedCount, setBlockedCount] = useState(0);
+  const [showFeynman, setShowFeynman]   = useState(false);
 
   React.useEffect(() => {
     hasSelection().then(setAppsSelected).catch(() => setAppsSelected(true));
@@ -225,6 +329,9 @@ function HomeTabContent({ onUpload, onCourseSelect, onSeeAll, onGoalSetup, C, fs
         </View>
       </View>
 
+      {/* ── Home mascot ── */}
+      {/* <HomeMascot /> */}
+
       {/* ── Gradient cards ── */}
       <View style={{ paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, gap: 12 }}>
         {(() => {
@@ -252,10 +359,26 @@ function HomeTabContent({ onUpload, onCourseSelect, onSeeAll, onGoalSetup, C, fs
           ? <NoAppsBlockedBanner width={cardWidth} isDark={isDark} onSetup={onGoalSetup} />
           : <AppsLockedBanner width={cardWidth} blockedCount={blockedCount} blockDurationHours={blockDurationHours} todayDone={todayDone} lessonTarget={lessonTarget} isDark={isDark} onStudy={onSeeAll} />
         }
+        {/* ── Feynman card ── */}
+        <GradientCard
+          width={cardWidth}
+          title="Feynman AI"
+          subtitle="Teach it back to a crew member — the fastest way to truly learn"
+          gradientColors={CardGradients.feynman}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowFeynman(true); }}
+          actionLabel="Start session ✨"
+          isDark={isDark}
+          imageSource={require('../assets/Fyenman-mascot.png')}
+        />
       </View>
 
+      {/* ── Feynman modal ── */}
+      <Modal visible={showFeynman} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setShowFeynman(false)}>
+        <FeynmanScreen onClose={() => setShowFeynman(false)} />
+      </Modal>
+
       {/* ── My Courses loading skeleton ── */}
-      {isCoursesLoading && (
+      {/* {isCoursesLoading && (
         <Animated.View entering={FadeInDown.delay(80).duration(260)} style={{ paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg, gap: 10 }}>
           <View style={{ height: 24, width: 130, borderRadius: 8, backgroundColor: C.borderStrong, marginBottom: 4 }} />
           {[1, 2, 3].map((i) => (
@@ -272,7 +395,7 @@ function HomeTabContent({ onUpload, onCourseSelect, onSeeAll, onGoalSetup, C, fs
       )}
 
       {/* ── Continue Learning (most recent course only) ── */}
-      {!isCoursesLoading && continueCourse && (
+      {/* {!isCoursesLoading && continueCourse && (
         <Animated.View entering={FadeInDown.delay(80).duration(260)} style={{ paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg }}>
           <Text style={[{ fontFamily: F.extraBold, fontSize: fs(20), color: C.text, letterSpacing: -0.3, marginBottom: 10 }]}>
             Continue Learning
@@ -314,10 +437,10 @@ function HomeTabContent({ onUpload, onCourseSelect, onSeeAll, onGoalSetup, C, fs
             );
           })()}
         </Animated.View>
-      )}
+      )} */}
 
       {/* Empty state */}
-      {!isCoursesLoading && personalCourses.length === 0 && (
+      {/* {!isCoursesLoading && personalCourses.length === 0 && (
         <Animated.View entering={FadeInDown.delay(60).duration(260)} style={[styles.empty, { marginTop: Spacing.lg }]}>
           <View style={[styles.emptyIcon, { backgroundColor: C.primaryBg, borderColor: C.border }]}>
             <Text style={{ fontSize: 34 }}>📄</Text>
@@ -329,7 +452,7 @@ function HomeTabContent({ onUpload, onCourseSelect, onSeeAll, onGoalSetup, C, fs
             Tap + to upload a PDF and AI will generate lessons for you.
           </Text>
         </Animated.View>
-      )}
+      )}  */}
     </ScrollView>
   );
 }

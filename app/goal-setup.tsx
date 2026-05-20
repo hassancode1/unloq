@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import {
   Alert,
@@ -12,9 +12,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown } from 'react-native-reanimated';  
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
 import DuoButton from '../components/DuoButton';
 import { Spacing } from '../constants/spacing';
 import { useAppStore } from '../store/useAppStore';
