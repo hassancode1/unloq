@@ -1,50 +1,53 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import * as StoreReview from 'expo-store-review';
 import React from 'react';
 import {
   Alert,
   Image,
   Linking,
   ScrollView,
+  Share,
   StyleSheet,
   Switch,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+
 import { useQuery } from 'convex/react';
 import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from '../convex/_generated/api';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../hooks/useTheme';
-import { useAppStore, FONT_SCALE_MIN, FONT_SCALE_MAX, type GoalConfig } from '../store/useAppStore';
+import { useAppStore, FONT_SCALE_MIN, FONT_SCALE_MAX } from '../store/useAppStore';
 import { Spacing } from '../constants/spacing';
 import type { AppColors } from '../constants/Colors';
 
-const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const APP_STORE_ID = '6761177417';
 
-function fmtLockTime(t: string) {
-  const [h, m] = t.split(':').map(Number);
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  const h12 = h % 12 === 0 ? 12 : h % 12;
-  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
-}
-
-function fmtFrequency(g: GoalConfig): string {
-  if (g.frequency === 'daily') return 'Every day';
-  if (g.frequency === 'weekdays') return 'Mon – Fri';
-  const days = [...g.customDays].sort((a, b) => a - b).map((d) => DAY_NAMES[d]).join(', ');
-  return days || '—';
-}
-
-export default function SettingsScreen({ onNavigateToCourses }: { onNavigateToCourses?: () => void }) {
+export default function SettingsScreen({ onNavigateToCourses: _onNavigateToCourses }: { onNavigateToCourses?: () => void }) {
   const insets = useSafeAreaInsets();
   const { C, isDark, fs, fontScale, F } = useTheme();
   const { goalConfig, setFlow, toggleDarkMode, increaseFontScale, decreaseFontScale } = useAppStore();
   const styles = React.useMemo(() => makeStyles(C), [C]);
   const viewer = useQuery(api.users.currentUser);
   const { signOut } = useAuthActions();
+
+  const handleRateApp = async () => {
+    if (await StoreReview.isAvailableAsync()) {
+      StoreReview.requestReview();
+    } else {
+      Linking.openURL(`https://apps.apple.com/app/id${APP_STORE_ID}?action=write-review`);
+    }
+  };
+
+  const handleShareApp = () => {
+    Share.share({
+      message: 'Check out LoqLearn — block distracting apps until you finish your daily study session! https://loqlearn.com',
+    });
+  };
 
   const handleSignOut = () => {
     Alert.alert("Sign Out", "Are you sure you want to sign out?", [
@@ -288,144 +291,24 @@ export default function SettingsScreen({ onNavigateToCourses }: { onNavigateToCo
             Learning Goal
           </Text>
           <View style={styles.card}>
-            {goalConfig ? (
-              <>
-                {[
-                  {
-                    icon: "calendar-outline",
-                    label: "Frequency",
-                    value: fmtFrequency(goalConfig),
-                  },
-                  {
-                    icon: "book-outline",
-                    label: "Daily lessons",
-                    value: `${goalConfig.lessonTarget} lesson${goalConfig.lessonTarget !== 1 ? "s" : ""}`,
-                  },
-                  {
-                    icon: "notifications-outline",
-                    label: "Reminder time",
-                    value: fmtLockTime(goalConfig.lockTime),
-                  },
-                ].map((item, i, arr) => (
-                  <View key={item.label}>
-                    <View style={styles.row}>
-                      <View
-                        style={[
-                          styles.iconBox,
-                          { backgroundColor: `${C.primary}12` },
-                        ]}
-                      >
-                        <Ionicons
-                          name={item.icon as any}
-                          size={15}
-                          color={C.primary}
-                        />
-                      </View>
-                      <Text
-                        style={[
-                          styles.rowLabel,
-                          {
-                            fontSize: fs(14),
-                            fontFamily: F.medium,
-                            color: C.sub,
-                          },
-                        ]}
-                      >
-                        {item.label}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.rowValue,
-                          {
-                            fontSize: fs(14),
-                            fontFamily: F.semiBold,
-                            color: C.text,
-                          },
-                        ]}
-                      >
-                        {item.value}
-                      </Text>
-                    </View>
-                    {i < arr.length - 1 && <View style={styles.separator} />}
-                  </View>
-                ))}
-                <View style={styles.separator} />
-                <TouchableOpacity
-                  style={styles.actionRow}
-                  activeOpacity={0.7}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setFlow("goalsetup");
-                  }}
-                >
-                  <Ionicons name="create-outline" size={15} color={C.primary} />
-                  <Text
-                    style={[
-                      styles.actionTxt,
-                      {
-                        fontSize: fs(14),
-                        fontFamily: F.medium,
-                        color: C.primary,
-                      },
-                    ]}
-                  >
-                    Edit goal
-                  </Text>
-                  <Ionicons
-                    name="chevron-forward"
-                    size={14}
-                    color={C.primary}
-                  />
-                </TouchableOpacity>
-              </>
-            ) : (
-              <TouchableOpacity
-                style={styles.actionRow}
-                activeOpacity={0.7}
-                onPress={() => setFlow("goalsetup")}
-              >
-                <Ionicons
-                  name="add-circle-outline"
-                  size={15}
-                  color={C.primary}
-                />
-                <Text
-                  style={[
-                    styles.actionTxt,
-                    {
-                      fontSize: fs(14),
-                      fontFamily: F.medium,
-                      color: C.primary,
-                    },
-                  ]}
-                >
-                  Set up your learning goal
-                </Text>
-                <Ionicons name="chevron-forward" size={14} color={C.primary} />
-              </TouchableOpacity>
-            )}
-          </View>
-        </Animated.View>
-
-        {/* ── My Courses ── */}
-        <Animated.View entering={FadeInDown.delay(150).duration(280)}>
-          <Text style={[styles.cap, { fontSize: fs(10), fontFamily: F.extraBold, color: C.muted }]}>
-            My Courses
-          </Text>
-          <View style={styles.card}>
             <TouchableOpacity
               style={styles.actionRow}
               activeOpacity={0.7}
               onPress={() => {
                 Haptics.selectionAsync();
-                onNavigateToCourses?.();
+                setFlow("goalsetup");
               }}
             >
               <View style={[styles.iconBox, { backgroundColor: `${C.primary}12` }]}>
-                <Ionicons name="book-outline" size={15} color={C.primary} />
+                <Ionicons name={goalConfig ? "create-outline" : "add-circle-outline"} size={15} color={C.primary} />
               </View>
-              <Text style={[styles.actionTxt, { fontSize: fs(14), fontFamily: F.medium, color: C.primary }]}>
-                View my courses
+              <Text
+                style={[
+                  styles.actionTxt,
+                  { fontSize: fs(14), fontFamily: F.medium, color: C.primary },
+                ]}
+              >
+                {goalConfig ? "Edit goal" : "Set up your learning goal"}
               </Text>
               <Ionicons name="chevron-forward" size={14} color={C.primary} />
             </TouchableOpacity>
@@ -470,6 +353,34 @@ export default function SettingsScreen({ onNavigateToCourses }: { onNavigateToCo
                 1.0.0
               </Text>
             </View>
+            <View style={styles.separator} />
+            <TouchableOpacity
+              style={styles.actionRow}
+              activeOpacity={0.7}
+              onPress={() => { Haptics.selectionAsync(); handleRateApp(); }}
+            >
+              <View style={[styles.iconBox, { backgroundColor: `${C.primary}12` }]}>
+                <Ionicons name="star-outline" size={15} color={C.primary} />
+              </View>
+              <Text style={[styles.rowLabel, { fontSize: fs(14), fontFamily: F.medium, color: C.sub }]}>
+                Rate LoqLearn
+              </Text>
+              <Ionicons name="open-outline" size={14} color={C.muted} />
+            </TouchableOpacity>
+            <View style={styles.separator} />
+            <TouchableOpacity
+              style={styles.actionRow}
+              activeOpacity={0.7}
+              onPress={() => { Haptics.selectionAsync(); handleShareApp(); }}
+            >
+              <View style={[styles.iconBox, { backgroundColor: `${C.primary}12` }]}>
+                <Ionicons name="share-social-outline" size={15} color={C.primary} />
+              </View>
+              <Text style={[styles.rowLabel, { fontSize: fs(14), fontFamily: F.medium, color: C.sub }]}>
+                Share LoqLearn
+              </Text>
+              <Ionicons name="arrow-forward" size={14} color={C.muted} />
+            </TouchableOpacity>
             <View style={styles.separator} />
             <TouchableOpacity
               style={styles.actionRow}

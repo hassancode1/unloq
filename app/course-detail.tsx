@@ -357,7 +357,7 @@ export default function CourseDetailScreen({
             <Tile
               icon="clipboard-outline"
               label="Quiz"
-              sublabel={allQuiz > 0 ? `${allQuiz} questions` : 'Tap to generate'}
+              sublabel={generatingQuiz ? 'Generating…' : allQuiz > 0 ? `${allQuiz} questions` : 'Tap to generate'}
               bg={quiz.bg} color={quiz.color} border={quiz.border} shadow={quiz.shadow}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

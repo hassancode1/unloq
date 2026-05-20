@@ -5,6 +5,7 @@ import Purchases from 'react-native-purchases';
 import RevenueCatUI, { PAYWALL_RESULT } from 'react-native-purchases-ui';
 import React, { useState, useMemo } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Dimensions,
   KeyboardAvoidingView,
@@ -352,30 +353,44 @@ function CreateFolderSheet({ visible, onDismiss, onCreated, C, fs, F }: {
   };
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onDismiss}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: C.bg }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg, paddingBottom: Spacing.md }}>
-          <TouchableOpacity onPress={() => { setName(''); onDismiss(); }} style={{ position: 'absolute', left: Spacing.lg }}>
-            <Text style={{ fontFamily: F.regular, fontSize: fs(16), color: C.text }}>Cancel</Text>
-          </TouchableOpacity>
-          <Text style={{ fontFamily: F.bold, fontSize: fs(17), color: C.text }}>Create Folder</Text>
-        </View>
+    <Modal visible={visible} animationType="fade" transparent onRequestClose={() => { setName(''); onDismiss(); }}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1, justifyContent: 'flex-end' }}
+      >
+        <TouchableOpacity
+          style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.45)' }}
+          activeOpacity={1}
+          onPress={() => { setName(''); onDismiss(); }}
+        />
+        <Animated.View
+          entering={FadeInDown.duration(220)}
+          style={{ backgroundColor: C.bg, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, paddingBottom: Spacing.xl, gap: Spacing.md }}
+        >
+          {/* Handle */}
+          <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: C.borderStrong, alignSelf: 'center', marginBottom: 4 }} />
 
-        <View style={{ alignItems: 'center', paddingVertical: Spacing.lg }}>
-          <View style={{ width: 80, height: 80, borderRadius: 22, backgroundColor: C.surfaceAlt, justifyContent: 'center', alignItems: 'center' }}>
-            <Ionicons name="folder" size={44} color="#7C6FF7" />
+          {/* Header row */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(124,111,247,0.15)', justifyContent: 'center', alignItems: 'center' }}>
+                <Ionicons name="folder" size={20} color="#7C6FF7" />
+              </View>
+              <Text style={{ fontFamily: F.bold, fontSize: fs(17), color: C.text }}>New Folder</Text>
+            </View>
+            <TouchableOpacity onPress={() => { setName(''); onDismiss(); }} hitSlop={8}>
+              <Text style={{ fontFamily: F.regular, fontSize: fs(15), color: C.muted }}>Cancel</Text>
+            </TouchableOpacity>
           </View>
-        </View>
 
-        <View style={{ paddingHorizontal: Spacing.lg, gap: Spacing.sm }}>
-          <Text style={{ fontFamily: F.bold, fontSize: fs(17), color: C.text }}>Folder Name</Text>
+          {/* Input */}
           <TextInput
             style={{
-              borderRadius: 12, borderWidth: 1, borderColor: C.border,
-              backgroundColor: C.surface, paddingHorizontal: 14, paddingVertical: 14,
-              fontFamily: F.regular, fontSize: fs(15), color: C.text,
+              borderRadius: 14, borderWidth: 1.5, borderColor: name.trim() ? '#7C6FF7' : C.border,
+              backgroundColor: C.surface, paddingHorizontal: 16, paddingVertical: 16,
+              fontFamily: F.regular, fontSize: fs(16), color: C.text,
             }}
-            placeholder="Enter folder name"
+            placeholder="Folder name"
             placeholderTextColor={C.muted}
             value={name}
             onChangeText={t => setName(t.slice(0, MAX))}
@@ -383,10 +398,8 @@ function CreateFolderSheet({ visible, onDismiss, onCreated, C, fs, F }: {
             returnKeyType="done"
             onSubmitEditing={handleCreate}
           />
-          <Text style={{ fontFamily: F.regular, fontSize: fs(12), color: C.muted, textAlign: 'right' }}>{name.length}/{MAX}</Text>
-        </View>
 
-        <View style={{ paddingHorizontal: Spacing.lg, paddingTop: Spacing.md }}>
+          {/* Create button */}
           <TouchableOpacity
             onPress={handleCreate}
             disabled={!name.trim()}
@@ -400,7 +413,7 @@ function CreateFolderSheet({ visible, onDismiss, onCreated, C, fs, F }: {
             <Ionicons name="folder-open" size={18} color={name.trim() ? C.bg : C.muted} />
             <Text style={{ fontFamily: F.bold, fontSize: fs(16), color: name.trim() ? C.bg : C.muted }}>Create Folder</Text>
           </TouchableOpacity>
-        </View>
+        </Animated.View>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -659,9 +672,14 @@ function LibraryTab({ onCourseSelect, onUpload, C, fs, F }: {
                     <Text style={[{ fontFamily: F.extraBold, fontSize: fs(14), color: C.text, lineHeight: 19 }]} numberOfLines={1}>
                       {course.title}
                     </Text>
-                    <Text style={[{ fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>
-                      {isGenerating ? 'Generating…' : date}
-                    </Text>
+                    {isGenerating ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                        <ActivityIndicator size="small" color={C.primary} style={{ transform: [{ scale: 0.65 }] }} />
+                        <Text style={[{ fontFamily: F.regular, fontSize: fs(11), color: C.primary }]}>Generating…</Text>
+                      </View>
+                    ) : (
+                      <Text style={[{ fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>{date}</Text>
+                    )}
                   </View>
                 </TouchableOpacity>
                 {/* Three-dot button — sibling, not nested */}
@@ -887,6 +905,7 @@ export default function HomeScreen() {
   if (showUpload) return (
     <UploadScreen
       onBack={() => setShowUpload(false)}
+      onGoToLibrary={() => { setShowUpload(false); setActiveTab('library'); }}
       initialSourceTab={createSourceTab}
       onGenerated={(courseId) => {
         setShowUpload(false);

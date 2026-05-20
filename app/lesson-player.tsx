@@ -13,13 +13,18 @@ import {
 } from 'react-native';
 import Reanimated, {
   FadeInDown,
+  FadeInUp,
+  ZoomIn,
   useSharedValue,
   useAnimatedStyle,
   withRepeat,
+  withSequence,
   withTiming,
   withSpring,
   FadeIn,
   Easing,
+  runOnJS,
+  interpolate,
 } from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -186,21 +191,22 @@ function FlashcardView({
   // RN Animated for swipe — kept entirely separate from Reanimated
   const translateX = useRef(new Animated.Value(0)).current;
 
+  // Reanimated scaleX for flip — collapses to 0, swaps content, expands back
+  const flipScale  = useSharedValue(1);
+  const flipStyle  = useAnimatedStyle(() => ({ transform: [{ scaleX: flipScale.value }] }));
+
   const card     = cards[idx];
   const nextCard = cards[idx + 1];
   const isLast   = idx === cards.length - 1;
   const progressPct = cards.length > 0 ? (idx + 1) / cards.length : 0;
 
-  // Derived animations
   const rotate = translateX.interpolate({
     inputRange: [-300, 0, 300], outputRange: ['-12deg', '0deg', '12deg'],
   });
-  // Next card scales up as current slides away
   const nextScale = translateX.interpolate({
     inputRange: [-SWIPE_THRESHOLD, 0, SWIPE_THRESHOLD],
     outputRange: [1, 0.93, 1], extrapolate: 'clamp',
   });
-  // "Know it" label fades in on right swipe, "Again" on left
   const knowOpacity = translateX.interpolate({
     inputRange: [20, 80], outputRange: [0, 1], extrapolate: 'clamp',
   });
@@ -222,13 +228,21 @@ function FlashcardView({
     Animated.spring(translateX, { toValue: 0, useNativeDriver: true, tension: 120, friction: 8 }).start();
   };
 
+  const toggleBack = useCallback(() => setShowBack(b => !b), []);
+
   const flip = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setShowBack(b => !b);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    // Collapse card horizontally → swap content at midpoint → expand
+    flipScale.value = withTiming(0, { duration: 130, easing: Easing.in(Easing.quad) }, (finished) => {
+      'worklet';
+      if (finished) {
+        runOnJS(toggleBack)();
+        flipScale.value = withSpring(1, { damping: 14, stiffness: 220 });
+      }
+    });
   };
 
   const panResponder = useRef(PanResponder.create({
-    // Only claim gesture once horizontal movement is clear
     onMoveShouldSetPanResponder: (_, gs) =>
       Math.abs(gs.dx) > 8 && Math.abs(gs.dx) > Math.abs(gs.dy),
     onPanResponderGrant: () => translateX.stopAnimation(),
@@ -257,7 +271,7 @@ function FlashcardView({
       {/* ── Card stack ── */}
       <View style={fc.stackArea}>
 
-        {/* Next card — absolutely behind, slightly inset */}
+        {/* Next card — behind, slightly inset */}
         {nextCard && (
           <Animated.View style={[fc.card, fc.nextCard, {
             backgroundColor: C.surface, borderColor: C.border,
@@ -270,7 +284,7 @@ function FlashcardView({
           </Animated.View>
         )}
 
-        {/* Current card — absolutely on top, full area */}
+        {/* Current card — swipe handled by RN Animated, flip by Reanimated scaleX */}
         <Animated.View
           style={[fc.card, fc.currentCard, {
             backgroundColor: showBack ? C.text : C.surface,
@@ -279,7 +293,6 @@ function FlashcardView({
           }]}
           {...panResponder.panHandlers}
         >
-          {/* Swipe direction overlays */}
           <Animated.View style={[fc.swipeTag, fc.swipeTagRight, { opacity: knowOpacity, borderColor: GREEN }]}>
             <Text style={[fc.swipeTagTxt, { color: GREEN, fontFamily: F.extraBold }]}>KNOW IT</Text>
           </Animated.View>
@@ -287,21 +300,23 @@ function FlashcardView({
             <Text style={[fc.swipeTagTxt, { color: '#EF4444', fontFamily: F.extraBold }]}>AGAIN</Text>
           </Animated.View>
 
-          {/* Card content — tap anywhere to flip */}
-          <TouchableOpacity style={fc.cardInner} onPress={flip} activeOpacity={0.97}>
-            <Text style={[fc.sideLabel, { fontFamily: F.extraBold, fontSize: fs(10), color: showBack ? `${C.bg}55` : C.muted }]}>
-              {showBack ? 'ANSWER' : 'QUESTION'}
-            </Text>
-            <Text style={[fc.cardText, { fontFamily: showBack ? F.regular : F.semiBold, fontSize: fs(18), color: showBack ? C.bg : C.text }]}>
-              {showBack ? card?.back : card?.front}
-            </Text>
-            {!showBack && (
-              <View style={[fc.tapPill, { backgroundColor: showBack ? `${C.bg}15` : C.surfaceAlt }]}>
-                <Ionicons name="sync-outline" size={13} color={C.muted} />
-                <Text style={[{ fontFamily: F.semiBold, fontSize: fs(11), color: C.muted }]}>Tap to flip</Text>
-              </View>
-            )}
-          </TouchableOpacity>
+          {/* Flip wrapper — scaleX collapses and expands on tap */}
+          <Reanimated.View style={[fc.cardInner, flipStyle]}>
+            <TouchableOpacity style={fc.cardInner} onPress={flip} activeOpacity={0.97}>
+              <Text style={[fc.sideLabel, { fontFamily: F.extraBold, fontSize: fs(10), color: showBack ? `${C.bg}55` : C.muted }]}>
+                {showBack ? 'ANSWER' : 'QUESTION'}
+              </Text>
+              <Text style={[fc.cardText, { fontFamily: showBack ? F.regular : F.semiBold, fontSize: fs(18), color: showBack ? C.bg : C.text }]}>
+                {showBack ? card?.back : card?.front}
+              </Text>
+              {!showBack && (
+                <View style={[fc.tapPill, { backgroundColor: C.surfaceAlt }]}>
+                  <Ionicons name="sync-outline" size={13} color={C.muted} />
+                  <Text style={[{ fontFamily: F.semiBold, fontSize: fs(11), color: C.muted }]}>Tap to reveal</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </Reanimated.View>
         </Animated.View>
       </View>
 
@@ -625,19 +640,46 @@ function QuizView({
   const [correct, setCorrect]   = useState(0);
   const [done, setDone]         = useState(false);
 
+  // Slide animation for question transitions
+  const slideX = useSharedValue(0);
+  const slideStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: slideX.value }],
+    opacity: interpolate(Math.abs(slideX.value), [0, 200], [1, 0], 'clamp'),
+  }));
+
   const q      = questions[idx];
   const isLast = idx >= questions.length - 1;
 
   const handleCheck = () => {
     if (!selected || answered) return;
-    Haptics.selectionAsync();
-    if (selected === q.correctAnswer) setCorrect(c => c + 1);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (selected === q.correctAnswer) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setCorrect(c => c + 1);
+    } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
     setAnswered(true);
   };
 
+  const goNext = useCallback(() => {
+    setIdx(i => i + 1);
+    setSelected(null);
+    setAnswered(false);
+  }, []);
+
   const handleNext = () => {
-    if (isLast) { setDone(true); }
-    else { setIdx(i => i + 1); setSelected(null); setAnswered(false); }
+    if (isLast) { setDone(true); return; }
+    Haptics.selectionAsync();
+    // Slide out left, swap question, slide in from right
+    slideX.value = withTiming(-380, { duration: 200, easing: Easing.in(Easing.quad) }, (finished) => {
+      'worklet';
+      if (finished) {
+        runOnJS(goNext)();
+        slideX.value = 380;
+        slideX.value = withSpring(0, { damping: 18, stiffness: 200 });
+      }
+    });
   };
 
   // ── Results ──
@@ -648,22 +690,35 @@ function QuizView({
 
     return (
       <View style={[qz.results, { flex: 1 }]}>
-        <Text style={{ fontSize: 64, lineHeight: 80 }}>{emoji}</Text>
-        <Text style={[{ fontFamily: F.extraBold, fontSize: fs(52), lineHeight: fs(64), color: score >= 60 ? GREEN : '#EF4444' }]}>
+        <Reanimated.Text entering={ZoomIn.springify().damping(12)} style={{ fontSize: 64, lineHeight: 80 }}>
+          {emoji}
+        </Reanimated.Text>
+        <Reanimated.Text
+          entering={FadeInDown.delay(120).springify().damping(14)}
+          style={[{ fontFamily: F.extraBold, fontSize: fs(52), lineHeight: fs(64), color: score >= 60 ? GREEN : '#EF4444' }]}
+        >
           {score}%
-        </Text>
-        <Text style={[{ fontFamily: F.bold, fontSize: fs(22), color: C.text, textAlign: 'center' }]}>{label}</Text>
-        <Text style={[{ fontFamily: F.regular, fontSize: fs(14), color: C.muted }]}>
+        </Reanimated.Text>
+        <Reanimated.Text
+          entering={FadeInDown.delay(200).duration(260)}
+          style={[{ fontFamily: F.bold, fontSize: fs(22), color: C.text, textAlign: 'center' }]}
+        >
+          {label}
+        </Reanimated.Text>
+        <Reanimated.Text
+          entering={FadeInDown.delay(260).duration(260)}
+          style={[{ fontFamily: F.regular, fontSize: fs(14), color: C.muted }]}
+        >
           {correct} out of {questions.length} correct
-        </Text>
-        <View style={qz.pipRow}>
+        </Reanimated.Text>
+        <Reanimated.View entering={FadeInUp.delay(320).duration(280)} style={qz.pipRow}>
           {questions.map((_, i) => (
             <View key={i} style={[qz.pip, i < correct ? { backgroundColor: GREEN, borderColor: GREEN } : { backgroundColor: '#FEE2E2', borderColor: '#EF4444' }]} />
           ))}
-        </View>
-        <View style={{ width: '100%', marginTop: Spacing.md }}>
+        </Reanimated.View>
+        <Reanimated.View entering={FadeInUp.delay(400).springify()} style={{ width: '100%', marginTop: Spacing.md }}>
           <DuoButton label="Continue" color={C.primary} onPress={() => onFinish(correct, questions.length)} icon={<Ionicons name="arrow-forward" size={17} color="#fff" />} />
-        </View>
+        </Reanimated.View>
       </View>
     );
   }
@@ -678,39 +733,50 @@ function QuizView({
   return (
     <>
       <View style={[qz.progressTrack, { backgroundColor: C.surfaceAlt }]}>
-        <View style={[qz.progressFill, { width: `${((idx + (answered ? 1 : 0)) / questions.length) * 100}%`, backgroundColor: C.primary }]} />
+        <Reanimated.View style={[qz.progressFill, { width: `${((idx + (answered ? 1 : 0)) / questions.length) * 100}%`, backgroundColor: C.primary }]} />
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={[qz.scroll, { paddingBottom: 120 }]} showsVerticalScrollIndicator={false}>
-        <View style={[qz.questionCard, { backgroundColor: C.surface, borderColor: C.border }]}>
-          <Text style={[qz.questionNum, { fontFamily: F.extraBold, fontSize: fs(10), color: C.primary }]}>
-            QUESTION {idx + 1} OF {questions.length}
-          </Text>
-          <Text style={[qz.questionText, { fontFamily: F.semiBold, fontSize: fs(17), color: C.text, lineHeight: fs(17) * 1.55 }]}>
-            {q.question}
-          </Text>
-        </View>
+        {/* Slide-animated question + options — key forces remount on question change */}
+        <Reanimated.View style={slideStyle}>
+          <View style={[qz.questionCard, { backgroundColor: C.surface, borderColor: C.border }]}>
+            <Text style={[qz.questionNum, { fontFamily: F.extraBold, fontSize: fs(10), color: C.primary }]}>
+              QUESTION {idx + 1} OF {questions.length}
+            </Text>
+            <Text style={[qz.questionText, { fontFamily: F.semiBold, fontSize: fs(17), color: C.text, lineHeight: fs(17) * 1.55 }]}>
+              {q.question}
+            </Text>
+          </View>
 
-        <View style={qz.options}>
-          {q.options.map((opt: string, i: number) => (
-            <TouchableOpacity
-              key={i} onPress={() => !answered && setSelected(opt)}
-              disabled={answered} activeOpacity={answered ? 1 : 0.75}
-              style={[qz.option, { backgroundColor: optBg(opt), borderColor: optBorder(opt) }]}
-            >
-              <View style={[qz.bullet, { backgroundColor: bulletBg(opt), borderColor: optBorder(opt) }]}>
-                <Text style={[qz.bulletTxt, { fontFamily: F.extraBold, fontSize: fs(12), color: answered || selected === opt ? '#fff' : C.muted }]}>
-                  {String.fromCharCode(65 + i)}
+          <View style={qz.options}>
+            {q.options.map((opt: string, i: number) => (
+              <TouchableOpacity
+                key={i} onPress={() => !answered && setSelected(opt)}
+                disabled={answered} activeOpacity={answered ? 1 : 0.75}
+                style={[qz.option, { backgroundColor: optBg(opt), borderColor: optBorder(opt) }]}
+              >
+                <View style={[qz.bullet, { backgroundColor: bulletBg(opt), borderColor: optBorder(opt) }]}>
+                  <Text style={[qz.bulletTxt, { fontFamily: F.extraBold, fontSize: fs(12), color: answered || selected === opt ? '#fff' : C.muted }]}>
+                    {String.fromCharCode(65 + i)}
+                  </Text>
+                </View>
+                <Text style={[qz.optionTxt, { fontFamily: F.semiBold, fontSize: fs(14), color: optColor(opt), flex: 1, lineHeight: 20 }]}>
+                  {opt}
                 </Text>
-              </View>
-              <Text style={[qz.optionTxt, { fontFamily: F.semiBold, fontSize: fs(14), color: optColor(opt), flex: 1, lineHeight: 20 }]}>
-                {opt}
-              </Text>
-              {answered && opt === q.correctAnswer && <Ionicons name="checkmark-circle" size={18} color={GREEN} />}
-              {answered && opt === selected && opt !== q.correctAnswer && <Ionicons name="close-circle" size={18} color="#EF4444" />}
-            </TouchableOpacity>
-          ))}
-        </View>
+                {answered && opt === q.correctAnswer && (
+                  <Reanimated.View entering={ZoomIn.springify().damping(12)}>
+                    <Ionicons name="checkmark-circle" size={18} color={GREEN} />
+                  </Reanimated.View>
+                )}
+                {answered && opt === selected && opt !== q.correctAnswer && (
+                  <Reanimated.View entering={ZoomIn.springify().damping(12)}>
+                    <Ionicons name="close-circle" size={18} color="#EF4444" />
+                  </Reanimated.View>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </Reanimated.View>
       </ScrollView>
 
       <Footer C={C}>

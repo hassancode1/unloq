@@ -39,7 +39,7 @@ const DEFAULT_LESSON_COUNT = 7;
 const DEFAULT_DIFFICULTY   = 'intermediate' as const;
 
 type SourceType = 'pdf' | 'youtube' | 'text' | 'capture';
-type Props = { onBack: () => void; initialSourceTab?: SourceType; onGenerated?: (courseId: string) => void };
+type Props = { onBack: () => void; onGoToLibrary?: () => void; initialSourceTab?: SourceType; onGenerated?: (courseId: string) => void };
 
 // ── Generation screen ─────────────────────────────────────────────────────────
 
@@ -51,7 +51,7 @@ const GEN_STEPS = [
   { label: 'Note ready',            ms: 22000 },
 ];
 
-function GeneratingView({ onBack }: { onBack: () => void }) {
+function GeneratingView({ onBack, onGoToLibrary }: { onBack: () => void; onGoToLibrary?: () => void }) {
   const { C, fs, F } = useTheme();
   const [doneSteps, setDoneSteps] = useState<number[]>([]);
   const [activeStep, setActiveStep] = useState(0);
@@ -141,7 +141,7 @@ function GeneratingView({ onBack }: { onBack: () => void }) {
           <Animated.View entering={FadeInUp.duration(400)} style={{ width: '100%' }}>
             <TouchableOpacity
               style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, height: 54, borderRadius: 14, backgroundColor: C.text }}
-              onPress={onBack}
+              onPress={onGoToLibrary ?? onBack}
               activeOpacity={0.85}
             >
               <Ionicons name="library-outline" size={18} color={C.bg} />
@@ -156,7 +156,7 @@ function GeneratingView({ onBack }: { onBack: () => void }) {
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 
-export default function UploadScreen({ onBack, initialSourceTab, onGenerated }: Props) {
+export default function UploadScreen({ onBack, onGoToLibrary, initialSourceTab, onGenerated }: Props) {
   const insets = useSafeAreaInsets();
   const { C, fs, F } = useTheme();
 
@@ -303,7 +303,7 @@ export default function UploadScreen({ onBack, initialSourceTab, onGenerated }: 
   };
 
   if (phase === 'uploading' || phase === 'done') {
-    return <GeneratingView onBack={onBack} />;
+    return <GeneratingView onBack={onBack} onGoToLibrary={onGoToLibrary} />;
   }
 
   return (

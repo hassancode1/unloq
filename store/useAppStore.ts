@@ -11,6 +11,7 @@ export interface GoalConfig {
   lessonTarget: number;
   lockTime: string; // 'HH:MM' — used as reminder time
   examDate: string | null; // 'YYYY-MM-DD' or null
+  goalSetDate?: string; // 'YYYY-MM-DD' — grace period: don't lock on the day goal was first set
 }
 
 interface DailyProgress {

@@ -78,8 +78,12 @@ function computeShouldLock(
     );
   if (!isAfterLockTime) return false;
 
-  // Daily goal already met → don't lock
   const todayDate = now.toISOString().slice(0, 10);
+
+  // Grace period: don't lock on the day the goal was first set
+  if (goalConfig.goalSetDate === todayDate) return false;
+
+  // Daily goal already met → don't lock
   const todayDone = dailyProgress.date === todayDate ? dailyProgress.count : 0;
   return todayDone < goalConfig.lessonTarget;
 }

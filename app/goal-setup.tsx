@@ -187,6 +187,7 @@ type Props = { onComplete: () => void; onBack?: () => void };
 export default function GoalSetupScreen({ onComplete, onBack }: Props) {
   const insets = useSafeAreaInsets();
   const setGoalConfig = useAppStore((s) => s.setGoalConfig);
+  const existingGoalConfig = useAppStore((s) => s.goalConfig);
   const setBlockDurationHoursStore = useAppStore((s) => s.setBlockDurationHours);
   const { C, fs, F } = useTheme();
   const styles = React.useMemo(() => makeStyles(C), [C]);
@@ -267,12 +268,15 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
 
   const handleSave = useCallback(async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    const today = new Date().toISOString().slice(0, 10);
     const cfg = {
       frequency,
       customDays,
       lessonTarget: 1,
       lockTime: toTimeString(lockDate),
       examDate: null,
+      // Only set grace period on first setup (not when editing an existing goal)
+      goalSetDate: existingGoalConfig?.goalSetDate ?? today,
     };
     setGoalConfig(cfg);
     setBlockDurationHoursStore(resolvedHours);
@@ -283,7 +287,7 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
       console.error('[Notifications] Failed to schedule reminders:', e);
     }
     onComplete();
-  }, [frequency, customDays, resolvedHours, lockDate, setGoalConfig, onComplete]);
+  }, [frequency, customDays, resolvedHours, lockDate, existingGoalConfig, setGoalConfig, onComplete]);
 
   const StepDots = () => (
     <View style={styles.stepDots}>
