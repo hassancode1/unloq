@@ -48,11 +48,11 @@ export const DarkColors = {
 export type AppColors = typeof LightColors;
 
 export const CardGradients = {
-  salmon:  ['#FF6B6B', '#FF8E53'] as const,
-  indigo:  ['#667eea', '#764ba2'] as const,
-  teal:    ['#11998e', '#38ef7d'] as const,
+  salmon:  ['#FF2D55', '#FF7B37'] as const,
+  indigo:  ['#4338CA', '#7C3AED'] as const,
+  teal:    ['#0D9488', '#34D399'] as const,
   blue:    ['#1D4ED8', '#3B82F6'] as const,
-  feynman: ['#4338CA', '#9333EA'] as const,
+  feynman: ['#1e0a3c', '#9333EA'] as const,
 };
 
 export const CreateOptionColors: Record<string, string> = {

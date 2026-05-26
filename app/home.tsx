@@ -88,11 +88,11 @@ function NoAppsBlockedBanner({ width, isDark, onSetup }: {
   return (
     <GradientCard
       width={width}
-      title="No apps blocked yet"
+      title="No apps blocked"
       subtitle="Set up your goal to start locking distractions"
       gradientColors={CardGradients.indigo}
       onPress={onSetup}
-      actionLabel="Set up Goal"
+      actionLabel="Set up Goal →"
       isDark={isDark}
       imageSource={require('../assets/lock-banner.png')}
     />
@@ -136,46 +136,67 @@ function AppsLockedBanner({ width, blockedCount, blockDurationHours, todayDone, 
   const pct = lessonTarget > 0 ? Math.min(1, todayDone / lessonTarget) : 0;
   const pctLabel = `${Math.round(pct * 100)}%`;
   return (
-    <TouchableOpacity activeOpacity={0.85} onPress={onStudy} style={{ width, height: 155, borderRadius: 20, overflow: 'hidden', opacity: isDark ? 0.85 : 1 }}>
-      <LinearGradient
-        colors={[...CardGradients.indigo] as [string, string]}
-        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-        style={{ flex: 1, padding: 18, justifyContent: 'space-between' }}
-      >
-        {/* Top row — title + count badge */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingRight: 100 }}>
-          <Text style={{ color: '#fff', fontSize: 17, fontFamily: 'Nunito-ExtraBold', lineHeight: 22 }}>
-            Focus Mode Active
-          </Text>
-        </View>
+    <TouchableOpacity
+      activeOpacity={0.80}
+      onPress={onStudy}
+      style={{
+        width,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.30,
+        shadowRadius: 20,
+        elevation: 14,
+      }}
+    >
+      <View style={{ height: 182, borderRadius: 24, overflow: 'hidden', opacity: isDark ? 0.92 : 1, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
+        <LinearGradient
+          colors={[...CardGradients.indigo] as [string, string]}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+          style={{ flex: 1, padding: 20, justifyContent: 'flex-end' }}
+        >
+          {/* Glass sheen */}
+          <LinearGradient
+            colors={['rgba(255,255,255,0.28)', 'rgba(255,255,255,0.0)']}
+            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 100 }}
+            pointerEvents="none"
+          />
+          {/* Decorative arcs */}
+          <View style={{ position: 'absolute', width: 200, height: 200, borderRadius: 100, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.13)', top: -70, right: -40 }} pointerEvents="none" />
+          <View style={{ position: 'absolute', width: 140, height: 140, borderRadius: 70, borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)', top: -30, right: -5 }} pointerEvents="none" />
+          <View style={{ position: 'absolute', width: 90, height: 90, borderRadius: 45, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', top: 5, right: 30 }} pointerEvents="none" />
 
-        {/* Bottom section — subtitle + progress */}
-        <View style={{ paddingRight: 110, gap: 8 }}>
-          <Text style={{ color: 'rgba(255,255,255,0.82)', fontSize: 12, fontFamily: 'Nunito-SemiBold' }}>
-            {blockedCount} app{blockedCount !== 1 ? 's' : ''} locked · study for {durationLabel}
-          </Text>
-          {/* Progress bar row */}
-          <View style={{ gap: 5 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 10, fontFamily: 'Nunito-SemiBold' }}>
-                {todayDone}/{lessonTarget} lessons
-              </Text>
-              <Text style={{ color: '#fff', fontSize: 11, fontFamily: 'Nunito-Bold' }}>
-                {pctLabel}
-              </Text>
-            </View>
-            <View style={{ height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.2)' }}>
-              <View style={{
-                height: '100%', borderRadius: 4,
-                backgroundColor: '#fff',
-                width: `${Math.round(pct * 100)}%`,
-                shadowColor: '#fff', shadowOpacity: 0.6, shadowRadius: 4,
-              }} />
+          {/* All content pinned to bottom */}
+          <View style={{ paddingRight: 120, gap: 3 }}>
+            <Text style={{ color: '#fff', fontSize: 24, fontFamily: 'Nunito-ExtraBold', lineHeight: 28, letterSpacing: -0.6, textShadowColor: 'rgba(0,0,0,0.25)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 6 }}>
+              Focus Mode
+            </Text>
+            <Text style={{ color: 'rgba(255,255,255,0.76)', fontSize: 12, fontFamily: 'Nunito-SemiBold', lineHeight: 17, marginBottom: 8 }}>
+              {blockedCount} app{blockedCount !== 1 ? 's' : ''} locked · study for {durationLabel}
+            </Text>
+            {/* Progress bar */}
+            <View style={{ gap: 5 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text style={{ color: 'rgba(255,255,255,0.55)', fontSize: 10, fontFamily: 'Nunito-SemiBold' }}>
+                  {todayDone}/{lessonTarget} lessons
+                </Text>
+                <Text style={{ color: '#fff', fontSize: 11, fontFamily: 'Nunito-ExtraBold', letterSpacing: 0.2 }}>
+                  {pctLabel}
+                </Text>
+              </View>
+              <View style={{ height: 9, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.18)' }}>
+                <View style={{
+                  height: '100%', borderRadius: 5,
+                  backgroundColor: '#fff',
+                  width: `${Math.round(pct * 100)}%`,
+                  shadowColor: '#fff', shadowOpacity: 0.8, shadowRadius: 6,
+                }} />
+              </View>
             </View>
           </View>
-        </View>
-      </LinearGradient>
-      <AppsLockedMascot />
+        </LinearGradient>
+        <AppsLockedMascot />
+      </View>
     </TouchableOpacity>
   );
 }
@@ -254,8 +275,9 @@ function HomeMascot() {
 
 // ── Home tab ─────────────────────────────────────────────────────────────────
 
-function HomeTabContent({ onUpload, onCourseSelect, onSeeAll, onGoalSetup, C, fs, F, isDark }: {
+function HomeTabContent({ onUpload, onCourseSelect, onSeeAll, onGoalSetup, onOpenFeynman, onUpgrade, C, fs, F, isDark }: {
   onUpload: () => void; onCourseSelect: (id: Id<'courses'>) => void; onSeeAll: () => void; onGoalSetup: () => void;
+  onOpenFeynman: () => void; onUpgrade: () => void;
   C: AppColors; fs: (n: number) => number; F: any; isDark: boolean;
 }) {
   const styles = React.useMemo(() => makeSharedStyles(C), [C]);
@@ -263,11 +285,11 @@ function HomeTabContent({ onUpload, onCourseSelect, onSeeAll, onGoalSetup, C, fs
   const { isPremium } = useEntitlement();
   const viewer = useQuery(api.users.currentUser);
   const rawCourses = useQuery(api.courses.listMine);
+  const myStats = useQuery(api.courses.getMyStats);
   const isCoursesLoading = rawCourses === undefined;
   const personalCourses = (rawCourses ?? []) as any[];
   const [appsSelected, setAppsSelected] = useState(true);
   const [blockedCount, setBlockedCount] = useState(0);
-  const [showFeynman, setShowFeynman]   = useState(false);
 
   React.useEffect(() => {
     hasSelection().then(setAppsSelected).catch(() => setAppsSelected(true));
@@ -305,12 +327,9 @@ function HomeTabContent({ onUpload, onCourseSelect, onSeeAll, onGoalSetup, C, fs
             </View>
           ) : (
             <TouchableOpacity
-              onPress={async () => {
+              onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                const result = await RevenueCatUI.presentPaywall();
-                if (result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED) {
-                  await Purchases.getCustomerInfo();
-                }
+                onUpgrade();
               }}
               activeOpacity={0.8}
               style={[headerStyles.badge, { backgroundColor: `${C.primary}10`, borderColor: `${C.primary}22` }]}
@@ -335,11 +354,11 @@ function HomeTabContent({ onUpload, onCourseSelect, onSeeAll, onGoalSetup, C, fs
       {/* ── Gradient cards ── */}
       <View style={{ paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, gap: 12 }}>
         {(() => {
-          const noteCount = personalCourses.length;
-          const atLimit = !isPremium && noteCount >= FREE_NOTE_LIMIT;
+          const lifetimeCount = myStats?.totalNotesCreated ?? personalCourses.length;
+          const atLimit = !isPremium && lifetimeCount >= FREE_NOTE_LIMIT;
           const noteBadge = !isPremium
             ? atLimit ? `${FREE_NOTE_LIMIT}/${FREE_NOTE_LIMIT} notes — upgrade`
-                      : `${noteCount}/${FREE_NOTE_LIMIT} notes`
+                      : `${lifetimeCount}/${FREE_NOTE_LIMIT} notes`
             : undefined;
           return (
             <GradientCard
@@ -365,17 +384,12 @@ function HomeTabContent({ onUpload, onCourseSelect, onSeeAll, onGoalSetup, C, fs
           title="Feynman AI"
           subtitle="Teach it back to a crew member — the fastest way to truly learn"
           gradientColors={CardGradients.feynman}
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowFeynman(true); }}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onOpenFeynman(); }}
           actionLabel="Start session ✨"
           isDark={isDark}
           imageSource={require('../assets/Fyenman-mascot.png')}
         />
       </View>
-
-      {/* ── Feynman modal ── */}
-      <Modal visible={showFeynman} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setShowFeynman(false)}>
-        <FeynmanScreen onClose={() => setShowFeynman(false)} />
-      </Modal>
 
       {/* ── My Courses loading skeleton ── */}
       {/* {isCoursesLoading && (
@@ -672,8 +686,11 @@ function FolderPickerSheet({ visible, folders, activeFolderId, onSelect, onDismi
 
 // ── Library tab ───────────────────────────────────────────────────────────────
 
-function LibraryTab({ onCourseSelect, onUpload, C, fs, F }: {
-  onCourseSelect: (id: Id<'courses'>) => void; onUpload: () => void; C: AppColors; fs: (n: number) => number; F: any;
+function LibraryTab({ onCourseSelect, onUpload, onFeynman, noteCount, C, fs, F }: {
+  onCourseSelect: (id: Id<'courses'>) => void; onUpload: () => void;
+  onFeynman: (id: string, title: string, feynmanTopics: any[]) => void;
+  noteCount: number;
+  C: AppColors; fs: (n: number) => number; F: any;
 }) {
   const [query, setQuery] = useState('');
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
@@ -704,7 +721,7 @@ function LibraryTab({ onCourseSelect, onUpload, C, fs, F }: {
           {!isPremium && (
             <View style={{ backgroundColor: C.surface, borderColor: C.border, borderWidth: 1, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 }}>
               <Text style={{ fontFamily: F.semiBold, fontSize: fs(12), color: C.muted }}>
-                {personalCourses.length}/{FREE_NOTE_LIMIT} notes
+                {noteCount}/{FREE_NOTE_LIMIT} notes
               </Text>
             </View>
           )}
@@ -881,6 +898,23 @@ function LibraryTab({ onCourseSelect, onUpload, C, fs, F }: {
                   <Text style={{ fontFamily: F.regular, fontSize: fs(11), color: C.muted }}>{contextMenuCourse.totalLessons ?? 0} lessons</Text>
                 </View>
               </View>
+              {/* Feynman action */}
+              <TouchableOpacity
+                activeOpacity={0.75}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border }}
+                onPress={() => {
+                  const course = contextMenuCourse;
+                  setContextMenuCourse(null);
+                  setTimeout(() => {
+                    onFeynman(course._id, course.title, course.feynmanTopics ?? []);
+                  }, 250);
+                }}
+              >
+                <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#EDE9FE', justifyContent: 'center', alignItems: 'center' }}>
+                  <Ionicons name="bulb-outline" size={18} color="#7C3AED" />
+                </View>
+                <Text style={{ fontFamily: F.semiBold, fontSize: fs(16), color: C.text }}>Feynman AI</Text>
+              </TouchableOpacity>
               {/* Delete action */}
               <TouchableOpacity
                 activeOpacity={0.75}
@@ -981,8 +1015,11 @@ export default function HomeScreen() {
   const { isConnected, networkLoading } = useNetworkStatus();
   const { isPremium } = useEntitlement();
   const rawAllCourses = useQuery(api.courses.listMine);
-  const noteCount = (rawAllCourses ?? []).length;
+  const myStats = useQuery(api.courses.getMyStats);
+  const noteCount = myStats?.totalNotesCreated ?? (rawAllCourses ?? []).length;
   const [activeTab, setActiveTab] = useState<HomeTab>('home');
+  const [showFeynman, setShowFeynman]     = useState(false);
+  const [feynmanCourse, setFeynmanCourse] = useState<{ id: string; title: string; feynmanTopics: any[] } | null>(null);
   const [showUpload, setShowUpload] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createSourceTab, setCreateSourceTab] = useState<'pdf' | 'youtube' | 'text' | 'capture'>('pdf');
@@ -994,20 +1031,32 @@ export default function HomeScreen() {
 
   const showUpgradeWall = async () => {
     try {
-      await RevenueCatUI.presentPaywall();
-    } catch {}
+      const result = await RevenueCatUI.presentPaywall();
+      console.log('[Paywall] main result:', result);
+      if (result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED) {
+        await Purchases.getCustomerInfo();
+        return;
+      }
+      if (result === PAYWALL_RESULT.CANCELLED) {
+        const offerings = await Purchases.getOfferings();
+        console.log('[Paywall] available offerings:', Object.keys(offerings.all));
+        const cancelOffering = offerings.all['com.loqlearn.app.premium_monthly_exclusive'];
+        console.log('[Paywall] cancel offering:', cancelOffering);
+        if (cancelOffering) {
+          const cancelResult = await RevenueCatUI.presentPaywall({ offering: cancelOffering });
+          if (cancelResult === PAYWALL_RESULT.PURCHASED || cancelResult === PAYWALL_RESULT.RESTORED) {
+            await Purchases.getCustomerInfo();
+          }
+        }
+      }
+    } catch (e) {
+      console.log('[Paywall] error:', e);
+    }
   };
 
   const guardNoteLimit = (): boolean => {
     if (isPremium || noteCount < FREE_NOTE_LIMIT) return true;
-    Alert.alert(
-      `${FREE_NOTE_LIMIT}/${FREE_NOTE_LIMIT} notes used`,
-      'Upgrade to Unloq Pro to create unlimited notes.',
-      [
-        { text: 'Upgrade', onPress: showUpgradeWall },
-        { text: 'Cancel', style: 'cancel' },
-      ],
-    );
+    showUpgradeWall();
     return false;
   };
 
@@ -1054,6 +1103,11 @@ export default function HomeScreen() {
       onOpenQuiz={() => { setPlayerMode('quiz'); setActiveCourse(detailCourse); }}
       onOpenDiagram={() => { setPlayerMode('diagram'); setActiveCourse(detailCourse); }}
       onOpenPdf={(url, title) => setPdfView({ url, title })}
+      onOpenFeynman={(title, feynmanTopics) => {
+        setFeynmanCourse({ id: detailCourse as string, title, feynmanTopics });
+        setDetailCourse(null);
+        setShowFeynman(true);
+      }}
     />
   );
 
@@ -1076,17 +1130,21 @@ export default function HomeScreen() {
       <View style={{ flex: 1 }}>
         {activeTab === 'home' && (
           <HomeTabContent
-            onUpload={() => { if (isAuthenticated) { setShowCreateModal(true); } else { setShowAuthModal(true); } }}
+            onUpload={() => { if (!isAuthenticated) { setShowAuthModal(true); return; } if (!guardNoteLimit()) return; setShowCreateModal(true); }}
             onCourseSelect={setDetailCourse}
             onSeeAll={() => setActiveTab('library')}
             onGoalSetup={() => setFlow('goalsetup')}
+            onOpenFeynman={() => { setFeynmanCourse(null); setShowFeynman(true); }}
+            onUpgrade={showUpgradeWall}
             C={C} fs={fs} F={F} isDark={isDark}
           />
         )}
         {activeTab === 'library' && (
           <LibraryTab
             onCourseSelect={setDetailCourse}
-            onUpload={() => { if (isAuthenticated) { setShowCreateModal(true); } else { setShowAuthModal(true); } }}
+            onUpload={() => { if (!isAuthenticated) { setShowAuthModal(true); return; } if (!guardNoteLimit()) return; setShowCreateModal(true); }}
+            onFeynman={(id, title, feynmanTopics) => { setFeynmanCourse({ id, title, feynmanTopics }); setShowFeynman(true); }}
+            noteCount={noteCount}
             C={C} fs={fs} F={F}
           />
         )}
@@ -1115,6 +1173,20 @@ export default function HomeScreen() {
         onDismiss={() => setShowAuthModal(false)}
         onAuthSuccess={() => { setShowAuthModal(false); setShowUpload(true); }}
       />
+
+      {/* ── Feynman modal ── */}
+      <Modal
+        visible={showFeynman}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => { setShowFeynman(false); setFeynmanCourse(null); }}
+      >
+        <FeynmanScreen
+          onClose={() => { setShowFeynman(false); setFeynmanCourse(null); }}
+          onOpenLibrary={() => { setShowFeynman(false); setFeynmanCourse(null); setActiveTab('library'); }}
+          initialCourse={feynmanCourse ?? undefined}
+        />
+      </Modal>
     </View>
   );
 }

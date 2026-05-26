@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
 import Purchases from 'react-native-purchases';
 import RevenueCatUI, { PAYWALL_RESULT } from 'react-native-purchases-ui';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -59,23 +60,47 @@ const CHARACTERS: Character[] = [
   { id: 'kai',  name: 'Kai',  age: 22, level: 'easy',       levelLabel: 'Easy',       levelColor: '#22C55E', image: require('../assets/kai.png'),   prompt: "like I'm a college student — full depth, technical terms ok" },
 ];
 
+// ── Orbit dots helper ─────────────────────────────────────────────────────────
+
+function orbitDots(angles: number[], radius: number, baseDot: number, brightIdx: number[]) {
+  return angles.map((deg, i) => {
+    const θ = (deg - 90) * (Math.PI / 180);
+    const isBright = brightIdx.includes(i);
+    const s = isBright ? baseDot + 2 : baseDot;
+    return (
+      <View key={i} style={{
+        position: 'absolute',
+        width: s, height: s, borderRadius: s / 2,
+        backgroundColor: isBright ? '#EDE9FE' : '#A78BFA',
+        opacity: isBright ? 1 : 0.55,
+        left: radius + radius * Math.cos(θ) - s / 2,
+        top:  radius + radius * Math.sin(θ) - s / 2,
+        shadowColor: '#C4B5FD',
+        shadowRadius: isBright ? 6 : 2,
+        shadowOpacity: 1,
+      }} />
+    );
+  });
+}
+
 // ── Glow Mascot ───────────────────────────────────────────────────────────────
 
 function GlowMascot({ size = 'medium', pulseFast = false, characterImage }: {
   size?: 'small' | 'medium' | 'large'; pulseFast?: boolean; characterImage?: any;
 }) {
   const imageSize = size === 'large' ? 110 : size === 'medium' ? 76 : 50;
-  const r1 = imageSize / 2 + (size === 'large' ? 20 : size === 'medium' ? 14 : 10); // ring 1 radius
-  const r2 = r1 + (size === 'large' ? 14 : size === 'medium' ? 10 : 7);              // ring 2 radius
-  const r3 = r2 + (size === 'large' ? 12 : size === 'medium' ? 9 : 6);              // ring 3 radius
-  const totalSize = (r3 + 4) * 2;
+  const r1 = imageSize / 2 + (size === 'large' ? 20 : size === 'medium' ? 14 : 10);
+  const r2 = r1 + (size === 'large' ? 14 : size === 'medium' ? 10 : 7);
+  const r3 = r2 + (size === 'large' ? 12 : size === 'medium' ? 9 : 6);
+  const totalSize = (r3 + 14) * 2;
   const mascotSrc = characterImage ?? require('../assets/Fyenman-mascot.png');
 
-  const rot1  = useSharedValue(0);   // ring 1 — clockwise
-  const rot2  = useSharedValue(0);   // ring 2 — counter-clockwise
-  const rot3  = useSharedValue(0);   // ring 3 — clockwise slow
-  const pulse = useSharedValue(1);
-  const float = useSharedValue(0);
+  const rot1     = useSharedValue(0);
+  const rot2     = useSharedValue(0);
+  const rot3     = useSharedValue(0);
+  const pulse    = useSharedValue(1);
+  const float    = useSharedValue(0);
+  const glowAnim = useSharedValue(0);
 
   useEffect(() => {
     const speed = pulseFast ? 0.45 : 1;
@@ -90,51 +115,70 @@ function GlowMascot({ size = 'medium', pulseFast = false, characterImage }: {
       withTiming(-7, { duration: 1800, easing: Easing.inOut(Easing.ease) }),
       withTiming(0,  { duration: 1800, easing: Easing.inOut(Easing.ease) }),
     ), -1, false);
+    glowAnim.value = withRepeat(withSequence(
+      withTiming(1, { duration: 2600, easing: Easing.inOut(Easing.ease) }),
+      withTiming(0, { duration: 2600, easing: Easing.inOut(Easing.ease) }),
+    ), -1, false);
   }, [pulseFast]);
 
-  const ring1Style = useAnimatedStyle(() => ({ transform: [{ rotate: `${rot1.value}deg` }] }));
-  const ring2Style = useAnimatedStyle(() => ({ transform: [{ rotate: `${rot2.value}deg` }] }));
-  const ring3Style = useAnimatedStyle(() => ({ transform: [{ rotate: `${rot3.value}deg` }] }));
-  const pulseStyle = useAnimatedStyle(() => ({ transform: [{ scale: pulse.value }] }));
-  const floatStyle = useAnimatedStyle(() => ({ transform: [{ translateY: float.value }] }));
+  const ring1Style    = useAnimatedStyle(() => ({ transform: [{ rotate: `${rot1.value}deg` }] }));
+  const ring2Style    = useAnimatedStyle(() => ({ transform: [{ rotate: `${rot2.value}deg` }] }));
+  const ring3Style    = useAnimatedStyle(() => ({ transform: [{ rotate: `${rot3.value}deg` }] }));
+  const pulseStyle    = useAnimatedStyle(() => ({ transform: [{ scale: pulse.value }] }));
+  const floatStyle    = useAnimatedStyle(() => ({ transform: [{ translateY: float.value }] }));
+  const outerHaze     = useAnimatedStyle(() => ({ opacity: interpolate(glowAnim.value, [0, 1], [0.04, 0.13]) }));
+  const innerHaze     = useAnimatedStyle(() => ({ opacity: interpolate(glowAnim.value, [0, 1], [0.10, 0.26]) }));
 
   const d1 = r1 * 2; const d2 = r2 * 2; const d3 = r3 * 2;
 
   return (
     <Animated.View style={[{ width: totalSize, height: totalSize, alignItems: 'center', justifyContent: 'center' }, floatStyle]}>
 
-      {/* Ring 3 — outermost, slow CW, dim arcs + shine dot */}
+      {/* Ambient halos — pulsing radial glow layers */}
+      <Animated.View style={[{ position: 'absolute', width: d3 + 36, height: d3 + 36, borderRadius: (d3 + 36) / 2, backgroundColor: '#3B0764' }, outerHaze]} />
+      <Animated.View style={[{ position: 'absolute', width: d1 + 28, height: d1 + 28, borderRadius: (d1 + 28) / 2, backgroundColor: '#7C3AED' }, innerHaze]} />
+
+      {/* Ring 3 — outermost, slow CW, constellation dots */}
       <Animated.View style={[{ position: 'absolute', width: d3, height: d3, borderRadius: r3, alignItems: 'center', justifyContent: 'center' }, ring3Style]}>
         <View style={{ position: 'absolute', width: d3, height: d3, borderRadius: r3,
-          borderWidth: 1.5, borderTopColor: '#A78BFA55', borderRightColor: 'transparent',
+          borderWidth: 1, borderTopColor: '#A78BFA55', borderRightColor: '#A78BFA18',
           borderBottomColor: '#A78BFA44', borderLeftColor: 'transparent' }} />
-        {/* Shine dot */}
-        <View style={{ position: 'absolute', top: 2, width: 6, height: 6, borderRadius: 3, backgroundColor: '#E9D5FF', shadowColor: '#C4B5FD', shadowRadius: 6, shadowOpacity: 1 }} />
+        {orbitDots([20, 115, 215, 310], r3, size === 'large' ? 3 : 2, [0, 2])}
       </Animated.View>
 
-      {/* Ring 2 — middle, CCW, opposite arcs */}
+      {/* Ring 2 — middle, CCW, constellation dots */}
       <Animated.View style={[{ position: 'absolute', width: d2, height: d2, borderRadius: r2, alignItems: 'center', justifyContent: 'center' }, ring2Style]}>
         <View style={{ position: 'absolute', width: d2, height: d2, borderRadius: r2,
-          borderWidth: 2, borderTopColor: 'transparent', borderRightColor: '#8B5CF6BB',
-          borderBottomColor: 'transparent', borderLeftColor: '#7C3AEDAA' }} />
-        {/* Shine dot */}
-        <View style={{ position: 'absolute', right: 1, width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#DDD6FE', shadowColor: '#A78BFA', shadowRadius: 8, shadowOpacity: 1 }} />
+          borderWidth: 1.5, borderTopColor: 'transparent', borderRightColor: '#8B5CF6BB',
+          borderBottomColor: '#8B5CF630', borderLeftColor: '#7C3AEDAA' }} />
+        {orbitDots([50, 145, 235, 330], r2, size === 'large' ? 4 : 3, [1, 3])}
       </Animated.View>
 
-      {/* Ring 1 — inner, faster CW, stronger color */}
+      {/* Ring 1 — inner, faster CW, constellation dots */}
       <Animated.View style={[{ position: 'absolute', width: d1, height: d1, borderRadius: r1, alignItems: 'center', justifyContent: 'center' }, ring1Style]}>
         <View style={{ position: 'absolute', width: d1, height: d1, borderRadius: r1,
-          borderWidth: 2.5, borderTopColor: '#9333EACC', borderRightColor: 'transparent',
-          borderBottomColor: '#7C3AEDAA', borderLeftColor: 'transparent' }} />
-        {/* Shine dot */}
-        <View style={{ position: 'absolute', top: 0, width: 8, height: 8, borderRadius: 4, backgroundColor: '#F5F3FF', shadowColor: '#9333EA', shadowRadius: 10, shadowOpacity: 1 }} />
+          borderWidth: 2, borderTopColor: '#9333EACC', borderRightColor: 'transparent',
+          borderBottomColor: '#7C3AEDAA', borderLeftColor: '#9333EA44' }} />
+        {orbitDots([0, 130, 260], r1, size === 'large' ? 5 : 4, [0])}
       </Animated.View>
 
-      {/* Purple fill + mascot image */}
-      <Animated.View style={[{ width: imageSize + 8, height: imageSize + 8, borderRadius: (imageSize + 8) / 2,
-        backgroundColor: '#5B21B6', alignItems: 'center', justifyContent: 'center',
-        shadowColor: '#7C3AED', shadowRadius: 18, shadowOpacity: 0.7, shadowOffset: { width: 0, height: 0 },
+      {/* Deep dark core + mascot */}
+      <Animated.View style={[{
+        width: imageSize + 12, height: imageSize + 12,
+        borderRadius: (imageSize + 12) / 2,
+        backgroundColor: '#0D0B1E',
+        alignItems: 'center', justifyContent: 'center',
+        shadowColor: '#7C3AED',
+        shadowRadius: 24, shadowOpacity: 0.9,
+        shadowOffset: { width: 0, height: 0 },
       }, pulseStyle]}>
+        <View style={{
+          position: 'absolute',
+          width: imageSize + 6, height: imageSize + 6,
+          borderRadius: (imageSize + 6) / 2,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: '#7C3AED88',
+        }} />
         <Image source={mascotSrc}
           style={{ width: imageSize, height: imageSize, borderRadius: imageSize / 2 }}
           resizeMode="cover"
@@ -161,13 +205,13 @@ function UnderstandingBar({ score, C, F, fs }: { score: number; C: any; F: any; 
   const color = score >= 75 ? '#22C55E' : score >= 40 ? '#EAB308' : '#EF4444';
 
   return (
-    <View style={{ paddingHorizontal: Spacing.lg, paddingTop: Spacing.md }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-        <Text style={{ fontFamily: F.semiBold, fontSize: fs(12), color: C.muted }}>Understanding</Text>
-        <Text style={{ fontFamily: F.extraBold, fontSize: fs(12), color }}>{score}%</Text>
+    <View style={{ paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+        <Text style={{ fontFamily: F.semiBold, fontSize: fs(14), color: C.muted }}>Understanding</Text>
+        <Text style={{ fontFamily: F.extraBold, fontSize: fs(14), color }}>{score}%</Text>
       </View>
-      <View style={{ height: 6, borderRadius: 3, backgroundColor: C.border, overflow: 'hidden' }}>
-        <Animated.View style={[{ height: 6, borderRadius: 3, backgroundColor: color }, fillStyle]} />
+      <View style={{ height: 10, borderRadius: 5, backgroundColor: C.border, overflow: 'hidden' }}>
+        <Animated.View style={[{ height: 10, borderRadius: 5, backgroundColor: color }, fillStyle]} />
       </View>
     </View>
   );
@@ -175,33 +219,13 @@ function UnderstandingBar({ score, C, F, fs }: { score: number; C: any; F: any; 
 
 // ── Note breakdown screen ─────────────────────────────────────────────────────
 
-const BREAKDOWN_GREETINGS = [
-  'Pick a topic and teach it back 🔥',
-  'What do you actually know? Prove it 🧠',
-  'Time to break it down ⚡',
-  'Grab a topic and let\'s go 🚀',
-  'Show what you know 💡',
-];
-
-function NoteBreakdownScreen({ courseId, C, F, fs, insets, isDark, onSection }: {
-  courseId: string;
+function NoteBreakdownScreen({ courseTitle, feynmanTopics, C, F, fs, insets, isDark, onSection }: {
+  courseTitle: string;
+  feynmanTopics: { title: string; summary: string }[];
   C: any; F: any; fs: (n: number) => number; insets: any; isDark: boolean;
   onSection: (title: string, summary: string) => void;
 }) {
   const cardBg = isDark ? '#1E1E2E' : '#F5F5F5';
-  const lessons = useQuery(api.courses.getLessons, { courseId: courseId as any }) as any[] | undefined;
-  const [greeting] = useState(() => BREAKDOWN_GREETINGS[Math.floor(Math.random() * BREAKDOWN_GREETINGS.length)]);
-
-  // Flatten all sections into a single list
-  const allSections: { heading: string; body: string; lessonTitle: string }[] = [];
-  (lessons ?? []).forEach((lesson: any) => {
-    const sections: { heading: string; body: string }[] = lesson.content ?? [];
-    if (sections.length > 0) {
-      sections.forEach((sec) => allSections.push({ ...sec, lessonTitle: lesson.title }));
-    } else {
-      allSections.push({ heading: lesson.title, body: lesson.keyConcept ?? lesson.title, lessonTitle: lesson.title });
-    }
-  });
 
   return (
     <ScrollView
@@ -211,37 +235,48 @@ function NoteBreakdownScreen({ courseId, C, F, fs, insets, isDark, onSection }: 
       <Animated.View entering={FadeInDown.delay(40).duration(300)} style={{ alignItems: 'center', paddingTop: Spacing.lg, paddingBottom: Spacing.md }}>
         <GlowMascot size="medium" />
         <Text style={{ fontFamily: F.extraBold, fontSize: fs(16), color: C.text, textAlign: 'center', marginTop: Spacing.md }}>
-          {greeting}
+          Pick a concept to teach
+        </Text>
+        <Text style={{ fontFamily: F.regular, fontSize: fs(12), color: C.muted, marginTop: 4, textAlign: 'center' }}>
+          {courseTitle}
         </Text>
       </Animated.View>
 
-      {lessons === undefined && (
-        <ActivityIndicator size="large" color="#7C3AED" style={{ marginTop: Spacing.xl }} />
-      )}
-
-      <View style={{ gap: 10, marginTop: Spacing.sm }}>
-        {allSections.map((sec, i) => (
-          <Animated.View key={`${sec.heading}-${i}`} entering={FadeInDown.delay(i * 25).duration(220)}>
-            <TouchableOpacity
-              onPress={() => { Haptics.selectionAsync(); onSection(sec.heading, sec.body); }}
-              activeOpacity={0.75}
-              style={[styles.sectionRow, { backgroundColor: cardBg, borderColor: C.border }]}
-            >
-              <View style={{ flex: 1, gap: 3 }}>
-                <Text style={{ fontFamily: F.bold, fontSize: fs(14), color: C.text }} numberOfLines={1}>
-                  {sec.heading}
-                </Text>
-                {sec.body && sec.body !== sec.heading && (
-                  <Text style={{ fontFamily: F.regular, fontSize: fs(12), color: C.muted }} numberOfLines={2}>
-                    {sec.body}
+      {feynmanTopics.length === 0 ? (
+        <Animated.View entering={FadeInDown.delay(80).duration(280)} style={{ alignItems: 'center', paddingTop: Spacing.xl, paddingHorizontal: Spacing.lg, gap: Spacing.md }}>
+          <View style={{ width: 56, height: 56, borderRadius: 16, backgroundColor: '#EDE9FE', alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name="bulb-outline" size={26} color="#7C3AED" />
+          </View>
+          <Text style={{ fontFamily: F.extraBold, fontSize: fs(16), color: C.text, textAlign: 'center' }}>
+            No Feynman topics yet
+          </Text>
+          <Text style={{ fontFamily: F.regular, fontSize: fs(13), color: C.muted, textAlign: 'center', lineHeight: 20 }}>
+            This note was created before topic analysis. Delete and re-upload it to get 7–8 AI-curated concepts.
+          </Text>
+        </Animated.View>
+      ) : (
+        <View style={{ gap: 10, marginTop: Spacing.sm }}>
+          {feynmanTopics.map((topic, i) => (
+            <Animated.View key={`${topic.title}-${i}`} entering={FadeInDown.delay(i * 30).duration(220)}>
+              <TouchableOpacity
+                onPress={() => { Haptics.selectionAsync(); onSection(topic.title, topic.summary); }}
+                activeOpacity={0.75}
+                style={[styles.sectionRow, { backgroundColor: cardBg, borderColor: C.border }]}
+              >
+                <View style={{ flex: 1, gap: 3 }}>
+                  <Text style={{ fontFamily: F.bold, fontSize: fs(14), color: C.text }} numberOfLines={1}>
+                    {topic.title}
                   </Text>
-                )}
-              </View>
-              <Ionicons name="chevron-forward" size={14} color={C.muted} />
-            </TouchableOpacity>
-          </Animated.View>
-        ))}
-      </View>
+                  <Text style={{ fontFamily: F.regular, fontSize: fs(12), color: C.muted }} numberOfLines={2}>
+                    {topic.summary}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={14} color={C.muted} />
+              </TouchableOpacity>
+            </Animated.View>
+          ))}
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -249,15 +284,15 @@ function NoteBreakdownScreen({ courseId, C, F, fs, insets, isDark, onSection }: 
 // ── Topic state ───────────────────────────────────────────────────────────────
 
 function TopicPicker({
-  C, F, fs, onTopicChosen, onNoteChosen,
+  C, F, fs, onTopicChosen, onOpenLibrary,
 }: {
   C: any; F: any; fs: (n: number) => number;
   onTopicChosen: (title: string, summary: string) => void;
-  onNoteChosen: (id: string, title: string) => void;
+  onOpenLibrary: () => void;
 }) {
-  const [text, setText]           = useState('');
-  const [showNotes, setShowNotes] = useState(false);
+  const [text, setText] = useState('');
   const courses = useQuery(api.courses.listMine) as any[] | undefined;
+  const hasReadyCourses = (courses ?? []).some((c: any) => c.status === 'ready');
 
   const handleFreeText = () => {
     if (!text.trim()) return;
@@ -265,48 +300,35 @@ function TopicPicker({
     onTopicChosen(text.trim(), text.trim());
   };
 
-  const readyCourses = (courses ?? []).filter((c: any) => c.status === 'ready');
-
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <Animated.View entering={FadeInDown.delay(60).duration(300)} style={{ alignItems: 'center', paddingTop: Spacing.xl }}>
-          <GlowMascot size="medium" />
+          <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+            <View pointerEvents="none" style={{ position: 'absolute', width: 280, height: 280, borderRadius: 140, backgroundColor: '#5B21B6', opacity: 0.09 }} />
+            <GlowMascot size="large" />
+          </View>
           <Text style={[styles.bigTitle, { color: C.text, fontFamily: F.extraBold, fontSize: fs(26), marginTop: Spacing.lg }]}>
             What topic do you{'\n'}want to explore?
           </Text>
+          <Text style={{ fontFamily: F.semiBold, fontSize: fs(12), color: C.muted, marginTop: 6, textAlign: 'center' }}>
+            Explain it simply. Understand it deeply.
+          </Text>
         </Animated.View>
 
-        {/* From notes */}
-        {readyCourses.length > 0 && (
+        {hasReadyCourses && (
           <Animated.View entering={FadeInDown.delay(120).duration(300)} style={{ paddingHorizontal: Spacing.lg, marginTop: Spacing.xl }}>
             <TouchableOpacity
-              onPress={() => setShowNotes(!showNotes)}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onOpenLibrary(); }}
               style={[styles.notesRow, { borderColor: C.border, backgroundColor: C.surface }]}
               activeOpacity={0.7}
             >
-              <Text style={{ fontFamily: F.semiBold, fontSize: fs(13), color: C.sub }}>Or from your notes</Text>
-              <Ionicons name={showNotes ? 'chevron-up' : 'chevron-forward'} size={16} color={C.muted} />
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="library-outline" size={16} color="#7C3AED" />
+                <Text style={{ fontFamily: F.semiBold, fontSize: fs(13), color: C.sub }}>From your notes</Text>
+              </View>
+              <Ionicons name="arrow-forward" size={16} color={C.muted} />
             </TouchableOpacity>
-
-            {showNotes && (
-              <Animated.View entering={FadeInDown.duration(220)}>
-                {readyCourses.map((course: any, i: number) => (
-                  <Animated.View key={course._id} entering={FadeInDown.delay(i * 40).duration(220)}>
-                    <TouchableOpacity
-                      onPress={() => { Haptics.selectionAsync(); onNoteChosen(course._id, course.title); }}
-                      activeOpacity={0.7}
-                      style={[styles.lessonRow, { backgroundColor: C.surface, borderColor: C.border }]}
-                    >
-                      <Text style={{ fontFamily: F.semiBold, fontSize: fs(13), color: C.text, flex: 1 }} numberOfLines={1}>
-                        {course.title}
-                      </Text>
-                      <Ionicons name="chevron-forward" size={14} color={C.muted} />
-                    </TouchableOpacity>
-                  </Animated.View>
-                ))}
-              </Animated.View>
-            )}
           </Animated.View>
         )}
       </ScrollView>
@@ -408,7 +430,9 @@ function SessionView({
   const [textInput,   setTextInput]     = useState('');
 
   const evaluate = useAction(api.ai.evaluateFeynmanExplanation);
-  const recognitionRef = useRef<any>(null);
+  const runEvaluationRef  = useRef<((explanation: string) => Promise<void>) | null>(null);
+  const transcriptRef     = useRef('');
+  const hasEvaluatedRef   = useRef(false);
 
   const runEvaluation = useCallback(async (explanation: string) => {
     if (!explanation.trim()) return;
@@ -433,52 +457,46 @@ function SessionView({
     }
   }, [evaluate, topicTitle, topicSummary, character.age]);
 
+  useEffect(() => { runEvaluationRef.current = runEvaluation; }, [runEvaluation]);
+
+  // Update transcript in real-time; isFinal just updates the button state
+  useSpeechRecognitionEvent('result', (e) => {
+    const text = e.results?.[0]?.transcript ?? '';
+    transcriptRef.current = text;
+    setTranscript(text);
+    if (e.isFinal) setIsRecording(false);
+  });
+
+  // end always fires when the session closes — use it as the sole eval trigger
+  useSpeechRecognitionEvent('end', () => {
+    setIsRecording(false);
+    if (!hasEvaluatedRef.current && transcriptRef.current.trim()) {
+      hasEvaluatedRef.current = true;
+      runEvaluationRef.current?.(transcriptRef.current);
+    }
+  });
+
   const startRecording = useCallback(async () => {
     try {
-      const { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } = await import('expo-speech-recognition');
+      transcriptRef.current   = '';
+      hasEvaluatedRef.current = false;
       setTranscript('');
       setHasResult(false);
       setIsRecording(true);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       await ExpoSpeechRecognitionModule.requestPermissionsAsync();
       ExpoSpeechRecognitionModule.start({ lang: 'en-US', interimResults: true, continuous: false });
-      recognitionRef.current = ExpoSpeechRecognitionModule;
-    } catch {
+    } catch (err) {
+      console.warn('[Feynman] startRecording failed:', err);
       setUseTextMode(true);
       setIsRecording(false);
     }
   }, []);
 
-  const stopRecording = useCallback(async () => {
-    setIsRecording(false);
+  const stopRecording = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    try {
-      recognitionRef.current?.stop?.();
-    } catch {}
-    if (transcript.trim()) {
-      await runEvaluation(transcript);
-    }
-  }, [transcript, runEvaluation]);
-
-  useEffect(() => {
-    let unsub: (() => void) | undefined;
-    (async () => {
-      try {
-        const { ExpoSpeechRecognitionModule } = await import('expo-speech-recognition');
-        const resultHandler = (e: any) => {
-          const text = e.results?.[0]?.transcript ?? '';
-          setTranscript(text);
-          if (e.isFinal) {
-            setIsRecording(false);
-            if (text.trim()) runEvaluation(text);
-          }
-        };
-        const sub = ExpoSpeechRecognitionModule.addListener?.('result', resultHandler);
-        unsub = () => sub?.remove?.();
-      } catch {}
-    })();
-    return () => unsub?.();
-  }, [runEvaluation]);
+    ExpoSpeechRecognitionModule.stop(); // fires 'end', which triggers evaluation
+  }, []);
 
   const handleMicPress = async () => {
     if (!isPremium) {
@@ -635,26 +653,28 @@ function SessionView({
 // ── Main Feynman Screen ───────────────────────────────────────────────────────
 
 type FeynmanState = 'topic' | 'notes' | 'character' | 'session';
+type SelectedCourse = { id: string; title: string; feynmanTopics: { title: string; summary: string }[] };
 
-export default function FeynmanScreen({ onClose }: { onClose: () => void }) {
+export default function FeynmanScreen({
+  onClose, onOpenLibrary, initialCourse,
+}: {
+  onClose: () => void;
+  onOpenLibrary: () => void;
+  initialCourse?: SelectedCourse;
+}) {
   const { C, F, fs, isDark } = useTheme();
   const insets = useSafeAreaInsets();
 
-  const [state, setState]                 = useState<FeynmanState>('topic');
-  const [topicTitle, setTopicTitle]       = useState('');
-  const [topicSummary, setTopicSummary]   = useState('');
-  const [character, setCharacter]         = useState<Character | null>(null);
-  const [selectedCourse, setSelectedCourse] = useState<{ id: string; title: string } | null>(null);
+  const [state, setState]                   = useState<FeynmanState>(initialCourse ? 'notes' : 'topic');
+  const [topicTitle, setTopicTitle]         = useState('');
+  const [topicSummary, setTopicSummary]     = useState('');
+  const [character, setCharacter]           = useState<Character | null>(null);
+  const [selectedCourse, setSelectedCourse] = useState<SelectedCourse | null>(initialCourse ?? null);
 
   const handleTopicChosen = (title: string, summary: string) => {
     setTopicTitle(title);
     setTopicSummary(summary);
     setState('character');
-  };
-
-  const handleNoteChosen = (id: string, title: string) => {
-    setSelectedCourse({ id, title });
-    setState('notes');
   };
 
   const handleSection = (title: string, summary: string) => {
@@ -669,7 +689,7 @@ export default function FeynmanScreen({ onClose }: { onClose: () => void }) {
   const handleBack = () => {
     if (state === 'session')   { setState('character'); return; }
     if (state === 'character') { setState(selectedCourse ? 'notes' : 'topic'); return; }
-    if (state === 'notes')     { setState('topic'); return; }
+    if (state === 'notes')     { setState('topic'); setSelectedCourse(null); return; }
     onClose();
   };
 
@@ -687,19 +707,18 @@ export default function FeynmanScreen({ onClose }: { onClose: () => void }) {
         <TouchableOpacity onPress={handleBack} style={styles.backBtn} activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={22} color={C.text} />
         </TouchableOpacity>
-        <Text style={{ fontFamily: F.extraBold, fontSize: fs(17), color: C.text }}>
-          {stateTitle[state]}
-        </Text>
+       
         <View style={{ width: 40 }} />
       </View>
 
       {/* Content */}
       {state === 'topic' && (
-        <TopicPicker C={C} F={F} fs={fs} onTopicChosen={handleTopicChosen} onNoteChosen={handleNoteChosen} />
+        <TopicPicker C={C} F={F} fs={fs} onTopicChosen={handleTopicChosen} onOpenLibrary={onOpenLibrary} />
       )}
       {state === 'notes' && selectedCourse && (
         <NoteBreakdownScreen
-          courseId={selectedCourse.id}
+          courseTitle={selectedCourse.title}
+          feynmanTopics={selectedCourse.feynmanTopics}
           C={C} F={F} fs={fs} insets={insets} isDark={isDark}
           onSection={handleSection}
         />
@@ -750,7 +769,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 14,
     paddingVertical: 12,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
     marginBottom: 2,
   },
@@ -782,14 +801,14 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: Spacing.lg,
     paddingTop: 10,
-    paddingBottom: 28,
+    paddingBottom: 34,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 14,
     paddingVertical: 8,

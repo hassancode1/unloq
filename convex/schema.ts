@@ -47,11 +47,17 @@ export default defineSchema({
     completedLessons: v.optional(v.number()),
     folderId: v.optional(v.id("folders")),
     pdfStorageId: v.optional(v.id("_storage")),
+    feynmanTopics: v.optional(v.array(v.object({ title: v.string(), summary: v.string() }))),
   })
     .index("by_user", ["userId"])
     .index("by_published", ["published"])
     .index("by_group", ["group_id"])
     .index("by_admin_created", ["adminCreated"]),
+
+  userStats: defineTable({
+    userId: v.id("users"),
+    totalNotesCreated: v.number(),
+  }).index("by_user", ["userId"]),
 
   lessons: defineTable({
     courseId: v.id("courses"),

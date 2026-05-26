@@ -35,6 +35,7 @@ type Props = {
   onOpenQuiz: () => void;
   onOpenDiagram: () => void;
   onOpenPdf?: (url: string, title: string) => void;
+  onOpenFeynman?: (title: string, feynmanTopics: any[]) => void;
 };
 
 function topicEmoji(title: string): string {
@@ -219,7 +220,7 @@ const FM = StyleSheet.create({
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function CourseDetailScreen({
-  courseId, onBack, onOpenFlashcards, onOpenQuiz, onOpenDiagram, onOpenPdf,
+  courseId, onBack, onOpenFlashcards, onOpenQuiz, onOpenDiagram, onOpenPdf, onOpenFeynman,
 }: Props) {
   const insets = useSafeAreaInsets();
   const { C, fs, F, isDark } = useTheme();
@@ -314,7 +315,9 @@ export default function CourseDetailScreen({
         >
           <Ionicons name="arrow-back" size={19} color={C.muted} />
         </TouchableOpacity>
-        <Text style={[S.headerEmoji]}>{topicEmoji(course?.title ?? '')}</Text>
+        <Text style={[S.headerTitle, { color: C.text, fontFamily: F.bold }]} numberOfLines={1} ellipsizeMode="tail">
+          {course?.title ?? ''}
+        </Text>
         <TouchableOpacity style={[S.iconBtn, { backgroundColor: C.surfaceAlt }]}>
           <Ionicons name="ellipsis-horizontal" size={18} color={C.muted} />
         </TouchableOpacity>
@@ -455,9 +458,9 @@ export default function CourseDetailScreen({
 
       </ScrollView>
 
-      {/* Sticky bottom bar — Duo-style shadow CTAs */}
+      {/* Sticky bottom bar */}
       <View style={[S.bottomBar, { backgroundColor: C.bg, borderTopColor: C.border, paddingBottom: insets.bottom + 8 }]}>
-        {/* Ask AI */}
+        {/* Ask AI — coming soon
         <View style={S.duoWrap}>
           <View style={[S.duoShadow, { backgroundColor: C.text }]} />
           <View style={[S.duoBtn, { backgroundColor: C.surface, borderWidth: 1.5, borderColor: C.text, transform: [{ translateY: -4 }] }]}>
@@ -466,14 +469,21 @@ export default function CourseDetailScreen({
             <View style={S.soonTag}><Text style={S.soonTagTxt}>Soon</Text></View>
           </View>
         </View>
+        */}
         {/* Feynman */}
         <View style={S.duoWrap}>
-          <View style={[S.duoShadow, { backgroundColor: C.text }]} />
-          <View style={[S.duoBtn, { backgroundColor: C.surface, borderWidth: 1.5, borderColor: C.text, transform: [{ translateY: -4 }] }]}>
-            <Text style={{ fontSize: 18 }}>🐷</Text>
-            <Text style={[S.duoBtnTxt, { fontFamily: F.bold, color: C.text }]}>Feynman</Text>
-            <View style={S.soonTag}><Text style={S.soonTagTxt}>Soon</Text></View>
-          </View>
+          <View style={[S.duoShadow, { backgroundColor: '#4C1D95' }]} />
+          <TouchableOpacity
+            style={[S.duoBtn, { backgroundColor: '#7C3AED', borderWidth: 0, transform: [{ translateY: -4 }] }]}
+            activeOpacity={0.85}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              onOpenFeynman?.(course?.title ?? '', course?.feynmanTopics ?? []);
+            }}
+          >
+            <Text style={{ fontSize: 20 }}>✨</Text>
+            <Text style={[S.duoBtnTxt, { fontFamily: F.bold, color: '#fff' }]}>Feynman AI</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -498,6 +508,7 @@ const S = StyleSheet.create({
   },
   iconBtn:     { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
   headerEmoji: { fontSize: 20 },
+  headerTitle: { flex: 1, fontSize: 15, marginHorizontal: 8 },
 
   scroll: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg, gap: Spacing.lg },
 

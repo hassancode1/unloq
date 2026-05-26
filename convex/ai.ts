@@ -70,11 +70,16 @@ For each lesson output:
 CONTENT (3–5 sections): Each section = one "heading" (a key phrase from that part of the document, 3–6 words) + one "body" (2–5 sentences closely based on that part of the document, preserving its key ideas and terminology).
 ${flashcardsInstruction}${quizInstruction}${diagramInstruction}
 
+FEYNMAN TOPICS (exactly 7–8): The key teachable concepts across the entire document — concrete, atomic ideas a student should be able to explain simply. Not section headings or lesson titles. Think "How X works", "Why Y happens", "The difference between A and B".
+
 Output ONLY valid JSON:
 {
   "title": "Title based on the document's topic or cover/header (max 8 words)",
   "description": "2–3 sentences describing what this document is about, based on its introduction or abstract.",
   "learningObjectives": ["Learning goals derived from the document's content"],
+  "feynmanTopics": [
+    { "title": "Short concept name (max 6 words)", "summary": "One sentence describing what this concept is about." }
+  ],
   "lessons": [
     {
       "lessonNumber": 1,
@@ -166,6 +171,8 @@ For each lesson:
 CONTENT (3–5 sections): Each section = one "heading" (the specific rule or sub-topic, 3–7 words) + one "body" (3–5 sentences: state the rule precisely, explain when it applies, give a one-sentence illustrative scenario).
 ${flashcardsInstruction}${quizInstruction}${diagramInstruction}
 
+FEYNMAN TOPICS (exactly 7–8): The key teachable concepts across the entire course — concrete, atomic ideas a student should be able to explain simply. Not lesson titles. Think "How X works", "The difference between A and B", "Why Y matters".
+
 Output ONLY valid JSON — no markdown fences, no explanation:
 {
   "title": "Concise course title (max 8 words)",
@@ -174,6 +181,9 @@ Output ONLY valid JSON — no markdown fences, no explanation:
     "Identify and apply the rule of...",
     "Distinguish between X and Y in a fact pattern...",
     "Recognise the exception to... and when it controls"
+  ],
+  "feynmanTopics": [
+    { "title": "Short concept name (max 6 words)", "summary": "One sentence describing what this concept covers." }
   ],
   "lessons": [
     {
@@ -910,6 +920,16 @@ export const generateCourse = action({
           quiz,
           diagram,
         });
+      }
+
+      const feynmanTopics = Array.isArray(courseData.feynmanTopics)
+        ? courseData.feynmanTopics
+            .filter((t: any) => t?.title && t?.summary)
+            .map((t: any) => ({ title: String(t.title), summary: String(t.summary) }))
+            .slice(0, 8)
+        : [];
+      if (feynmanTopics.length > 0) {
+        await ctx.runMutation(internal.courses.patchFeynmanTopics, { courseId, feynmanTopics });
       }
 
       await ctx.runMutation(internal.courses.updateStatus, {

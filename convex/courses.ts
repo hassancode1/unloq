@@ -246,12 +246,26 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Must be signed in to create a course");
+    const stats = await ctx.db.query("userStats").withIndex("by_user", (q) => q.eq("userId", userId)).first();
+    if (stats) {
+      await ctx.db.patch(stats._id, { totalNotesCreated: stats.totalNotesCreated + 1 });
+    } else {
+      await ctx.db.insert("userStats", { userId, totalNotesCreated: 1 });
+    }
     return ctx.db.insert("courses", {
       ...args,
       userId,
       status: "generating",
       createdAt: Date.now(),
     });
+  },
+});
+
+export const getMyStats = query({
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return null;
+    return ctx.db.query("userStats").withIndex("by_user", (q) => q.eq("userId", userId)).first();
   },
 });
 
@@ -411,6 +425,16 @@ export const patchTitleAndDescription = internalMutation({
   },
   handler: async (ctx, { courseId, title, description, totalLessons }) => {
     await ctx.db.patch(courseId, { title, description, totalLessons });
+  },
+});
+
+export const patchFeynmanTopics = internalMutation({
+  args: {
+    courseId: v.id("courses"),
+    feynmanTopics: v.array(v.object({ title: v.string(), summary: v.string() })),
+  },
+  handler: async (ctx, { courseId, feynmanTopics }) => {
+    await ctx.db.patch(courseId, { feynmanTopics });
   },
 });
 

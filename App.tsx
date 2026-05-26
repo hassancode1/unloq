@@ -168,6 +168,7 @@ SplashScreen.preventAutoHideAsync();
 setupNotificationHandler();
 
 const REVENUECAT_IOS_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY ?? '';
+console.log("RevenueCat iOS Key:", REVENUECAT_IOS_KEY ? "Provided" : "Not provided");
 if (REVENUECAT_IOS_KEY) {
   Purchases.configure({ apiKey: REVENUECAT_IOS_KEY });
 }
