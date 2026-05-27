@@ -47,7 +47,6 @@ export default function PdfViewerScreen({ url, title, onBack }: Props) {
     fetchBase64(url)
       .then(b64 => setHtml(pdfHtml(b64)))
       .catch((err) => {
-        console.error('[PdfViewer] load failed:', err);
         setError(true);
       });
   }, [url]);

@@ -100,7 +100,6 @@ export default function AuthModal({ visible, onDismiss, onAuthSuccess }: Props) 
         }
       }
     } catch (e: any) {
-      console.log('[Auth] error:', e?.message);
       Toast.show({ type: 'error', text1: 'Sign in failed', text2: e?.message ?? 'Please try again.' });
     } finally {
       setLoading(false);

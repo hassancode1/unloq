@@ -53,7 +53,8 @@ interface AppState {
 }
 
 function todayStr() {
-  return new Date().toISOString().slice(0, 10);
+  // Use local date so that timezone offsets don't shift the date relative to the user's clock
+  return new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
 }
 
 export const useAppStore = create<AppState>()(
@@ -120,6 +121,7 @@ export const useAppStore = create<AppState>()(
         activeLessonIndex: s.activeLessonIndex,
         darkMode: s.darkMode,
         fontScale: s.fontScale,
+        revenueCatReady: s.revenueCatReady,
         onboardingRole: s.onboardingRole,
         semesterGoal: s.semesterGoal,
         hoursLost: s.hoursLost,

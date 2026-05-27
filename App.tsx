@@ -78,7 +78,7 @@ function computeShouldLock(
     );
   if (!isAfterLockTime) return false;
 
-  const todayDate = now.toISOString().slice(0, 10);
+  const todayDate = now.toLocaleDateString('en-CA'); // local YYYY-MM-DD
 
   // Grace period: don't lock on the day the goal was first set
   if (goalConfig.goalSetDate === todayDate) return false;
@@ -168,7 +168,6 @@ SplashScreen.preventAutoHideAsync();
 setupNotificationHandler();
 
 const REVENUECAT_IOS_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY ?? '';
-console.log("RevenueCat iOS Key:", REVENUECAT_IOS_KEY ? "Provided" : "Not provided");
 if (REVENUECAT_IOS_KEY) {
   Purchases.configure({ apiKey: REVENUECAT_IOS_KEY });
 }

@@ -267,7 +267,7 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
 
   const handleSave = useCallback(async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    const today = new Date().toISOString().slice(0, 10);
+    const today = new Date().toLocaleDateString('en-CA');
     const cfg = {
       frequency,
       customDays,
@@ -283,7 +283,7 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
       const scheduled = await scheduleStudyReminders(cfg);
       if (!scheduled) showNotificationPermissionAlert();
     } catch (e) {
-      console.error('[Notifications] Failed to schedule reminders:', e);
+      if (__DEV__) console.error('[Notifications] Failed to schedule reminders:', e);
     }
     onComplete();
   }, [frequency, customDays, resolvedHours, lockDate, existingGoalConfig, setGoalConfig, onComplete]);
@@ -370,6 +370,7 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
                       style={[styles.dayBtn, selected && styles.dayBtnActive]}
                       onPress={() => toggleCustomDay(day)}
                       activeOpacity={0.75}
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                     >
                       <Text style={[styles.dayBtnText, selected && styles.dayBtnTextActive]}>{label}</Text>
                     </TouchableOpacity>
@@ -516,7 +517,7 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
     );
   }
 
-  // ── Step 4: App blocker ───────────────────────────────────────────────────
+  // ── Step 3: App blocker ───────────────────────────────────────────────────
   return (
     <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       {onBack && (
@@ -586,7 +587,7 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
 
         <Animated.View entering={FadeInDown.delay(240).duration(300)} style={{ gap: Spacing.sm }}>
           <StepDots />
-          <DuoButton label="Start Unloqing 🔓" onPress={handleSave} />
+          <DuoButton label="Get Started 🔓" onPress={handleSave} />
           <TouchableOpacity onPress={() => setStep('session')} style={styles.backBtn}>
             <Text style={styles.backBtnText}>← Back</Text>
           </TouchableOpacity>

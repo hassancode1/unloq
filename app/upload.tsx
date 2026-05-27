@@ -170,6 +170,8 @@ export default function UploadScreen({ onBack, onGoToLibrary, initialSourceTab, 
   const [captureUri, setCaptureUri]     = useState<string | null>(null);
   const [captureBase64, setCaptureBase64] = useState<string | null>(null);
   const [phase, setPhase]       = useState<'idle' | 'uploading' | 'done'>('idle');
+  const isMountedRef = useRef(true);
+  useEffect(() => { return () => { isMountedRef.current = false; }; }, []);
 
   const createCourse   = useMutation(api.courses.create);
   const generateCourse = useAction(api.ai.generateCourse);
@@ -250,7 +252,7 @@ export default function UploadScreen({ onBack, onGoToLibrary, initialSourceTab, 
         const info = await FileSystem.getInfoAsync(docUri);
         const size = (info as any).size as number | undefined;
         if (size && size > 20 * 1024 * 1024) {
-          setPhase('idle');
+          if (isMountedRef.current) setPhase('idle');
           Toast.show({ type: 'error', text1: 'PDF too large', text2: 'Max 20 MB', visibilityTime: 4000 });
           return;
         }
@@ -284,12 +286,14 @@ export default function UploadScreen({ onBack, onGoToLibrary, initialSourceTab, 
         includeDiagram: false,
       });
 
+      if (!isMountedRef.current) return;
       if (onGenerated) {
         onGenerated(courseId as string);
       } else {
         setPhase('done');
       }
     } catch (err: any) {
+      if (!isMountedRef.current) return;
       setPhase('idle');
       const msg = err?.data?.message ?? err?.message ?? '';
       if (msg.includes('PDF_TOO_LONG') || msg.includes('page limit')) {

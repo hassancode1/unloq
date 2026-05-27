@@ -503,11 +503,7 @@ function parseOrRepair(raw: string): any {
       raw.slice(arrayOpen + 1, lastCompleteEnd + 1) +
       "]}";
     try {
-      const result = JSON.parse(repaired);
-      console.warn(
-        `JSON was truncated — salvaged ${result.lessons?.length ?? 0} lessons.`,
-      );
-      return result;
+      return JSON.parse(repaired);
     } catch {
       throw new Error("AI response was truncated and could not be repaired.");
     }
@@ -542,7 +538,7 @@ function parseTranscriptXml(xml: string): string[] {
   return texts;
 }
 
-const YT_API_KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8";
+const YT_API_KEY = process.env.YT_API_KEY ?? "";
 
 async function fetchCaptionTracks(videoId: string): Promise<any[]> {
   const clients = [
@@ -770,7 +766,6 @@ export const adminGenerateCourse = action({
 
       await ctx.runMutation(internal.courses.updateStatus, { courseId, status: "ready" });
     } catch (err) {
-      console.error("adminGenerateCourse failed:", err);
       await ctx.runMutation(internal.courses.updateStatus, { courseId, status: "error" }).catch(() => {});
       throw err;
     }
@@ -805,12 +800,20 @@ export const generateCourse = action({
     ctx,
     { courseId, pdfBase64, imageBase64, pdfStorageId, transcript, youtubeUrl, courseTopic, lessonCount, difficulty, userPrompt, ...flags },
   ) => {
+    const { getAuthUserId } = await import("@convex-dev/auth/server");
+    const userId = await getAuthUserId(ctx as any);
+    if (!userId) throw new Error("Must be signed in");
+    const course = await ctx.runQuery(api.courses.get, { courseId });
+    if (!course || (course as any).userId !== userId) throw new Error("Not authorized");
+
+    const clampedLessonCount = Math.max(1, Math.min(20, lessonCount));
+    const clampedPrompt = userPrompt ? userPrompt.slice(0, 500) : undefined;
+
     const includeFlashcards = flags.includeFlashcards !== false;
     const includeQuiz       = flags.includeQuiz !== false;
     const includeDiagram    = flags.includeDiagram === true;
 
     try {
-      console.log("[generateCourse] start", { courseId, hasPdfBase64: !!pdfBase64, hasPdfStorageId: !!pdfStorageId, hasTranscript: !!transcript, hasYoutube: !!youtubeUrl, hasTopic: !!courseTopic });
       const geminiKey = process.env.GEMINI_API_KEY;
 
       if (!geminiKey)
@@ -830,20 +833,18 @@ export const generateCourse = action({
       }
 
       let raw: string;
-      console.log("[generateCourse] calling Gemini...");
       if (transcript) {
-        raw = await callGeminiText(transcript, lessonCount, difficulty, geminiKey, userPrompt, includeFlashcards, includeQuiz, includeDiagram);
+        raw = await callGeminiText(transcript, clampedLessonCount, difficulty, geminiKey, clampedPrompt, includeFlashcards, includeQuiz, includeDiagram);
       } else if (youtubeUrl) {
-        raw = await callGeminiVideo(youtubeUrl, lessonCount, difficulty, geminiKey, userPrompt, includeFlashcards, includeQuiz, includeDiagram);
+        raw = await callGeminiVideo(youtubeUrl, clampedLessonCount, difficulty, geminiKey, clampedPrompt, includeFlashcards, includeQuiz, includeDiagram);
       } else if (imageBase64) {
-        raw = await callGeminiImage(imageBase64, lessonCount, difficulty, geminiKey, userPrompt, includeFlashcards, includeQuiz, includeDiagram);
+        raw = await callGeminiImage(imageBase64, clampedLessonCount, difficulty, geminiKey, clampedPrompt, includeFlashcards, includeQuiz, includeDiagram);
       } else if (pdfBase64) {
-        raw = await callGemini(pdfBase64, lessonCount, difficulty, geminiKey, userPrompt, includeFlashcards, includeQuiz, includeDiagram);
+        raw = await callGemini(pdfBase64, clampedLessonCount, difficulty, geminiKey, clampedPrompt, includeFlashcards, includeQuiz, includeDiagram);
       } else {
         // Topic-only: generate from course name with no source document
-        raw = await callGeminiExamTopic(courseTopic!, lessonCount, difficulty, geminiKey, userPrompt, includeFlashcards, includeQuiz, includeDiagram);
+        raw = await callGeminiExamTopic(courseTopic!, clampedLessonCount, difficulty, geminiKey, clampedPrompt, includeFlashcards, includeQuiz, includeDiagram);
       }
-      console.log("[generateCourse] Gemini returned", raw.length, "chars");
 
       // Strip markdown fences if present
       raw = raw
@@ -858,7 +859,7 @@ export const generateCourse = action({
         courseId,
         title: courseData.title ?? "Untitled Course",
         description: courseData.description ?? "",
-        totalLessons: courseData.lessons?.length ?? lessonCount,
+        totalLessons: courseData.lessons?.length ?? clampedLessonCount,
       });
 
       // Clear any lessons from a previous attempt before inserting (handles action retries)
@@ -937,12 +938,11 @@ export const generateCourse = action({
         status: "ready",
       });
     } catch (err) {
-      console.error("generateCourse failed:", err);
       try {
         await ctx.runMutation(internal.courses.updateStatus, { courseId, status: "error" });
         await ctx.runMutation(api.courses.remove, { courseId });
-      } catch (cleanupErr) {
-        console.error("cleanup failed (course left as error status):", cleanupErr);
+      } catch {
+        // cleanup failure: course left with error status
       }
       const errMsg = (err as any)?.message ?? "";
       if (errMsg.includes("exceeds the supported page limit") || errMsg.includes("page limit")) {
@@ -958,6 +958,12 @@ export const generateCourse = action({
 export const generateQuizForCourse = action({
   args: { courseId: v.id("courses") },
   handler: async (ctx, { courseId }) => {
+    const { getAuthUserId } = await import("@convex-dev/auth/server");
+    const userId = await getAuthUserId(ctx as any);
+    if (!userId) throw new Error("Must be signed in");
+    const course = await ctx.runQuery(api.courses.get, { courseId });
+    if (!course || (course as any).userId !== userId) throw new Error("Not authorized");
+
     const geminiKey = process.env.GEMINI_API_KEY;
     if (!geminiKey) throw new Error("No AI API key set.");
 
@@ -1007,8 +1013,8 @@ Rules:
           await ctx.runMutation(internal.courses.patchLessonQuiz, { lessonId: lesson._id, quiz });
           totalSaved += quiz.length;
         }
-      } catch (e) {
-        console.error("Quiz generation failed for lesson", lesson._id, e);
+      } catch {
+        // skip lesson if quiz generation fails for it
       }
     }
 
@@ -1023,19 +1029,22 @@ Rules:
 export const generateDiagramForCourse = action({
   args: { courseId: v.id("courses") },
   handler: async (ctx, { courseId }) => {
+    const { getAuthUserId } = await import("@convex-dev/auth/server");
+    const userId = await getAuthUserId(ctx as any);
+    if (!userId) throw new Error("Must be signed in");
+    const course = await ctx.runQuery(api.courses.get, { courseId });
+    if (!course || (course as any).userId !== userId) throw new Error("Not authorized");
+
     const geminiKey = process.env.GEMINI_API_KEY;
     if (!geminiKey) throw new Error("No AI API key set.");
 
     const lessons = await ctx.runQuery(api.courses.getLessons, { courseId });
-    console.log("[diagram] lessons fetched:", lessons?.length ?? 0);
     if (!lessons?.length) throw new Error("No lessons found.");
 
     const todo = (lessons as any[]).filter((l: any) => !l.diagram);
-    console.log("[diagram] lessons needing diagram:", todo.length);
 
     await Promise.all(
       todo.map(async (lesson: any) => {
-        console.log("[diagram] starting lesson:", lesson._id, lesson.title);
         const prompt = `Create a mind map for this lesson.
 Lesson title: ${lesson.title}
 Key concept: ${lesson.keyConcept}
@@ -1046,34 +1055,27 @@ Return ONLY a JSON object:
 Include 3-5 branches, each with 2-3 points.`;
 
         try {
-          console.log("[diagram] calling Gemini for:", lesson._id);
-          const resp = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + geminiKey, {
+          const resp = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              "x-goog-api-key": geminiKey,
+            },
             body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.6, maxOutputTokens: 1024 } }),
           });
-          console.log("[diagram] Gemini status:", resp.status, "for:", lesson._id);
           const json = await resp.json();
-          console.log("[diagram] Gemini raw response for", lesson._id, ":", JSON.stringify(json).slice(0, 300));
           const raw = json.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
           const cleaned = raw.replace(/^```json\n?/, "").replace(/^```\n?/, "").replace(/```\n?$/, "").trim();
-          console.log("[diagram] cleaned JSON for", lesson._id, ":", cleaned.slice(0, 200));
           const diagram = JSON.parse(cleaned);
 
           if (diagram?.root && Array.isArray(diagram.branches) && diagram.branches.length > 0) {
-            console.log("[diagram] saving diagram for:", lesson._id, "branches:", diagram.branches.length);
             await ctx.runMutation(internal.courses.patchLessonDiagram, { lessonId: lesson._id, diagram });
-            console.log("[diagram] saved diagram for:", lesson._id);
-          } else {
-            console.warn("[diagram] invalid diagram shape for:", lesson._id, diagram);
           }
-        } catch (e) {
-          console.error("[diagram] FAILED for lesson", lesson._id, e);
+        } catch {
+          // skip lesson if diagram generation fails for it
         }
       })
     );
-
-    console.log("[diagram] all done for course:", courseId);
   },
 });
 
@@ -1086,7 +1088,11 @@ export const evaluateFeynmanExplanation = action({
     userExplanation: v.string(),
     characterAge:    v.number(),
   },
-  handler: async (_ctx, { topicTitle, topicSummary, userExplanation, characterAge }) => {
+  handler: async (ctx, { topicTitle, topicSummary, userExplanation, characterAge }) => {
+    const { getAuthUserId } = await import("@convex-dev/auth/server");
+    const userId = await getAuthUserId(ctx as any);
+    if (!userId) throw new Error("Must be signed in");
+
     const anthropicKey = process.env.ANTHROPIC_API_KEY;
     if (!anthropicKey) throw new Error("No Anthropic API key set.");
 

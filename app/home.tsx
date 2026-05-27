@@ -382,7 +382,7 @@ function HomeTabContent({ onUpload, onCourseSelect, onSeeAll, onGoalSetup, onOpe
         <GradientCard
           width={cardWidth}
           title="Feynman AI"
-          subtitle="Teach it back to a crew member — the fastest way to truly learn"
+          subtitle="Explain it to an AI character — the fastest way to truly learn"
           gradientColors={CardGradients.feynman}
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onOpenFeynman(); }}
           actionLabel="Start session ✨"
@@ -1032,16 +1032,13 @@ export default function HomeScreen() {
   const showUpgradeWall = async () => {
     try {
       const result = await RevenueCatUI.presentPaywall();
-      console.log('[Paywall] main result:', result);
       if (result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED) {
         await Purchases.getCustomerInfo();
         return;
       }
       if (result === PAYWALL_RESULT.CANCELLED) {
         const offerings = await Purchases.getOfferings();
-        console.log('[Paywall] available offerings:', Object.keys(offerings.all));
         const cancelOffering = offerings.all['com.loqlearn.app.premium_monthly_exclusive'];
-        console.log('[Paywall] cancel offering:', cancelOffering);
         if (cancelOffering) {
           const cancelResult = await RevenueCatUI.presentPaywall({ offering: cancelOffering });
           if (cancelResult === PAYWALL_RESULT.PURCHASED || cancelResult === PAYWALL_RESULT.RESTORED) {
@@ -1049,8 +1046,8 @@ export default function HomeScreen() {
           }
         }
       }
-    } catch (e) {
-      console.log('[Paywall] error:', e);
+    } catch {
+      // paywall errors are non-fatal
     }
   };
 

@@ -4,9 +4,9 @@ import { requireAdmin } from "./lib/requireAdmin";
 export const getAdminStats = query({
   handler: async (ctx) => {
     await requireAdmin(ctx);
-    const allUsers = await ctx.db.query("users").collect();
-    const allCourses = await ctx.db.query("courses").collect();
-    const allLessons = await ctx.db.query("lessons").collect();
+    const allUsers = await ctx.db.query("users").take(2000);
+    const allCourses = await ctx.db.query("courses").take(2000);
+    const allLessons = await ctx.db.query("lessons").take(10000);
 
     const completedLessons = allLessons.filter((l) => l.completed);
 

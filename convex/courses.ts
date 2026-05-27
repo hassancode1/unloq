@@ -31,8 +31,10 @@ export const listCourses = query({
 export const getCourse = query({
   args: { id: v.id("courses") },
   handler: async (ctx, { id }) => {
+    const userId = await getAuthUserId(ctx);
     const course = await ctx.db.get(id);
     if (!course) return null;
+    if (!course.published && course.userId !== userId) return null;
     const lessons = await ctx.db
       .query("lessons")
       .withIndex("by_course", (q) => q.eq("courseId", id))
@@ -214,13 +216,21 @@ export const listWithProgress = query({
 export const get = query({
   args: { courseId: v.id("courses") },
   handler: async (ctx, { courseId }) => {
-    return ctx.db.get(courseId);
+    const userId = await getAuthUserId(ctx);
+    const course = await ctx.db.get(courseId);
+    if (!course) return null;
+    if (!course.published && course.userId !== userId) return null;
+    return course;
   },
 });
 
 export const getLessons = query({
   args: { courseId: v.id("courses") },
   handler: async (ctx, { courseId }) => {
+    const userId = await getAuthUserId(ctx);
+    const course = await ctx.db.get(courseId);
+    if (!course) return [];
+    if (!course.published && course.userId !== userId) return [];
     return ctx.db
       .query("lessons")
       .withIndex("by_course", (q) => q.eq("courseId", courseId))
@@ -318,6 +328,10 @@ export const addToFolder = mutation({
     const userId = await getAuthUserId(ctx);
     const course = await ctx.db.get(courseId);
     if (!course || course.userId !== userId) throw new Error("Not authorized");
+    if (folderId) {
+      const folder = await ctx.db.get(folderId);
+      if (!folder || folder.userId !== userId) throw new Error("Folder not found or not authorized");
+    }
     await ctx.db.patch(courseId, { folderId });
   },
 });
@@ -327,8 +341,10 @@ export const addToFolder = mutation({
 export const getPdfUrl = query({
   args: { courseId: v.id("courses") },
   handler: async (ctx, { courseId }) => {
+    const userId = await getAuthUserId(ctx);
     const course = await ctx.db.get(courseId);
     if (!course?.pdfStorageId) return null;
+    if (!course.published && course.userId !== userId) return null;
     return ctx.storage.getUrl(course.pdfStorageId);
   },
 });
@@ -404,15 +420,16 @@ export const insertLesson = internalMutation({
 export const completeLesson = mutation({
   args: { lessonId: v.id("lessons") },
   handler: async (ctx, { lessonId }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Must be signed in");
     const lesson = await ctx.db.get(lessonId);
     if (!lesson || lesson.completed) return;
-    await ctx.db.patch(lessonId, { completed: true });
     const course = await ctx.db.get(lesson.courseId);
-    if (course) {
-      await ctx.db.patch(lesson.courseId, {
-        completedLessons: (course.completedLessons ?? 0) + 1,
-      });
-    }
+    if (!course || course.userId !== userId) throw new Error("Not authorized");
+    await ctx.db.patch(lessonId, { completed: true });
+    await ctx.db.patch(lesson.courseId, {
+      completedLessons: (course.completedLessons ?? 0) + 1,
+    });
   },
 });
 

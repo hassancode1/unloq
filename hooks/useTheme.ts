@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { LightColors, DarkColors, type AppColors } from '../constants/Colors';
 import { FontFamily } from '../constants/theme';
@@ -14,11 +15,11 @@ export interface Theme {
 export function useTheme(): Theme {
   const { darkMode, fontScale } = useAppStore();
   const C = darkMode ? DarkColors : LightColors;
-  return {
+  return useMemo(() => ({
     C,
     isDark: darkMode,
     fontScale,
     fs: (base: number) => base * fontScale,
     F: FontFamily,
-  };
+  }), [darkMode, fontScale]);
 }

@@ -84,7 +84,7 @@ export async function scheduleStudyReminders(cfg: GoalConfig): Promise<boolean> 
 export function showNotificationPermissionAlert() {
   Alert.alert(
     'Notifications disabled',
-    'To receive study reminders, enable notifications for Loqlearn in Settings.',
+    'To receive study reminders, enable notifications for Unloq in Settings.',
     [
       { text: 'Not now', style: 'cancel' },
       { text: 'Open Settings', onPress: () => Linking.openSettings() },

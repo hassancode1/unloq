@@ -318,9 +318,7 @@ export default function CourseDetailScreen({
         <Text style={[S.headerTitle, { color: C.text, fontFamily: F.bold }]} numberOfLines={1} ellipsizeMode="tail">
           {course?.title ?? ''}
         </Text>
-        <TouchableOpacity style={[S.iconBtn, { backgroundColor: C.surfaceAlt }]}>
-          <Ionicons name="ellipsis-horizontal" size={18} color={C.muted} />
-        </TouchableOpacity>
+        <View style={S.iconBtn} />
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={[S.scroll, { paddingBottom: insets.bottom + 100 }]} showsVerticalScrollIndicator={false}>

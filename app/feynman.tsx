@@ -251,7 +251,7 @@ function NoteBreakdownScreen({ courseTitle, feynmanTopics, C, F, fs, insets, isD
             No Feynman topics yet
           </Text>
           <Text style={{ fontFamily: F.regular, fontSize: fs(13), color: C.muted, textAlign: 'center', lineHeight: 20 }}>
-            This note was created before topic analysis. Delete and re-upload it to get 7–8 AI-curated concepts.
+            Topics are auto-extracted during generation. Re-upload this note to get AI-curated concepts.
           </Text>
         </Animated.View>
       ) : (
@@ -292,6 +292,7 @@ function TopicPicker({
 }) {
   const [text, setText] = useState('');
   const courses = useQuery(api.courses.listMine) as any[] | undefined;
+  const coursesLoading = courses === undefined;
   const hasReadyCourses = (courses ?? []).some((c: any) => c.status === 'ready');
 
   const handleFreeText = () => {
@@ -316,7 +317,13 @@ function TopicPicker({
           </Text>
         </Animated.View>
 
-        {hasReadyCourses && (
+        {coursesLoading && (
+          <Animated.View entering={FadeInDown.delay(120).duration(300)} style={{ alignItems: 'center', marginTop: Spacing.xl }}>
+            <ActivityIndicator size="small" color="#7C3AED" />
+          </Animated.View>
+        )}
+
+        {!coursesLoading && hasReadyCourses && (
           <Animated.View entering={FadeInDown.delay(120).duration(300)} style={{ paddingHorizontal: Spacing.lg, marginTop: Spacing.xl }}>
             <TouchableOpacity
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onOpenLibrary(); }}
@@ -377,7 +384,7 @@ function CharacterPicker({
           Choose your crew!
         </Text>
         <Text style={{ fontFamily: F.regular, fontSize: fs(13), color: C.muted, marginTop: 4 }}>
-          Harder = simpler explanation required
+          Higher difficulty = explain in plainer terms
         </Text>
       </Animated.View>
 
@@ -419,15 +426,16 @@ function SessionView({
   C: any; F: any; fs: (n: number) => number; insets: any;
 }) {
   const { isPremium } = useEntitlement();
-  const [isRecording, setIsRecording]   = useState(false);
-  const [transcript,  setTranscript]    = useState('');
-  const [score,       setScore]         = useState(0);
-  const [feedback,    setFeedback]      = useState('');
-  const [gaps,        setGaps]          = useState<string[]>([]);
-  const [loading,     setLoading]       = useState(false);
-  const [hasResult,   setHasResult]     = useState(false);
-  const [useTextMode, setUseTextMode]   = useState(false);
-  const [textInput,   setTextInput]     = useState('');
+  const [isRecording,       setIsRecording]       = useState(false);
+  const [transcript,        setTranscript]        = useState('');
+  const [score,             setScore]             = useState(0);
+  const [feedback,          setFeedback]          = useState('');
+  const [gaps,              setGaps]              = useState<string[]>([]);
+  const [loading,           setLoading]           = useState(false);
+  const [hasResult,         setHasResult]         = useState(false);
+  const [evaluationFailed,  setEvaluationFailed]  = useState(false);
+  const [useTextMode,       setUseTextMode]       = useState(false);
+  const [textInput,         setTextInput]         = useState('');
 
   const evaluate = useAction(api.ai.evaluateFeynmanExplanation);
   const runEvaluationRef  = useRef<((explanation: string) => Promise<void>) | null>(null);
@@ -447,9 +455,11 @@ function SessionView({
       setScore(result.score);
       setFeedback(result.feedback);
       setGaps(result.gaps);
+      setEvaluationFailed(false);
       setHasResult(true);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch {
+      setEvaluationFailed(true);
       setFeedback('Could not evaluate your explanation. Please try again.');
       setHasResult(true);
     } finally {
@@ -482,12 +492,12 @@ function SessionView({
       hasEvaluatedRef.current = false;
       setTranscript('');
       setHasResult(false);
+      setEvaluationFailed(false);
       setIsRecording(true);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       await ExpoSpeechRecognitionModule.requestPermissionsAsync();
       ExpoSpeechRecognitionModule.start({ lang: 'en-US', interimResults: true, continuous: false });
-    } catch (err) {
-      console.warn('[Feynman] startRecording failed:', err);
+    } catch {
       setUseTextMode(true);
       setIsRecording(false);
     }
@@ -619,7 +629,7 @@ function SessionView({
                 <Text style={{ fontFamily: F.semiBold, fontSize: fs(13), color: C.muted }}>
                   {isRecording ? 'Listening… tap to stop' : 'Press to talk'}
                 </Text>
-                <TouchableOpacity onPress={handleMicPress} activeOpacity={0.8} style={styles.micWrapper}>
+                <TouchableOpacity onPress={handleMicPress} activeOpacity={0.8} style={styles.micWrapper} accessibilityLabel={isRecording ? 'Stop recording' : 'Start recording'} accessibilityRole="button">
                   <View style={[styles.micBtn, { backgroundColor: isRecording ? '#EF4444' : '#1a1a2e' }]}>
                     <Ionicons name={isRecording ? 'stop' : 'mic'} size={28} color="#fff" />
                     {!isPremium && !isRecording && (
