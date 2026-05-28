@@ -1093,15 +1093,16 @@ export const evaluateFeynmanExplanation = action({
     const userId = await getAuthUserId(ctx as any);
     if (!userId) throw new Error("Must be signed in");
 
-    const anthropicKey = process.env.ANTHROPIC_API_KEY;
-    if (!anthropicKey) throw new Error("No Anthropic API key set.");
+    const geminiKey = process.env.GEMINI_API_KEY;
+    if (!geminiKey) throw new Error("No Gemini API key set.");
 
-    const Anthropic = (await import("@anthropic-ai/sdk")).default;
-    const client = new Anthropic({ apiKey: anthropicKey });
+    const { GoogleGenerativeAI } = await import("@google/generative-ai");
+    const genAI = new GoogleGenerativeAI(geminiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-    const system = `You are an expert learning coach evaluating a student's understanding of a topic using the Feynman Technique. The student attempted to explain the topic to someone who is ${characterAge} years old. Your job is to score how well they covered the key concepts and give brief, encouraging feedback.`;
+    const prompt = `You are an expert learning coach evaluating a student's understanding of a topic using the Feynman Technique. The student explained the topic to someone who is ${characterAge} years old.
 
-    const userMsg = `TOPIC: ${topicTitle}
+TOPIC: ${topicTitle}
 
 KEY CONTENT (ground truth):
 ${topicSummary}
@@ -1116,22 +1117,22 @@ Evaluate the explanation. Return ONLY valid JSON with no markdown:
   "gaps": ["<key concept they missed or got wrong>", ...]
 }`;
 
-    const message = await client.messages.create({
-      model: "claude-3-5-haiku-20241022",
-      max_tokens: 512,
-      system,
-      messages: [{ role: "user", content: userMsg }],
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: {
+        responseMimeType: "application/json",
+        thinkingConfig: { thinkingBudget: 0 },
+      } as any,
     });
 
-    const block = message.content.find((b: any) => b.type === "text");
-    const raw = (block as any)?.text?.trim() ?? "{}";
+    const raw = result.response.text().trim();
     const cleaned = raw.replace(/^```json\n?/, "").replace(/^```\n?/, "").replace(/```\n?$/, "").trim();
     try {
-      const result = JSON.parse(cleaned);
+      const parsed = JSON.parse(cleaned);
       return {
-        score:    Math.max(0, Math.min(100, Number(result.score) || 0)),
-        feedback: String(result.feedback ?? "Good effort! Keep practising."),
-        gaps:     Array.isArray(result.gaps) ? result.gaps.map(String) : [],
+        score:    Math.max(0, Math.min(100, Number(parsed.score) || 0)),
+        feedback: String(parsed.feedback ?? "Good effort! Keep practising."),
+        gaps:     Array.isArray(parsed.gaps) ? parsed.gaps.map(String) : [],
       };
     } catch {
       return { score: 0, feedback: "Could not evaluate your explanation. Please try again.", gaps: [] };

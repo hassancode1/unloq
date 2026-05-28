@@ -13,7 +13,6 @@ import type * as ai from "../ai.js";
 import type * as auth from "../auth.js";
 import type * as courses from "../courses.js";
 import type * as crons from "../crons.js";
-import type * as debug from "../debug.js";
 import type * as groups from "../groups.js";
 import type * as http from "../http.js";
 import type * as lib_requireAdmin from "../lib/requireAdmin.js";
@@ -31,7 +30,6 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   courses: typeof courses;
   crons: typeof crons;
-  debug: typeof debug;
   groups: typeof groups;
   http: typeof http;
   "lib/requireAdmin": typeof lib_requireAdmin;

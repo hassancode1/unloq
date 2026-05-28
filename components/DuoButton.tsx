@@ -25,10 +25,10 @@ function makeStyles(C: AppColors) {
       marginBottom: 4,
     },
     shadowPrimary: {
-      backgroundColor: C.primaryRing,
+      backgroundColor: '#1E3A8A',
     },
     shadowOutline: {
-      backgroundColor: C.border,
+      backgroundColor: C.borderStrong,
     },
     btn: {
       paddingVertical: 16,
@@ -39,6 +39,8 @@ function makeStyles(C: AppColors) {
     },
     btnPrimary: {
       backgroundColor: C.primary,
+      borderWidth: 2,
+      borderColor: 'rgba(255,255,255,0.2)',
       transform: [{ translateY: -4 }],
     },
     btnOutline: {
@@ -51,8 +53,8 @@ function makeStyles(C: AppColors) {
       backgroundColor: C.muted,
     },
     label: {
-      fontSize: 16,
-      fontFamily: 'PJS-Bold',
+      fontSize: 17,
+      fontFamily: 'Nunito-Bold',
     },
     labelPrimary: {
       color: '#ffffff',

@@ -796,7 +796,7 @@ const qz = StyleSheet.create({
   questionCard:  { borderRadius: 16, borderWidth: 1, padding: Spacing.lg, gap: Spacing.sm },
   questionNum:   { letterSpacing: 1.4 },
   questionText:  {},
-  options:       { gap: 10 },
+  options:       { gap: 10, marginTop: Spacing.lg },
   option:        { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1.5, borderRadius: 14, padding: 14 },
   bullet:        { width: 30, height: 30, borderRadius: 9, borderWidth: 1.5, justifyContent: 'center', alignItems: 'center' },
   bulletTxt:     {},

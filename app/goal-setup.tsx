@@ -71,8 +71,8 @@ function makeStyles(C: AppColors) {
     header: { gap: Spacing.sm },
     badge: {
       flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start',
-      backgroundColor: `${P}12`, borderRadius: 20, paddingHorizontal: 12,
-      paddingVertical: 6, borderWidth: 1.5, borderColor: `${P}35`,
+      backgroundColor: `${P}15`, borderRadius: 20, paddingHorizontal: 12,
+      paddingVertical: 6, borderWidth: 2, borderColor: `${P}45`,
     },
     badgeEmoji: { fontSize: 13 },
     badgeText: { fontSize: 12, fontFamily: 'Nunito-Bold', color: P, letterSpacing: 0.3 },
@@ -82,7 +82,7 @@ function makeStyles(C: AppColors) {
     // Frequency chips
     chipRow: { flexDirection: 'row', gap: Spacing.sm },
     chip: {
-      flex: 1, paddingVertical: 12, borderRadius: 12, borderWidth: 1.5,
+      flex: 1, paddingVertical: 12, borderRadius: 14, borderWidth: 2,
       borderColor: C.border, backgroundColor: C.surfaceAlt, alignItems: 'center',
     },
     chipActive: { backgroundColor: P, borderColor: P },
@@ -105,7 +105,7 @@ function makeStyles(C: AppColors) {
     dayPickerLabel: { fontSize: 11, fontFamily: 'Nunito-ExtraBold', color: C.sub, letterSpacing: 1.2, textTransform: 'uppercase' },
     dayRow: { flexDirection: 'row', gap: 8 },
     dayBtn: {
-      width: 38, height: 38, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth,
+      width: 38, height: 38, borderRadius: 12, borderWidth: 1.5,
       borderColor: C.border, backgroundColor: C.surface, justifyContent: 'center', alignItems: 'center',
     },
     dayBtnActive: { backgroundColor: P, borderColor: P },
@@ -120,8 +120,8 @@ function makeStyles(C: AppColors) {
     tileRow: { flexDirection: 'row', gap: Spacing.sm },
     tile: {
       flex: 1, alignItems: 'center', gap: 4, paddingVertical: 14,
-      borderRadius: 14, borderWidth: StyleSheet.hairlineWidth,
-      borderColor: C.border, backgroundColor: C.primaryBg,
+      borderRadius: 16, borderWidth: 2,
+      borderColor: C.border, backgroundColor: C.surface,
     },
     tileActive: { backgroundColor: `${P}12`, borderColor: P },
     tileEmoji: { fontSize: 22 },
@@ -424,10 +424,15 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
                   <Animated.View
                     key={opt.hours}
                     entering={FadeInDown.delay(60 + i * 30).duration(250)}
-                    style={{ width: '48%' }}
+                    style={{ width: '48%', marginBottom: 5 }}
                   >
+                    <View style={{
+                      position: 'absolute', bottom: -5, left: 1, right: -1, top: 0,
+                      borderRadius: 16,
+                      backgroundColor: selected ? '#1E3A8A' : C.borderStrong,
+                    }} />
                     <TouchableOpacity
-                      style={[styles.tile, selected && styles.tileActive]}
+                      style={[styles.tile, selected && styles.tileActive, { transform: [{ translateY: -5 }] }]}
                       onPress={() => { Haptics.selectionAsync(); setBlockDurationHours(opt.hours); }}
                       activeOpacity={0.75}
                     >

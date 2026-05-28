@@ -469,15 +469,21 @@ function SessionView({
 
   useEffect(() => { runEvaluationRef.current = runEvaluation; }, [runEvaluation]);
 
-  // Update transcript in real-time; isFinal just updates the button state
+  // Trigger evaluation immediately when speech recognition finalises the transcript
   useSpeechRecognitionEvent('result', (e) => {
     const text = e.results?.[0]?.transcript ?? '';
     transcriptRef.current = text;
     setTranscript(text);
-    if (e.isFinal) setIsRecording(false);
+    if (e.isFinal) {
+      setIsRecording(false);
+      if (!hasEvaluatedRef.current && text.trim()) {
+        hasEvaluatedRef.current = true;
+        runEvaluationRef.current?.(text);
+      }
+    }
   });
 
-  // end always fires when the session closes — use it as the sole eval trigger
+  // Fallback: catch cases where isFinal never fired but the session still ended
   useSpeechRecognitionEvent('end', () => {
     setIsRecording(false);
     if (!hasEvaluatedRef.current && transcriptRef.current.trim()) {
