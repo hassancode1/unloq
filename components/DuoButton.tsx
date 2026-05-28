@@ -52,7 +52,7 @@ function makeStyles(C: AppColors) {
     },
     label: {
       fontSize: 16,
-      fontFamily: 'Nunito-Bold',
+      fontFamily: 'PJS-Bold',
     },
     labelPrimary: {
       color: '#ffffff',

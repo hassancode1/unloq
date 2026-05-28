@@ -87,7 +87,7 @@ function Tile({ icon, label, sublabel, bg, color, border, shadow, onPress, disab
 }) {
   return (
     <View style={[T.wrap, { opacity: disabled ? 0.42 : 1 }]}>
-      <View style={[T.shadow, { backgroundColor: shadow, borderRadius: 14 }]} />
+      <View style={[T.shadow, { backgroundColor: shadow, borderRadius: 16 }]} />
       <TouchableOpacity
         style={[T.tile, { backgroundColor: bg, borderColor: border }]}
         onPress={disabled ? undefined : onPress}
@@ -108,9 +108,9 @@ function Tile({ icon, label, sublabel, bg, color, border, shadow, onPress, disab
 }
 
 const T = StyleSheet.create({
-  wrap:       { flex: 1, marginBottom: 4 },
-  shadow:     { position: 'absolute', bottom: -4, left: 0, right: 0, top: 0 },
-  tile:       { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 68, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 14, borderWidth: 1.5, transform: [{ translateY: -4 }] },
+  wrap:       { flex: 1, marginBottom: 5 },
+  shadow:     { position: 'absolute', bottom: -5, left: 1, right: -1, top: 0 },
+  tile:       { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 68, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 16, borderWidth: 2, transform: [{ translateY: -5 }] },
   iconCircle: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   textCol:    { flex: 1 },
   label:      { fontSize: 14, fontFamily: 'Nunito-Bold' },
@@ -290,19 +290,19 @@ export default function CourseDetailScreen({
 
   if (isLoading) return <Skeleton C={C} onBack={onBack} />;
 
-  // Tile color sets — hand-picked per mode with Duo shadow color
+  // Tile color sets — Claymorphism vibrant palette
   const flash = isDark
-    ? { bg: '#0D1F3C', color: '#60A5FA', border: '#1B3460', shadow: '#060E1E' }
-    : { bg: '#DBEAFE', color: '#1D4ED8', border: '#93C5FD', shadow: '#93C5FD' };
+    ? { bg: '#0D1F3C', color: '#818CF8', border: '#2E2E60', shadow: '#060E1E' }
+    : { bg: '#EEF2FF', color: '#4F46E5', border: '#6366F1', shadow: '#3730A3' };
   const quiz = isDark
     ? { bg: '#2A0A14', color: '#FB7185', border: '#5A1525', shadow: '#150408' }
-    : { bg: '#FFE4E6', color: '#BE123C', border: '#FCA5A5', shadow: '#FCA5A5' };
+    : { bg: '#FFF1F2', color: '#E11D48', border: '#F43F5E', shadow: '#9F1239' };
   const mindmap = isDark
     ? { bg: '#1C1200', color: '#FCD34D', border: '#3A2600', shadow: '#0E0900' }
-    : { bg: '#FEF9C3', color: '#92400E', border: '#FDE68A', shadow: '#FDE68A' };
+    : { bg: '#FFFBEB', color: '#D97706', border: '#F59E0B', shadow: '#92400E' };
   const pdf = isDark
     ? { bg: '#041F1A', color: '#34D399', border: '#0A4035', shadow: '#020F0D' }
-    : { bg: '#D1FAE5', color: '#065F46', border: '#6EE7B7', shadow: '#6EE7B7' };
+    : { bg: '#ECFDF5', color: '#059669', border: '#10B981', shadow: '#065F46' };
 
   return (
     <View style={[S.root, { backgroundColor: C.bg, paddingTop: insets.top }]}>
@@ -470,9 +470,9 @@ export default function CourseDetailScreen({
         */}
         {/* Feynman */}
         <View style={S.duoWrap}>
-          <View style={[S.duoShadow, { backgroundColor: '#4C1D95' }]} />
+          <View style={[S.duoShadow, { backgroundColor: '#3730A3' }]} />
           <TouchableOpacity
-            style={[S.duoBtn, { backgroundColor: '#7C3AED', borderWidth: 0, transform: [{ translateY: -4 }] }]}
+            style={[S.duoBtn, { backgroundColor: '#4F46E5', borderWidth: 2, borderColor: 'rgba(255,255,255,0.22)', transform: [{ translateY: -5 }] }]}
             activeOpacity={0.85}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -530,10 +530,10 @@ const S = StyleSheet.create({
   bottomBtn:    { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 50, borderRadius: 14 },
   bottomBtnTxt: { fontSize: 15 },
 
-  duoWrap:   { flex: 1, borderRadius: 14, marginBottom: 4 },
-  duoShadow: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 50, borderRadius: 14 },
-  duoBtn:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 50, borderRadius: 14 },
-  duoBtnTxt: { fontSize: 15, color: '#fff' },
+  duoWrap:   { flex: 1, borderRadius: 16, marginBottom: 5 },
+  duoShadow: { position: 'absolute', bottom: -5, left: 1, right: -1, height: 50, borderRadius: 16 },
+  duoBtn:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 50, borderRadius: 16 },
+  duoBtnTxt: { fontSize: 18, color: '#fff' },
   soonTag:   { position: 'absolute', top: -6, right: 8, backgroundColor: 'rgba(0,0,0,0.35)', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
   soonTagTxt:{ fontSize: 9, fontFamily: 'Nunito-Bold', color: '#fff', letterSpacing: 0.5 },
 });

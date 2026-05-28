@@ -235,14 +235,14 @@ const S = StyleSheet.create({
 
   title: {
     fontSize: 38,
-    fontFamily: 'Nunito-ExtraBold',
+    fontFamily: 'PJS-ExtraBold',
     color: '#fff',
     letterSpacing: -1,
   },
 
   tag: {
     fontSize: 14,
-    fontFamily: 'Nunito-Regular',
+    fontFamily: 'PJS-Regular',
     color: `${PRIMARY_DIM}CC`,
     letterSpacing: 0.3,
   },

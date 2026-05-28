@@ -57,7 +57,7 @@ export default function CreateModal({ visible, onDismiss, onSelectOption, C, F, 
 
         <View style={styles.header}>
           <Text style={[styles.title, { color: C.text, fontFamily: F.extraBold, fontSize: fs(18) }]}>
-            ✨ Create Note / Learning
+            Create a Note
           </Text>
           <TouchableOpacity onPress={onDismiss} hitSlop={12}>
             <Ionicons name="close" size={24} color={C.sub} />
