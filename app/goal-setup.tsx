@@ -12,14 +12,12 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';  
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import DuoButton from '../components/DuoButton';
 import { Spacing } from '../constants/spacing';
 import { useAppStore } from '../store/useAppStore';
 import { useTheme } from '../hooks/useTheme';
 import { scheduleStudyReminders, showNotificationPermissionAlert } from '../lib/notifications';
-import type { AppColors } from '../constants/Colors';
 import {
   getAuthorizationStatus,
   requestAuthorization,
@@ -28,8 +26,90 @@ import {
   getBlockedCount,
 } from '../lib/familyControls';
 
-const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-const DAY_NAMES  = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+// ─── Design tokens (clay aesthetic) ──────────────────────────────────────────
+
+const CLAY_BG       = '#EEF2FF';   // indigo-tinted lavender canvas
+const CLAY_CARD     = '#FFFFFF';
+const CLAY_SHADOW   = '#C7D2FE';   // indigo-100 — inactive shadow
+const CLAY_SHADOW_ACTIVE = '#4338CA'; // deep indigo — active shadow
+const CLAY_PRIMARY  = '#6366F1';
+const CLAY_PRIMARY2 = '#8B5CF6';
+const CLAY_TEXT     = '#1E1B4B';
+const CLAY_MUTED    = '#6B7280';
+const CLAY_SUB      = '#4B5563';
+const CLAY_BORDER   = '#E0E7FF';
+
+// ─── Clay helpers ─────────────────────────────────────────────────────────────
+
+type ClayCardProps = {
+  children: React.ReactNode;
+  shadowColor?: string;
+  depth?: number;
+  radius?: number;
+  style?: object;
+  innerStyle?: object;
+};
+
+function ClayButton({ label, onPress, disabled = false }: { label: string; onPress: () => void; disabled?: boolean }) {
+  return (
+    <View style={{ position: 'relative', marginBottom: 6 }}>
+      <View style={{
+        position: 'absolute',
+        bottom: -6, left: 0, right: 0, top: 0,
+        borderRadius: 18,
+        backgroundColor: disabled ? CLAY_SHADOW : CLAY_SHADOW_ACTIVE,
+      }} />
+      <TouchableOpacity
+        onPress={disabled ? undefined : onPress}
+        activeOpacity={0.82}
+        style={{
+          borderRadius: 18,
+          backgroundColor: disabled ? CLAY_MUTED : CLAY_PRIMARY,
+          paddingVertical: 16,
+          alignItems: 'center',
+          transform: [{ translateY: -6 }],
+          opacity: disabled ? 0.6 : 1,
+        }}
+      >
+        <Text style={{ fontFamily: 'Nunito-ExtraBold', fontSize: 17, color: '#fff' }}>
+          {label}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+function ClayCard({
+  children,
+  shadowColor = CLAY_SHADOW,
+  depth = 6,
+  radius = 24,
+  style,
+  innerStyle,
+}: ClayCardProps) {
+  return (
+    <View style={[{ position: 'relative', marginBottom: depth }, style]}>
+      <View style={{
+        position: 'absolute',
+        bottom: -depth, left: 0, right: 0, top: 0,
+        borderRadius: radius,
+        backgroundColor: shadowColor,
+      }} />
+      <View style={[{
+        borderRadius: radius,
+        backgroundColor: CLAY_CARD,
+        overflow: 'hidden',
+      }, innerStyle]}>
+        {children}
+      </View>
+    </View>
+  );
+}
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const DAY_LABELS  = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+const DAY_NAMES   = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const WEEKDAY_DAYS = [1, 2, 3, 4, 5];
 
 type GoalFrequency = 'daily' | 'weekdays' | 'custom';
@@ -38,14 +118,10 @@ type Step          = 'frequency' | 'session' | 'apps';
 const BLOCK_DURATION_OPTIONS = [
   { hours: 0.5, label: '30 mins', emoji: '⚡', desc: 'Quick sprint' },
   { hours: 1,   label: '1 hour',  emoji: '⏱️', desc: 'Light session' },
-  { hours: 2,   label: '2 hours', emoji: '🔒', desc: 'Steady commitment' },
+  { hours: 2,   label: '2 hours', emoji: '🔒', desc: 'Steady focus' },
   { hours: 3,   label: '3 hours', emoji: '💪', desc: 'Deep focus' },
-  { hours: 4,   label: '4 hours', emoji: '🔥', desc: 'Serious discipline' },
-  { hours: 6,   label: '6 hours', emoji: '🔥', desc: 'Serious discipline' },
-  { hours: 8,   label: '8 hours', emoji: '💀', desc: 'Full lock mode' },
-  { hours: -1,  label: 'Custom',  emoji: '✏️', desc: 'Set your own hours' },
+  { hours: -1,  label: 'Custom',  emoji: '✏️', desc: 'Set your own' },
 ];
-
 
 function toTimeString(date: Date) {
   const h = String(date.getHours()).padStart(2, '0');
@@ -57,139 +133,55 @@ function fmtTime(date: Date) {
   const h = date.getHours();
   const m = date.getMinutes();
   const ampm = h >= 12 ? 'PM' : 'AM';
-  const h12 = h % 12 === 0 ? 12 : h % 12;
+  const h12  = h % 12 === 0 ? 12 : h % 12;
   return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
 }
 
-function makeStyles(C: AppColors) {
-  const P = C.primary;
-  return StyleSheet.create({
-    root: { flex: 1, backgroundColor: C.bg, paddingHorizontal: Spacing.lg },
-    scrollContent: { paddingTop: Spacing.md, paddingBottom: Spacing.xxl, gap: Spacing.lg },
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
-    // Header
-    header: { gap: Spacing.sm },
-    badge: {
-      flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start',
-      backgroundColor: `${P}15`, borderRadius: 20, paddingHorizontal: 12,
-      paddingVertical: 6, borderWidth: 2, borderColor: `${P}45`,
-    },
-    badgeEmoji: { fontSize: 13 },
-    badgeText: { fontSize: 12, fontFamily: 'Nunito-Bold', color: P, letterSpacing: 0.3 },
-    title: { fontSize: 30, fontFamily: 'Nunito-ExtraBold', color: C.text, lineHeight: 38 },
-    subtitle: { fontSize: 15, fontFamily: 'Nunito-SemiBold', color: C.sub, lineHeight: 22 },
+const S = StyleSheet.create({
+  root: { flex: 1, backgroundColor: CLAY_BG, paddingHorizontal: Spacing.lg },
+  scroll: { paddingTop: Spacing.md, paddingBottom: 48, gap: Spacing.lg },
 
-    // Frequency chips
-    chipRow: { flexDirection: 'row', gap: Spacing.sm },
-    chip: {
-      flex: 1, paddingVertical: 12, borderRadius: 14, borderWidth: 2,
-      borderColor: C.border, backgroundColor: C.surfaceAlt, alignItems: 'center',
-    },
-    chipActive: { backgroundColor: P, borderColor: P },
-    chipText: { fontSize: 13, fontFamily: 'Nunito-Bold', color: C.sub },
-    chipTextActive: { color: '#fff' },
+  // Header
+  badge: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    alignSelf: 'flex-start', backgroundColor: `${CLAY_PRIMARY}18`,
+    borderRadius: 50, paddingHorizontal: 14, paddingVertical: 7,
+    borderWidth: 1.5, borderColor: `${CLAY_PRIMARY}35`,
+  },
+  badgeEmoji: { fontSize: 14 },
+  badgeText: { fontSize: 12, fontFamily: 'Nunito-ExtraBold', color: CLAY_PRIMARY, letterSpacing: 0.5 },
+  title: { fontSize: 34, fontFamily: 'Nunito-ExtraBold', color: CLAY_TEXT, lineHeight: 40, letterSpacing: -0.5 },
+  subtitle: { fontSize: 15, fontFamily: 'Nunito-SemiBold', color: CLAY_SUB, lineHeight: 22 },
 
-    // Description card
-    descCard: {
-      flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm,
-      backgroundColor: C.surfaceAlt, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth,
-      borderColor: C.border, padding: Spacing.md,
-    },
-    descText: { flex: 1, fontSize: 13, fontFamily: 'Nunito-SemiBold', color: C.sub, lineHeight: 20 },
+  // Navigation
+  cancelBar: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: 2 },
+  cancelTxt: { fontSize: 15, fontFamily: 'Nunito-SemiBold', color: CLAY_MUTED },
+  stepDots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginBottom: 4 },
+  stepDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: CLAY_BORDER },
+  stepDotActive: { backgroundColor: CLAY_PRIMARY, width: 24 },
+  backBtn: { alignSelf: 'center', paddingVertical: 8, paddingHorizontal: 20 },
+  backBtnText: { fontSize: 14, fontFamily: 'Nunito-SemiBold', color: CLAY_MUTED },
 
-    // Day picker
-    dayPickerCard: {
-      backgroundColor: C.surfaceAlt, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth,
-      borderColor: C.border, padding: Spacing.md, gap: 12, alignItems: 'center',
-    },
-    dayPickerLabel: { fontSize: 11, fontFamily: 'Nunito-ExtraBold', color: C.sub, letterSpacing: 1.2, textTransform: 'uppercase' },
-    dayRow: { flexDirection: 'row', gap: 8 },
-    dayBtn: {
-      width: 38, height: 38, borderRadius: 12, borderWidth: 1.5,
-      borderColor: C.border, backgroundColor: C.surface, justifyContent: 'center', alignItems: 'center',
-    },
-    dayBtnActive: { backgroundColor: P, borderColor: P },
-    dayBtnText: { fontSize: 13, fontFamily: 'Nunito-Bold', color: C.sub },
-    dayBtnTextActive: { color: '#fff' },
-    dayPickerSub: { fontSize: 12, fontFamily: 'Nunito-SemiBold', color: P },
+  // Section labels
+  sectionLabel: {
+    fontSize: 11, fontFamily: 'Nunito-ExtraBold', color: CLAY_PRIMARY,
+    letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 4,
+  },
+  sectionSub: { fontSize: 13, fontFamily: 'Nunito-SemiBold', color: CLAY_SUB, lineHeight: 19 },
+});
 
-    // Session — lesson tiles
-    sectionHeader: { gap: 4 },
-    sectionLabel: { fontSize: 11, fontFamily: 'Nunito-ExtraBold', color: C.sub, letterSpacing: 1.2, textTransform: 'uppercase' },
-    sectionSub: { fontSize: 13, fontFamily: 'Nunito-SemiBold', color: C.sub, lineHeight: 19 },
-    tileRow: { flexDirection: 'row', gap: Spacing.sm },
-    tile: {
-      flex: 1, alignItems: 'center', gap: 4, paddingVertical: 14,
-      borderRadius: 16, borderWidth: 2,
-      borderColor: C.border, backgroundColor: C.surface,
-    },
-    tileActive: { backgroundColor: `${P}12`, borderColor: P },
-    tileEmoji: { fontSize: 22 },
-    tileLabel: { fontSize: 13, fontFamily: 'Nunito-Bold', color: C.text },
-    tileLabelActive: { color: P },
-    tileDesc: { fontSize: 11, fontFamily: 'Nunito-SemiBold', color: C.sub },
-    tileDescActive: { color: `${P}BB` },
-
-    // Time picker
-    pickerCard: {
-      backgroundColor: C.surfaceAlt, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth,
-      borderColor: C.border, overflow: 'hidden', alignItems: 'center',
-    },
-    pickerRow: {
-      flexDirection: 'row', alignItems: 'center', gap: 10,
-      paddingTop: Spacing.md, paddingHorizontal: Spacing.md,
-    },
-    pickerIcon: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-    pickerTime: { fontSize: 22 },
-    picker: { width: '100%', height: 150 },
-
-    // Native picker card
-    pickerInfoCard: {
-      backgroundColor: C.surfaceAlt, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth,
-      borderColor: C.border, padding: Spacing.md, gap: Spacing.md,
-    },
-    pickerInfoRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-    pickerInfoIcon: {
-      width: 52, height: 52, borderRadius: 14, borderWidth: 1.5,
-      justifyContent: 'center', alignItems: 'center',
-    },
-    pickerInfoTitle: { fontSize: 14 },
-    pickerInfoSub: { fontSize: 12, lineHeight: 17 },
-    checkBadge: { width: 22, height: 22, borderRadius: 11, justifyContent: 'center', alignItems: 'center' },
-    openPickerBtn: {
-      flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-      gap: 8, borderRadius: 12, borderWidth: 1.5, paddingVertical: 12,
-    },
-    openPickerBtnText: { fontSize: 14 },
-
-    // Info card
-    infoCard: {
-      flexDirection: 'row', alignItems: 'flex-start', gap: 8,
-      backgroundColor: `${P}08`, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth,
-      borderColor: `${P}25`, padding: Spacing.sm,
-    },
-    infoCardText: { flex: 1, fontSize: 12, fontFamily: 'Nunito-SemiBold', color: C.sub, lineHeight: 18 },
-
-    // Navigation
-    stepDots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginBottom: 4 },
-    stepDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: C.border },
-    stepDotActive: { backgroundColor: P, width: 22 },
-    backBtn: { alignSelf: 'center', paddingVertical: 8, paddingHorizontal: 20 },
-    backBtnText: { fontSize: 14, fontFamily: 'Nunito-SemiBold', color: C.sub },
-    cancelBar: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: 2 },
-    cancelTxt: { fontSize: 15, fontFamily: 'Nunito-SemiBold', color: C.muted },
-  });
-}
+// ─── Props ───────────────────────────────────────────────────────────────────
 
 type Props = { onComplete: () => void; onBack?: () => void };
 
 export default function GoalSetupScreen({ onComplete, onBack }: Props) {
   const insets = useSafeAreaInsets();
-  const setGoalConfig = useAppStore((s) => s.setGoalConfig);
-  const existingGoalConfig = useAppStore((s) => s.goalConfig);
+  const setGoalConfig           = useAppStore((s) => s.setGoalConfig);
+  const existingGoalConfig      = useAppStore((s) => s.goalConfig);
   const setBlockDurationHoursStore = useAppStore((s) => s.setBlockDurationHours);
-  const { C, fs, F } = useTheme();
-  const styles = React.useMemo(() => makeStyles(C), [C]);
+  const { F } = useTheme();
 
   const [step, setStep]               = useState<Step>('frequency');
   const [frequency, setFrequency]     = useState<GoalFrequency>('daily');
@@ -203,7 +195,7 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
   const [pickerLoading, setPickerLoading] = useState(false);
 
   const isCustomDuration = blockDurationHours === -1;
-  const resolvedHours = isCustomDuration ? (parseInt(customHoursInput, 10) || 0) : blockDurationHours;
+  const resolvedHours    = isCustomDuration ? (parseInt(customHoursInput, 10) || 0) : blockDurationHours;
 
   const totalSteps = 3;
   const stepIndex  = step === 'frequency' ? 0 : step === 'session' ? 1 : 2;
@@ -217,7 +209,6 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
     );
   }, []);
 
-  // Pre-load existing selection when entering the apps step
   const loadSelectionInfo = useCallback(async () => {
     const [sel, count] = await Promise.all([hasSelection(), getBlockedCount()]);
     setAppsSelected(sel);
@@ -228,12 +219,10 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
     setPickerLoading(true);
     try {
       let status = await getAuthorizationStatus();
-
       if (status === 'notDetermined') {
         await requestAuthorization();
         status = await getAuthorizationStatus();
       }
-
       if (status === 'denied') {
         Alert.alert(
           'Screen Time Access Required',
@@ -242,12 +231,10 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
         );
         return;
       }
-
       if (status !== 'approved') {
         Alert.alert('Permission Required', `Screen Time status: ${status}. Please try again.`);
         return;
       }
-
       const count = await presentActivityPicker();
       setBlockedCount(count);
       setAppsSelected(count > 0);
@@ -274,7 +261,6 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
       lessonTarget: 1,
       lockTime: toTimeString(lockDate),
       examDate: null,
-      // Only set grace period on first setup (not when editing an existing goal)
       goalSetDate: existingGoalConfig?.goalSetDate ?? today,
     };
     setGoalConfig(cfg);
@@ -288,157 +274,241 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
     onComplete();
   }, [frequency, customDays, resolvedHours, lockDate, existingGoalConfig, setGoalConfig, onComplete]);
 
+  // ── Step dots ──────────────────────────────────────────────────────────────
   const StepDots = () => (
-    <View style={styles.stepDots}>
+    <View style={S.stepDots}>
       {Array.from({ length: totalSteps }, (_, i) => (
-        <View key={i} style={[styles.stepDot, i === stepIndex && styles.stepDotActive]} />
+        <View key={i} style={[S.stepDot, i === stepIndex && S.stepDotActive]} />
       ))}
     </View>
   );
 
-  // ── Step 1: Frequency ──────────────────────────────────────────────────────
+  // ── FREQUENCY desc ─────────────────────────────────────────────────────────
+  const freqMeta: Record<GoalFrequency, { icon: any; text: string }> = {
+    daily:    { icon: 'sunny-outline',     text: 'Apps are blocked every day until your study session is done.' },
+    weekdays: { icon: 'briefcase-outline', text: 'Apps are blocked Mon–Fri. Weekends are free — no pressure.' },
+    custom:   { icon: 'calendar-outline',  text: 'Apps are only blocked on the days you choose.' },
+  };
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // STEP 1 — Frequency
+  // ══════════════════════════════════════════════════════════════════════════
   if (step === 'frequency') {
-    const freqDesc = {
-      daily:    'Apps are blocked every day until your lessons are done.',
-      weekdays: 'Apps are blocked Mon–Fri. Weekends are free — no pressure.',
-      custom:   'Apps are only blocked on the days you choose.',
-    };
     return (
-      <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+      <View style={[S.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         {onBack && (
-          <TouchableOpacity onPress={onBack} style={styles.cancelBar} activeOpacity={0.7}>
-            <Ionicons name="chevron-back" size={20} color={C.muted} />
-            <Text style={styles.cancelTxt}>Cancel</Text>
+          <TouchableOpacity onPress={onBack} style={S.cancelBar} activeOpacity={0.7}>
+            <Ionicons name="chevron-back" size={20} color={CLAY_MUTED} />
+            <Text style={S.cancelTxt}>Cancel</Text>
           </TouchableOpacity>
         )}
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          <Animated.View entering={FadeInDown.duration(300)} style={styles.header}>
-            <View style={styles.badge}>
-              <Text style={styles.badgeEmoji}>📅</Text>
-              <Text style={styles.badgeText}>Learning Goal</Text>
+
+        <ScrollView contentContainerStyle={S.scroll} showsVerticalScrollIndicator={false}>
+
+          {/* ── Header ── */}
+          <Animated.View entering={FadeInDown.duration(300)} style={{ gap: Spacing.sm }}>
+            <View style={S.badge}>
+              <Text style={S.badgeEmoji}>📅</Text>
+              <Text style={S.badgeText}>Learning Goal</Text>
             </View>
-            <Text style={styles.title}>How often do you{'\n'}want to learn?</Text>
-            <Text style={styles.subtitle}>
-              Apps are only blocked on your goal days.
-            </Text>
+            <Text style={S.title}>How often do you{'\n'}want to learn?</Text>
+            <Text style={S.subtitle}>Apps only block on your chosen days.</Text>
           </Animated.View>
 
-          <Animated.View entering={FadeInDown.delay(80).duration(300)} style={styles.chipRow}>
-            {(['daily', 'weekdays', 'custom'] as GoalFrequency[]).map((f) => (
-              <TouchableOpacity
-                key={f}
-                style={[styles.chip, frequency === f && styles.chipActive]}
-                onPress={() => { Haptics.selectionAsync(); setFrequency(f); }}
-                activeOpacity={0.75}
-              >
-                <Text style={[styles.chipText, frequency === f && styles.chipTextActive]}>
-                  {f === 'daily' ? 'Every day' : f === 'weekdays' ? 'Weekdays' : 'Custom'}
+          {/* ── Frequency chips (clay blocks) ── */}
+          <Animated.View entering={FadeInDown.delay(80).duration(300)} style={{ flexDirection: 'row', gap: Spacing.sm }}>
+            {(['daily', 'weekdays', 'custom'] as GoalFrequency[]).map((f) => {
+              const active = frequency === f;
+              return (
+                <View key={f} style={{ flex: 1, position: 'relative', marginBottom: 6 }}>
+                  {/* clay shadow */}
+                  <View style={{
+                    position: 'absolute',
+                    bottom: -6, left: 0, right: 0, top: 0,
+                    borderRadius: 20,
+                    backgroundColor: active ? CLAY_SHADOW_ACTIVE : CLAY_SHADOW,
+                  }} />
+                  <TouchableOpacity
+                    onPress={() => { Haptics.selectionAsync(); setFrequency(f); }}
+                    activeOpacity={0.82}
+                    style={{
+                      paddingVertical: 16,
+                      borderRadius: 20,
+                      backgroundColor: active ? CLAY_PRIMARY : CLAY_CARD,
+                      alignItems: 'center', gap: 4,
+                      transform: [{ translateY: -6 }],
+                      borderWidth: active ? 0 : 1.5,
+                      borderColor: CLAY_BORDER,
+                    }}
+                  >
+                    <Text style={{ fontSize: 20 }}>
+                      {f === 'daily' ? '☀️' : f === 'weekdays' ? '💼' : '📆'}
+                    </Text>
+                    <Text style={{
+                      fontSize: 12, fontFamily: 'Nunito-ExtraBold',
+                      color: active ? '#fff' : CLAY_TEXT,
+                    }}>
+                      {f === 'daily' ? 'Every day' : f === 'weekdays' ? 'Weekdays' : 'Custom'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
+          </Animated.View>
+
+          {/* ── Description card ── */}
+          <Animated.View entering={FadeInDown.delay(140).duration(300)}>
+            <ClayCard shadowColor={`${CLAY_PRIMARY}30`} depth={5} innerStyle={{ padding: Spacing.md }}>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm }}>
+                <View style={{
+                  width: 36, height: 36, borderRadius: 12,
+                  backgroundColor: `${CLAY_PRIMARY}18`,
+                  justifyContent: 'center', alignItems: 'center',
+                }}>
+                  <Ionicons name={freqMeta[frequency].icon} size={18} color={CLAY_PRIMARY} />
+                </View>
+                <Text style={{ flex: 1, fontSize: 14, fontFamily: 'Nunito-SemiBold', color: CLAY_SUB, lineHeight: 21 }}>
+                  {freqMeta[frequency].text}
                 </Text>
-              </TouchableOpacity>
-            ))}
+              </View>
+            </ClayCard>
           </Animated.View>
 
-          <Animated.View entering={FadeInDown.delay(140).duration(300)} style={styles.descCard}>
-            <Ionicons name={frequency === 'daily' ? 'sunny-outline' : frequency === 'weekdays' ? 'briefcase-outline' : 'calendar-outline'} size={20} color={C.primary} />
-            <Text style={styles.descText}>{freqDesc[frequency]}</Text>
-          </Animated.View>
-
+          {/* ── Weekday preview ── */}
           {frequency === 'weekdays' && (
-            <Animated.View entering={FadeInDown.duration(250)} style={styles.dayPickerCard}>
-              <View style={styles.dayRow}>
-                {DAY_LABELS.map((label, day) => {
-                  const active = WEEKDAY_DAYS.includes(day);
-                  return (
-                    <View key={day} style={[styles.dayBtn, active && styles.dayBtnActive]}>
-                      <Text style={[styles.dayBtnText, active && styles.dayBtnTextActive]}>{label}</Text>
-                    </View>
-                  );
-                })}
-              </View>
+            <Animated.View entering={FadeInDown.duration(250)}>
+              <ClayCard shadowColor={CLAY_SHADOW} depth={5} innerStyle={{ padding: Spacing.md, alignItems: 'center', gap: 12 }}>
+                <Text style={S.sectionLabel}>Blocked days</Text>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {DAY_LABELS.map((label, day) => {
+                    const active = WEEKDAY_DAYS.includes(day);
+                    return (
+                      <View key={day} style={{
+                        width: 38, height: 38, borderRadius: 14,
+                        backgroundColor: active ? CLAY_PRIMARY : `${CLAY_PRIMARY}12`,
+                        justifyContent: 'center', alignItems: 'center',
+                      }}>
+                        <Text style={{ fontSize: 13, fontFamily: 'Nunito-ExtraBold', color: active ? '#fff' : `${CLAY_PRIMARY}60` }}>
+                          {label}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              </ClayCard>
             </Animated.View>
           )}
 
+          {/* ── Custom day picker ── */}
           {frequency === 'custom' && (
-            <Animated.View entering={FadeInDown.duration(250)} style={styles.dayPickerCard}>
-              <Text style={styles.dayPickerLabel}>Select your learning days</Text>
-              <View style={styles.dayRow}>
-                {DAY_LABELS.map((label, day) => {
-                  const selected = customDays.includes(day);
-                  return (
-                    <TouchableOpacity
-                      key={day}
-                      style={[styles.dayBtn, selected && styles.dayBtnActive]}
-                      onPress={() => toggleCustomDay(day)}
-                      activeOpacity={0.75}
-                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                    >
-                      <Text style={[styles.dayBtnText, selected && styles.dayBtnTextActive]}>{label}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-              <Text style={styles.dayPickerSub}>
-                {[...customDays].sort((a, b) => a - b).map((d) => DAY_NAMES[d]).join(' · ')}
-              </Text>
+            <Animated.View entering={FadeInDown.duration(250)}>
+              <ClayCard shadowColor={CLAY_SHADOW} depth={5} innerStyle={{ padding: Spacing.md, alignItems: 'center', gap: 12 }}>
+                <Text style={S.sectionLabel}>Pick your days</Text>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {DAY_LABELS.map((label, day) => {
+                    const selected = customDays.includes(day);
+                    return (
+                      <TouchableOpacity
+                        key={day}
+                        onPress={() => toggleCustomDay(day)}
+                        activeOpacity={0.75}
+                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                        style={{
+                          width: 38, height: 38, borderRadius: 14,
+                          backgroundColor: selected ? CLAY_PRIMARY : `${CLAY_PRIMARY}12`,
+                          justifyContent: 'center', alignItems: 'center',
+                        }}
+                      >
+                        <Text style={{ fontSize: 13, fontFamily: 'Nunito-ExtraBold', color: selected ? '#fff' : CLAY_SUB }}>
+                          {label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <Text style={{ fontSize: 12, fontFamily: 'Nunito-Bold', color: CLAY_PRIMARY }}>
+                  {[...customDays].sort((a, b) => a - b).map((d) => DAY_NAMES[d]).join(' · ')}
+                </Text>
+              </ClayCard>
             </Animated.View>
           )}
 
+          {/* ── CTA ── */}
           <Animated.View entering={FadeInDown.delay(200).duration(300)} style={{ gap: Spacing.sm }}>
             <StepDots />
-            <DuoButton label="Next →" onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setStep('session'); }} />
+            <ClayButton
+              label="Next →"
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setStep('session'); }}
+            />
           </Animated.View>
         </ScrollView>
       </View>
     );
   }
 
-  // ── Step 2: Session ────────────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+  // STEP 2 — Session
+  // ══════════════════════════════════════════════════════════════════════════
   if (step === 'session') {
     return (
-      <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+      <View style={[S.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         {onBack && (
-          <TouchableOpacity onPress={onBack} style={styles.cancelBar} activeOpacity={0.7}>
-            <Ionicons name="chevron-back" size={20} color={C.muted} />
-            <Text style={styles.cancelTxt}>Cancel</Text>
+          <TouchableOpacity onPress={onBack} style={S.cancelBar} activeOpacity={0.7}>
+            <Ionicons name="chevron-back" size={20} color={CLAY_MUTED} />
+            <Text style={S.cancelTxt}>Cancel</Text>
           </TouchableOpacity>
         )}
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          <Animated.View entering={FadeInDown.duration(300)} style={styles.header}>
-            <View style={styles.badge}>
-              <Text style={styles.badgeEmoji}>⏰</Text>
-              <Text style={styles.badgeText}>Block Settings</Text>
+
+        <ScrollView contentContainerStyle={S.scroll} showsVerticalScrollIndicator={false}>
+
+          {/* ── Header ── */}
+          <Animated.View entering={FadeInDown.duration(300)} style={{ gap: Spacing.sm }}>
+            <View style={S.badge}>
+              <Text style={S.badgeEmoji}>⏰</Text>
+              <Text style={S.badgeText}>Block Settings</Text>
             </View>
-            <Text style={styles.title}>How long should{'\n'}apps stay locked?</Text>
-            <Text style={styles.subtitle}>
-              Pick a duration and set a daily reminder time.
-            </Text>
+            <Text style={S.title}>How long stay{'\n'}locked?</Text>
+            <Text style={S.subtitle}>Pick a duration and a daily reminder time.</Text>
           </Animated.View>
 
-          {/* Block duration tiles */}
+          {/* ── Duration tiles ── */}
           <Animated.View entering={FadeInDown.delay(80).duration(300)}>
-            <Text style={styles.sectionLabel}>BLOCK DURATION</Text>
-            <View style={[styles.tileRow, { marginTop: 10, flexWrap: 'wrap', gap: Spacing.sm }]}>
+            <Text style={S.sectionLabel}>Block Duration</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginTop: 8 }}>
               {BLOCK_DURATION_OPTIONS.map((opt, i) => {
                 const selected = blockDurationHours === opt.hours;
                 return (
                   <Animated.View
                     key={opt.hours}
-                    entering={FadeInDown.delay(60 + i * 30).duration(250)}
-                    style={{ width: '48%', marginBottom: 5 }}
+                    entering={FadeInDown.delay(60 + i * 28).duration(250)}
+                    style={{ width: '48%', position: 'relative', marginBottom: 6 }}
                   >
+                    {/* clay shadow layer */}
                     <View style={{
-                      position: 'absolute', bottom: -5, left: 1, right: -1, top: 0,
-                      borderRadius: 16,
-                      backgroundColor: selected ? '#1E3A8A' : C.borderStrong,
+                      position: 'absolute',
+                      bottom: -6, left: 0, right: 0, top: 0,
+                      borderRadius: 18,
+                      backgroundColor: selected ? CLAY_SHADOW_ACTIVE : CLAY_SHADOW,
                     }} />
                     <TouchableOpacity
-                      style={[styles.tile, selected && styles.tileActive, { transform: [{ translateY: -5 }] }]}
                       onPress={() => { Haptics.selectionAsync(); setBlockDurationHours(opt.hours); }}
-                      activeOpacity={0.75}
+                      activeOpacity={0.82}
+                      style={{
+                        borderRadius: 18,
+                        backgroundColor: selected ? CLAY_PRIMARY : CLAY_CARD,
+                        alignItems: 'center', gap: 3, paddingVertical: 13,
+                        transform: [{ translateY: -6 }],
+                        borderWidth: selected ? 0 : 1.5,
+                        borderColor: CLAY_BORDER,
+                      }}
                     >
-                      <Text style={styles.tileEmoji}>{opt.emoji}</Text>
-                      <Text style={[styles.tileLabel, selected && styles.tileLabelActive]}>{opt.label}</Text>
-                      <Text style={[styles.tileDesc, selected && styles.tileDescActive]}>{opt.desc}</Text>
+                      <Text style={{ fontSize: 22 }}>{opt.emoji}</Text>
+                      <Text style={{ fontSize: 13, fontFamily: 'Nunito-ExtraBold', color: selected ? '#fff' : CLAY_TEXT }}>
+                        {opt.label}
+                      </Text>
+                      <Text style={{ fontSize: 10, fontFamily: 'Nunito-SemiBold', color: selected ? 'rgba(255,255,255,0.75)' : CLAY_MUTED }}>
+                        {opt.desc}
+                      </Text>
                     </TouchableOpacity>
                   </Animated.View>
                 );
@@ -446,65 +516,81 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
             </View>
           </Animated.View>
 
-          {/* Custom hours input */}
+          {/* ── Custom hours input ── */}
           {isCustomDuration && (
-            <Animated.View entering={FadeInDown.duration(250)} style={styles.pickerInfoCard}>
-              <View style={styles.pickerInfoRow}>
-                <View style={[styles.pickerInfoIcon, { backgroundColor: `${C.primary}14`, borderColor: `${C.primary}28` }]}>
-                  <Text style={{ fontSize: 28 }}>✏️</Text>
+            <Animated.View entering={FadeInDown.duration(250)}>
+              <ClayCard shadowColor={`${CLAY_PRIMARY}40`} depth={6} innerStyle={{ padding: Spacing.md }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
+                  <View style={{
+                    width: 52, height: 52, borderRadius: 16,
+                    backgroundColor: `${CLAY_PRIMARY}14`,
+                    justifyContent: 'center', alignItems: 'center',
+                  }}>
+                    <Text style={{ fontSize: 28 }}>✏️</Text>
+                  </View>
+                  <View style={{ flex: 1, gap: 6 }}>
+                    <Text style={{ fontFamily: 'Nunito-ExtraBold', fontSize: 14, color: CLAY_TEXT }}>
+                      Custom duration
+                    </Text>
+                    <TextInput
+                      style={{
+                        fontFamily: F.regular, fontSize: 15, color: CLAY_TEXT,
+                        borderWidth: 1.5,
+                        borderColor: customHoursInput ? CLAY_PRIMARY : CLAY_BORDER,
+                        borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8,
+                        backgroundColor: customHoursInput ? `${CLAY_PRIMARY}08` : '#FAFAFA',
+                      }}
+                      placeholder="e.g. 5"
+                      placeholderTextColor={CLAY_MUTED}
+                      keyboardType="number-pad"
+                      value={customHoursInput}
+                      onChangeText={setCustomHoursInput}
+                      maxLength={2}
+                    />
+                    <Text style={{ fontFamily: F.regular, fontSize: 12, color: CLAY_MUTED }}>
+                      hours per day
+                    </Text>
+                  </View>
                 </View>
-                <View style={{ flex: 1, gap: 4 }}>
-                  <Text style={[styles.pickerInfoTitle, { fontFamily: F.bold, color: C.text }]}>
-                    Custom duration
-                  </Text>
-                  <TextInput
-                    style={[{
-                      fontFamily: F.regular, fontSize: fs(15), color: C.text,
-                      borderWidth: 1.5, borderColor: customHoursInput ? C.primary : C.border,
-                      borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8,
-                    }]}
-                    placeholder="e.g. 5"
-                    placeholderTextColor={C.muted}
-                    keyboardType="number-pad"
-                    value={customHoursInput}
-                    onChangeText={setCustomHoursInput}
-                    maxLength={2}
-                  />
-                  <Text style={[styles.pickerInfoSub, { fontFamily: F.regular, color: C.muted }]}>
-                    hours per day
-                  </Text>
-                </View>
-              </View>
+              </ClayCard>
             </Animated.View>
           )}
 
-          {/* Reminder time */}
+          {/* ── Reminder time ── */}
           <Animated.View entering={FadeInDown.delay(200).duration(300)}>
-            <View style={[styles.sectionHeader, { marginBottom: 10 }]}>
-              <Text style={styles.sectionLabel}>REMINDER TIME</Text>
-              <Text style={styles.sectionSub}>We'll remind you to study at this time.</Text>
-            </View>
-            <View style={styles.pickerCard}>
-              <View style={styles.pickerRow}>
-                <View style={[styles.pickerIcon, { backgroundColor: `${C.primary}14` }]}>
+            <Text style={[S.sectionLabel, { marginBottom: 8 }]}>Reminder Time</Text>
+            <Text style={[S.sectionSub, { marginBottom: 10 }]}>We'll remind you to study at this time.</Text>
+            <ClayCard shadowColor={`${CLAY_PRIMARY}30`} depth={6} innerStyle={{}}>
+              <View style={{
+                flexDirection: 'row', alignItems: 'center', gap: 10,
+                paddingTop: Spacing.md, paddingHorizontal: Spacing.md,
+              }}>
+                <View style={{
+                  width: 38, height: 38, borderRadius: 12,
+                  backgroundColor: `${CLAY_PRIMARY}18`,
+                  justifyContent: 'center', alignItems: 'center',
+                }}>
                   <Text style={{ fontSize: 20 }}>🔔</Text>
                 </View>
-                <Text style={[styles.pickerTime, { fontFamily: F.bold, color: C.text }]}>{fmtTime(lockDate)}</Text>
+                <Text style={{ fontSize: 22, fontFamily: 'Nunito-ExtraBold', color: CLAY_TEXT }}>
+                  {fmtTime(lockDate)}
+                </Text>
               </View>
               <DateTimePicker
                 value={lockDate}
                 mode="time"
                 display="spinner"
                 onChange={(_, selected) => { if (selected) { Haptics.selectionAsync(); setLockDate(selected); } }}
-                style={styles.picker}
-                textColor={C.text}
+                style={{ width: '100%', height: 150 }}
+                textColor={CLAY_TEXT}
               />
-            </View>
+            </ClayCard>
           </Animated.View>
 
+          {/* ── CTA ── */}
           <Animated.View entering={FadeInDown.delay(280).duration(300)} style={{ gap: Spacing.sm }}>
             <StepDots />
-            <DuoButton
+            <ClayButton
               label="Next: Choose apps →"
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -513,8 +599,8 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
               }}
               disabled={isCustomDuration && resolvedHours < 1}
             />
-            <TouchableOpacity onPress={() => setStep('frequency')} style={styles.backBtn}>
-              <Text style={styles.backBtnText}>← Back</Text>
+            <TouchableOpacity onPress={() => setStep('frequency')} style={S.backBtn}>
+              <Text style={S.backBtnText}>← Back</Text>
             </TouchableOpacity>
           </Animated.View>
         </ScrollView>
@@ -522,79 +608,131 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
     );
   }
 
-  // ── Step 3: App blocker ───────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+  // STEP 3 — Apps
+  // ══════════════════════════════════════════════════════════════════════════
   return (
-    <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+    <View style={[S.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       {onBack && (
-        <TouchableOpacity onPress={onBack} style={styles.cancelBar} activeOpacity={0.7}>
-          <Ionicons name="chevron-back" size={20} color={C.muted} />
-          <Text style={styles.cancelTxt}>Cancel</Text>
+        <TouchableOpacity onPress={onBack} style={S.cancelBar} activeOpacity={0.7}>
+          <Ionicons name="chevron-back" size={20} color={CLAY_MUTED} />
+          <Text style={S.cancelTxt}>Cancel</Text>
         </TouchableOpacity>
       )}
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <Animated.View entering={FadeInDown.duration(300)} style={styles.header}>
-          <View style={styles.badge}>
-            <Text style={styles.badgeEmoji}>📱</Text>
-            <Text style={styles.badgeText}>Screen Time</Text>
+
+      <ScrollView contentContainerStyle={S.scroll} showsVerticalScrollIndicator={false}>
+
+        {/* ── Header ── */}
+        <Animated.View entering={FadeInDown.duration(300)} style={{ gap: Spacing.sm }}>
+          <View style={S.badge}>
+            <Text style={S.badgeEmoji}>📱</Text>
+            <Text style={S.badgeText}>Screen Time</Text>
           </View>
-          <Text style={styles.title}>Which apps steal{'\n'}your time?</Text>
-          <Text style={styles.subtitle}>
-            These apps will be blocked on your goal days until your lessons are done.
+          <Text style={S.title}>Which apps steal{'\n'}your focus?</Text>
+          <Text style={S.subtitle}>
+            Blocked on goal days until your session is done.
           </Text>
         </Animated.View>
 
-        {/* Native picker card */}
-        <Animated.View entering={FadeInDown.delay(80).duration(300)} style={styles.pickerInfoCard}>
-          <View style={styles.pickerInfoRow}>
-            <View style={[styles.pickerInfoIcon, { backgroundColor: `${C.primary}14`, borderColor: `${C.primary}28` }]}>
-              <Text style={{ fontSize: 28 }}>📱</Text>
-            </View>
-            <View style={{ flex: 1, gap: 3 }}>
-              <Text style={[styles.pickerInfoTitle, { fontFamily: F.bold, color: C.text }]}>
-                {appsSelected ? `${blockedCount} app${blockedCount !== 1 ? 's' : ''} selected` : 'No apps selected yet'}
-              </Text>
-              <Text style={[styles.pickerInfoSub, { fontFamily: F.regular, color: C.sub }]}>
-                {appsSelected ? 'Tap to change your selection' : 'iOS shows your real installed apps'}
-              </Text>
-            </View>
-            {appsSelected && (
-              <View style={[styles.checkBadge, { backgroundColor: C.primary }]}>
-                <Ionicons name="checkmark" size={14} color="#fff" />
-              </View>
-            )}
-          </View>
-
-          <TouchableOpacity
-            style={[styles.openPickerBtn, { backgroundColor: `${C.primary}15`, borderColor: `${C.primary}40` }, pickerLoading && { opacity: 0.5 }]}
-            onPress={handleOpenPicker}
-            disabled={pickerLoading}
-            activeOpacity={0.75}
+        {/* ── App picker card ── */}
+        <Animated.View entering={FadeInDown.delay(80).duration(300)}>
+          <ClayCard
+            shadowColor={appsSelected ? CLAY_SHADOW_ACTIVE : CLAY_SHADOW}
+            depth={7}
+            innerStyle={{ padding: Spacing.md, gap: Spacing.md }}
           >
-            {pickerLoading ? (
-              <ActivityIndicator size="small" color={C.primary} />
-            ) : (
-              <>
-                <Ionicons name="apps-outline" size={17} color={C.primary} />
-                <Text style={[styles.openPickerBtnText, { fontFamily: F.bold, color: C.primary }]}>
-                  {appsSelected ? 'Change Selection' : 'Select Apps to Block →'}
+            {/* Status row */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
+              <View style={{
+                width: 56, height: 56, borderRadius: 18,
+                backgroundColor: appsSelected ? `${CLAY_PRIMARY}18` : `${CLAY_SHADOW}60`,
+                borderWidth: 2, borderColor: appsSelected ? `${CLAY_PRIMARY}35` : CLAY_BORDER,
+                justifyContent: 'center', alignItems: 'center',
+              }}>
+                <Text style={{ fontSize: 30 }}>📱</Text>
+              </View>
+              <View style={{ flex: 1, gap: 3 }}>
+                <Text style={{ fontSize: 15, fontFamily: 'Nunito-ExtraBold', color: CLAY_TEXT }}>
+                  {appsSelected ? `${blockedCount} app${blockedCount !== 1 ? 's' : ''} selected` : 'No apps selected yet'}
                 </Text>
-              </>
-            )}
-          </TouchableOpacity>
+                <Text style={{ fontSize: 13, fontFamily: 'Nunito-SemiBold', color: CLAY_MUTED }}>
+                  {appsSelected ? 'Tap to change your selection' : 'iOS shows your real installed apps'}
+                </Text>
+              </View>
+              {appsSelected && (
+                <View style={{
+                  width: 28, height: 28, borderRadius: 14,
+                  backgroundColor: CLAY_PRIMARY, justifyContent: 'center', alignItems: 'center',
+                }}>
+                  <Ionicons name="checkmark" size={16} color="#fff" />
+                </View>
+              )}
+            </View>
+
+            {/* Divider */}
+            <View style={{ height: 1, backgroundColor: CLAY_BORDER }} />
+
+            {/* Open picker button */}
+            <View style={{ position: 'relative', marginBottom: 4 }}>
+              <View style={{
+                position: 'absolute',
+                bottom: -4, left: 0, right: 0, top: 0,
+                borderRadius: 16,
+                backgroundColor: `${CLAY_PRIMARY}50`,
+              }} />
+              <TouchableOpacity
+                onPress={handleOpenPicker}
+                disabled={pickerLoading}
+                activeOpacity={0.82}
+                style={{
+                  borderRadius: 16,
+                  backgroundColor: CLAY_PRIMARY,
+                  paddingVertical: 14,
+                  flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+                  gap: 8,
+                  transform: [{ translateY: -4 }],
+                  opacity: pickerLoading ? 0.6 : 1,
+                }}
+              >
+                {pickerLoading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="apps-outline" size={18} color="#fff" />
+                    <Text style={{ fontFamily: 'Nunito-ExtraBold', fontSize: 15, color: '#fff' }}>
+                      {appsSelected ? 'Change Selection' : 'Select Apps to Block →'}
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </ClayCard>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.delay(160).duration(300)} style={styles.infoCard}>
-          <Ionicons name="shield-checkmark-outline" size={16} color={C.primary} />
-          <Text style={styles.infoCardText}>
-            Uses iOS Screen Time — Apple's built-in system. No third-party access to your app data.
-          </Text>
+        {/* ── Privacy note ── */}
+        <Animated.View entering={FadeInDown.delay(160).duration(300)}>
+          <ClayCard shadowColor={`${CLAY_PRIMARY}20`} depth={4} innerStyle={{ padding: Spacing.sm }}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
+              <View style={{
+                width: 28, height: 28, borderRadius: 10,
+                backgroundColor: `${CLAY_PRIMARY}18`,
+                justifyContent: 'center', alignItems: 'center', marginTop: 1,
+              }}>
+                <Ionicons name="shield-checkmark-outline" size={15} color={CLAY_PRIMARY} />
+              </View>
+              <Text style={{ flex: 1, fontSize: 12, fontFamily: 'Nunito-SemiBold', color: CLAY_SUB, lineHeight: 18 }}>
+                Uses iOS Screen Time — Apple's built-in system. No third-party access to your app data.
+              </Text>
+            </View>
+          </ClayCard>
         </Animated.View>
 
+        {/* ── CTA ── */}
         <Animated.View entering={FadeInDown.delay(240).duration(300)} style={{ gap: Spacing.sm }}>
           <StepDots />
-          <DuoButton label="Get Started 🔓" onPress={handleSave} />
-          <TouchableOpacity onPress={() => setStep('session')} style={styles.backBtn}>
-            <Text style={styles.backBtnText}>← Back</Text>
+          <ClayButton label="Get Started 🔓" onPress={handleSave} />
+          <TouchableOpacity onPress={() => setStep('session')} style={S.backBtn}>
+            <Text style={S.backBtnText}>← Back</Text>
           </TouchableOpacity>
         </Animated.View>
       </ScrollView>

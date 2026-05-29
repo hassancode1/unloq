@@ -178,11 +178,13 @@ function AppsLockedBanner({ width, blockedCount, blockDurationHours, todayDone, 
             <View style={{ gap: 5 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Text style={{ color: 'rgba(255,255,255,0.55)', fontSize: 10, fontFamily: 'Nunito-SemiBold' }}>
-                  {todayDone}/{lessonTarget} lessons
+                  {todayDone > 0 ? `${todayDone} session${todayDone !== 1 ? 's' : ''} done` : 'Study to unlock apps'}
                 </Text>
-                <Text style={{ color: '#fff', fontSize: 11, fontFamily: 'Nunito-ExtraBold', letterSpacing: 0.2 }}>
-                  {pctLabel}
-                </Text>
+                {pct > 0 && (
+                  <Text style={{ color: '#fff', fontSize: 11, fontFamily: 'Nunito-ExtraBold', letterSpacing: 0.2 }}>
+                    {pct >= 1 ? 'Done ✓' : pctLabel}
+                  </Text>
+                )}
               </View>
               <View style={{ height: 9, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.18)' }}>
                 <View style={{

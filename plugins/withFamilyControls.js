@@ -16,8 +16,8 @@ const kExtName = 'UnloqMonitor';
 const kShieldExtName = 'UnloqShield';
 const kShieldBundleId = 'com.loqlearn.app.shield';
 
-// Set to true once Apple approves the Family Controls entitlement for com.loqlearn.app
-const INCLUDE_MONITOR = false;
+// com.loqlearn.app.monitor approved by Apple — monitor extension enabled
+const INCLUDE_MONITOR = true;
 const INCLUDE_SHIELD = false;
 
 // ─── Swift / ObjC source content ─────────────────────────────────────────────
@@ -1139,7 +1139,7 @@ const withFamilyControls = (config) => {
         fs.writeFileSync(bridgingHeaderPath, '#import <React/RCTBridgeModule.h>\n');
       }
 
-      // Monitor extension files (disabled until Apple approves DeviceActivity entitlement for com.loqlearn.app.monitor)
+      // Monitor extension files (com.loqlearn.app.monitor approved by Apple)
       if (INCLUDE_MONITOR) {
         const extDir = path.join(platformRoot, kExtName);
         if (!fs.existsSync(extDir)) fs.mkdirSync(extDir, { recursive: true });

@@ -183,7 +183,7 @@ export default function StatsScreen({ onOpenCourse }: Props) {
                   >
                     {goalMet
                       ? "Goal complete! 🎯"
-                      : `${todayDone} of ${goalTarget} lessons`}
+                      : `${todayDone} of ${goalTarget} sessions`}
                   </Text>
                   <Text
                     style={[
@@ -192,7 +192,7 @@ export default function StatsScreen({ onOpenCourse }: Props) {
                   >
                     {goalMet
                       ? "Apps are unlocked"
-                      : `${goalTarget - todayDone} lesson${goalTarget - todayDone !== 1 ? "s" : ""} to go`}
+                      : `${goalTarget - todayDone} session${goalTarget - todayDone !== 1 ? "s" : ""} to go`}
                   </Text>
                 </View>
                 <Text
