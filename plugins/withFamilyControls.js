@@ -521,7 +521,7 @@ const MONITOR_EXTENSION_PLIST = `\
     <key>NSExtension</key>
     <dict>
         <key>NSExtensionPointIdentifier</key>
-        <string>com.apple.deviceactivity.monitor</string>
+        <string>com.apple.deviceactivity.monitor-extension</string>
         <key>NSExtensionPrincipalClass</key>
         <string>$(PRODUCT_MODULE_NAME).UnloqMonitor</string>
     </dict>
@@ -534,6 +534,10 @@ const MONITOR_EXTENSION_ENTITLEMENTS = `\
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <key>com.apple.developer.family-controls</key>
+    <true/>
+    <key>com.apple.developer.family-controls.app-and-website-usage</key>
+    <true/>
     <key>com.apple.security.application-groups</key>
     <array>
         <string>${kAppGroup}</string>
