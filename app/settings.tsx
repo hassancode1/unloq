@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as StoreReview from 'expo-store-review';
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Alert,
   Image,
@@ -22,6 +22,12 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../hooks/useTheme';
 import { useAppStore, FONT_SCALE_MIN, FONT_SCALE_MAX } from '../store/useAppStore';
+import {
+  getBlockedCount,
+  startMonitoring,
+  stopMonitoring,
+  unblockApps,
+} from '../lib/familyControls';
 import { Spacing } from '../constants/spacing';
 import type { AppColors } from '../constants/Colors';
 
@@ -30,10 +36,41 @@ const APP_STORE_ID = '6761177417';
 export default function SettingsScreen({ onNavigateToCourses: _onNavigateToCourses }: { onNavigateToCourses?: () => void }) {
   const insets = useSafeAreaInsets();
   const { C, isDark, fs, fontScale, F } = useTheme();
-  const { goalConfig, setFlow, toggleDarkMode, increaseFontScale, decreaseFontScale } = useAppStore();
+  const { goalConfig, setFlow, toggleDarkMode, increaseFontScale, decreaseFontScale, blockingEnabled, setBlockingEnabled } = useAppStore();
   const styles = React.useMemo(() => makeStyles(C), [C]);
   const viewer = useQuery(api.users.currentUser);
   const { signOut } = useAuthActions();
+
+  const [blockedCount, setBlockedCount] = useState(0);
+
+  useEffect(() => {
+    getBlockedCount().then(setBlockedCount).catch(() => setBlockedCount(0));
+  }, [blockingEnabled]);
+
+  const handleBlockingToggle = (value: boolean) => {
+    Haptics.selectionAsync();
+    if (value && !goalConfig) {
+      Alert.alert(
+        'Set Up Your Goal First',
+        'Focus Lock uses your study schedule to know when to block apps. Set up a learning goal first.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Set Up Goal', onPress: () => setFlow('goalsetup') },
+        ],
+      );
+      return;
+    }
+    setBlockingEnabled(value);
+    if (value) {
+      const [lh, lm] = (goalConfig!.lockTime).split(':').map(Number);
+      startMonitoring(lh ?? 8, lm ?? 0).catch(() => {});
+    } else {
+      stopMonitoring().catch(() => {});
+      unblockApps().catch(() => {});
+      setBlockedCount(0);
+    }
+  };
+
 
   const handleRateApp = async () => {
     if (await StoreReview.isAvailableAsync()) {
@@ -280,38 +317,57 @@ export default function SettingsScreen({ onNavigateToCourses: _onNavigateToCours
           </View>
         </Animated.View>
 
-        {/* ── Learning Goal ── */}
+        {/* ── Blocking ── */}
         <Animated.View entering={FadeInDown.delay(120).duration(280)}>
-          <Text
-            style={[
-              styles.cap,
-              { fontSize: fs(10), fontFamily: F.extraBold, color: C.muted },
-            ]}
-          >
-            Learning Goal
+          <Text style={[styles.cap, { fontSize: fs(10), fontFamily: F.extraBold, color: C.muted }]}>
+            Blocking
           </Text>
           <View style={styles.card}>
-            <TouchableOpacity
-              style={styles.actionRow}
-              activeOpacity={0.7}
-              onPress={() => {
-                Haptics.selectionAsync();
-                setFlow("goalsetup");
-              }}
-            >
-              <View style={[styles.iconBox, { backgroundColor: `${C.primary}12` }]}>
-                <Ionicons name={goalConfig ? "create-outline" : "add-circle-outline"} size={15} color={C.primary} />
+            <View style={styles.row}>
+              <View style={[styles.iconBox, { backgroundColor: `${C.primary}18` }]}>
+                <Ionicons name="lock-closed-outline" size={16} color={C.primary} />
               </View>
-              <Text
-                style={[
-                  styles.actionTxt,
-                  { fontSize: fs(14), fontFamily: F.medium, color: C.primary },
-                ]}
-              >
-                {goalConfig ? "Edit goal" : "Set up your learning goal"}
+              <Text style={[styles.rowLabel, { fontSize: fs(14), fontFamily: F.medium, color: C.text }]}>
+                Block apps while studying
               </Text>
-              <Ionicons name="chevron-forward" size={14} color={C.primary} />
-            </TouchableOpacity>
+              <Switch
+                value={blockingEnabled}
+                onValueChange={handleBlockingToggle}
+                trackColor={{ false: C.border, true: `${C.primary}70` }}
+                thumbColor={blockingEnabled ? C.primary : C.muted}
+                ios_backgroundColor={C.border}
+              />
+            </View>
+            {blockingEnabled && (
+              <>
+                <View style={styles.separator} />
+                <TouchableOpacity
+                  style={styles.actionRow}
+                  activeOpacity={0.7}
+                  onPress={() => { Haptics.selectionAsync(); setFlow('goalsetup'); }}
+                >
+                  <View style={[styles.iconBox, { backgroundColor: `${C.primary}12` }]}>
+                    <Ionicons name={goalConfig ? 'create-outline' : 'add-circle-outline'} size={15} color={C.primary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.actionTxt, { fontSize: fs(14), fontFamily: F.medium, color: C.primary }]}>
+                      {goalConfig ? 'Edit blocking schedule' : 'Set up blocking schedule'}
+                    </Text>
+                    {goalConfig ? (
+                      <Text style={{ fontSize: fs(11), fontFamily: F.regular, color: C.muted, marginTop: 1 }}>
+                        {goalConfig.frequency === 'daily' ? 'Every day' : goalConfig.frequency === 'weekdays' ? 'Weekdays' : 'Custom days'} · {goalConfig.lockTime}
+                        {blockedCount > 0 ? ` · ${blockedCount} app${blockedCount !== 1 ? 's' : ''}` : ''}
+                      </Text>
+                    ) : (
+                      <Text style={{ fontSize: fs(11), fontFamily: F.regular, color: C.muted, marginTop: 1 }}>
+                        Days, time, and apps to block
+                      </Text>
+                    )}
+                  </View>
+                  <Ionicons name="chevron-forward" size={14} color={C.primary} />
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </Animated.View>
 

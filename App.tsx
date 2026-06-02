@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { AppState } from "react-native";
 import Purchases from "react-native-purchases";
 import { useConvexAuth, useQuery, ConvexReactClient } from "convex/react";
+import type { ReactNode } from "react";
 import { api } from "./convex/_generated/api";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
@@ -89,18 +90,23 @@ function computeShouldLock(
 }
 
 function LockCheck() {
-  const { flow, setFlow, goalConfig, dailyProgress } = useAppStore();
+  const { flow, setFlow, goalConfig, dailyProgress, blockingEnabled } = useAppStore();
   const courses = useQuery(api.courses.listMineWithProgress);
 
   // Stable ref so the AppState handler always sees the latest values
-  const ref = useRef({ flow, setFlow, goalConfig, dailyProgress, courses });
+  const ref = useRef({ flow, setFlow, goalConfig, dailyProgress, courses, blockingEnabled });
   useEffect(() => {
-    ref.current = { flow, setFlow, goalConfig, dailyProgress, courses };
+    ref.current = { flow, setFlow, goalConfig, dailyProgress, courses, blockingEnabled };
   });
 
   const check = useCallback(() => {
-    const { flow, setFlow, goalConfig, dailyProgress, courses } = ref.current;
+    const { flow, setFlow, goalConfig, dailyProgress, courses, blockingEnabled } = ref.current;
     if (flow !== 'home' && flow !== 'locked') return;
+    if (!blockingEnabled) {
+      if (flow === 'locked') setFlow('home');
+      unblockApps().catch(() => {});
+      return;
+    }
     if (courses === undefined) return; // still loading
     const shouldLock = computeShouldLock(goalConfig, dailyProgress, courses);
     setFlow(shouldLock ? 'locked' : 'home');
@@ -164,6 +170,18 @@ function RevenueCatSync() {
   return null;
 }
 
+// Shows the splash screen while we wait for RevenueCat to identify the user,
+// preventing a flash of "upgrade" UI for pro subscribers on app open.
+function AppGate({ children }: { children: ReactNode }) {
+  const { isAuthenticated, isLoading: authLoading } = useConvexAuth();
+  const revenueCatReady = useAppStore((s) => s.revenueCatReady);
+
+  if (authLoading || (isAuthenticated && !revenueCatReady)) {
+    return <AppSplashScreen />;
+  }
+  return <>{children}</>;
+}
+
 SplashScreen.preventAutoHideAsync();
 setupNotificationHandler();
 
@@ -203,17 +221,19 @@ export default function App() {
     <ConvexAuthProvider client={convex} storage={secureStorage}>
       <RevenueCatSync />
       <LockCheck />
-      <SafeAreaProvider>
-        {flow === "onboarding" && (
-          <OnboardingScreen onComplete={() => setFlow("goalsetup")} />
-        )}
-        {flow === "goalsetup" && (
-          <GoalSetupScreen onComplete={() => setFlow("home")} />
-        )}
-        {flow === "home" && <HomeScreen />}
-        {flow === "locked" && <LockedScreen />}
-      </SafeAreaProvider>
-      <Toast />
+      <AppGate>
+        <SafeAreaProvider>
+          {flow === "onboarding" && (
+            <OnboardingScreen onComplete={() => setFlow("goalsetup")} />
+          )}
+          {flow === "goalsetup" && (
+            <GoalSetupScreen onComplete={() => setFlow("home")} />
+          )}
+          {flow === "home" && <HomeScreen />}
+          {flow === "locked" && <LockedScreen />}
+        </SafeAreaProvider>
+        <Toast />
+      </AppGate>
     </ConvexAuthProvider>
   );
 }

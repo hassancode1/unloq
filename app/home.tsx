@@ -283,7 +283,7 @@ function HomeTabContent({ onUpload, onCourseSelect, onSeeAll, onGoalSetup, onOpe
   C: AppColors; fs: (n: number) => number; F: any; isDark: boolean;
 }) {
   const styles = React.useMemo(() => makeSharedStyles(C), [C]);
-  const { goalConfig, dailyProgress, blockDurationHours } = useAppStore();
+  const { goalConfig, dailyProgress, blockDurationHours, blockingEnabled } = useAppStore();
   const { isPremium } = useEntitlement();
   const viewer = useQuery(api.users.currentUser);
   const rawCourses = useQuery(api.courses.listMine);
@@ -294,9 +294,10 @@ function HomeTabContent({ onUpload, onCourseSelect, onSeeAll, onGoalSetup, onOpe
   const [blockedCount, setBlockedCount] = useState(0);
 
   React.useEffect(() => {
+    if (!blockingEnabled) return;
     hasSelection().then(setAppsSelected).catch(() => setAppsSelected(true));
     getBlockedCount().then(setBlockedCount).catch(() => setBlockedCount(0));
-  }, []);
+  }, [blockingEnabled]);
 
   const todayStr  = new Date().toISOString().slice(0, 10);
   const todayDone = dailyProgress.date === todayStr ? dailyProgress.count : 0;
@@ -376,10 +377,11 @@ function HomeTabContent({ onUpload, onCourseSelect, onSeeAll, onGoalSetup, onOpe
             />
           );
         })()}
-        {!appsSelected
-          ? <NoAppsBlockedBanner width={cardWidth} isDark={isDark} onSetup={onGoalSetup} />
-          : <AppsLockedBanner width={cardWidth} blockedCount={blockedCount} blockDurationHours={blockDurationHours} todayDone={todayDone} lessonTarget={lessonTarget} isDark={isDark} onStudy={onSeeAll} />
-        }
+        {blockingEnabled && (
+          !appsSelected
+            ? <NoAppsBlockedBanner width={cardWidth} isDark={isDark} onSetup={onGoalSetup} />
+            : <AppsLockedBanner width={cardWidth} blockedCount={blockedCount} blockDurationHours={blockDurationHours} todayDone={todayDone} lessonTarget={lessonTarget} isDark={isDark} onStudy={onSeeAll} />
+        )}
         {/* ── Feynman card ── */}
         <GradientCard
           width={cardWidth}

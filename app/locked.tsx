@@ -86,14 +86,14 @@ export default function LockedScreen() {
         style={[S.card, { backgroundColor: C.surface, borderColor: C.border }]}
       >
         <Text style={[S.title, { fontFamily: F.extraBold, fontSize: fs(26), color: C.text }]}>
-          Your apps are locked
+          Focus Mode
         </Text>
         <Text style={[S.sub, { fontFamily: F.regular, fontSize: fs(15), color: C.sub }]}>
-          You committed to{' '}
+          You set up a{' '}
           <Text style={{ fontFamily: F.bold, color: C.primary }}>
-            {blockDurationHours === 0.5 ? '30 mins' : `${blockDurationHours}h`} of focused study
+            {blockDurationHours === 0.5 ? '30 min' : `${blockDurationHours}h`} focus session
           </Text>
-          {' '}today. Complete your session to unlock.
+          {' '}today. Complete your study to unlock your apps.
         </Text>
 
         {/* Progress bar */}

@@ -65,13 +65,16 @@ export function unblockApps(): Promise<boolean> {
 }
 
 /**
- * Starts a recurring daily DeviceActivity schedule (midnight → 11:59pm).
- * The UnloqMonitor extension fires at midnight each day and re-applies shields
+ * Starts a recurring daily DeviceActivity schedule (lockTime → 11:59pm).
+ * The UnloqMonitor extension fires at lockTime each day and re-applies shields
  * automatically, even when the app is closed. Call once after goal setup.
  * Requires iOS 16+.
+ *
+ * iOS fires intervalDidStart immediately if called after lockTime has already
+ * passed today, so shields apply right away on first enable too.
  */
-export function startMonitoring(): Promise<boolean> {
-  return mod ? mod.startMonitoring() : Promise.resolve(false);
+export function startMonitoring(lockHour: number, lockMinute: number): Promise<boolean> {
+  return mod ? mod.startMonitoring(lockHour, lockMinute) : Promise.resolve(false);
 }
 
 /**

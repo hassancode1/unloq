@@ -3,8 +3,8 @@ import * as Haptics from 'expo-haptics';
 import React, { useState, useCallback } from 'react';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import {
-  Alert,
   ActivityIndicator,
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -24,6 +24,7 @@ import {
   presentActivityPicker,
   hasSelection,
   getBlockedCount,
+  startMonitoring,
 } from '../lib/familyControls';
 
 // ─── Design tokens (clay aesthetic) ──────────────────────────────────────────
@@ -181,6 +182,7 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
   const setGoalConfig           = useAppStore((s) => s.setGoalConfig);
   const existingGoalConfig      = useAppStore((s) => s.goalConfig);
   const setBlockDurationHoursStore = useAppStore((s) => s.setBlockDurationHours);
+  const setBlockingEnabled      = useAppStore((s) => s.setBlockingEnabled);
   const { F } = useTheme();
 
   const [step, setStep]               = useState<Step>('frequency');
@@ -220,8 +222,8 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
     try {
       let status = await getAuthorizationStatus();
       if (status === 'notDetermined') {
-        await requestAuthorization();
-        status = await getAuthorizationStatus();
+        await requestAuthorization(); // resolves only on approval, rejects if denied
+        status = 'approved';
       }
       if (status === 'denied') {
         Alert.alert(
@@ -231,19 +233,17 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
         );
         return;
       }
-      if (status !== 'approved') {
-        Alert.alert('Permission Required', `Screen Time status: ${status}. Please try again.`);
-        return;
-      }
-      const count = await presentActivityPicker();
+      if (status !== 'approved') return;
+      await presentActivityPicker();
+      const [sel, count] = await Promise.all([hasSelection(), getBlockedCount()]);
+      setAppsSelected(sel);
       setBlockedCount(count);
-      setAppsSelected(count > 0);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if (sel) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e: any) {
       if (e?.code !== 'CANCELLED') {
         Alert.alert(
           'Screen Time Unavailable',
-          'Unable to access Screen Time on this device. This can happen if the device is managed by a parent or employer.\n\nYou can still use Unloq — app blocking just won\'t be available.',
+          'Unable to access Screen Time on this device. App blocking won\'t be available.',
           [{ text: 'OK' }],
         );
       }
@@ -271,8 +271,13 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
     } catch (e) {
       if (__DEV__) console.error('[Notifications] Failed to schedule reminders:', e);
     }
+    if (appsSelected) {
+      setBlockingEnabled(true);
+      const [lh, lm] = toTimeString(lockDate).split(':').map(Number);
+      startMonitoring(lh ?? 8, lm ?? 0).catch(() => {});
+    }
     onComplete();
-  }, [frequency, customDays, resolvedHours, lockDate, existingGoalConfig, setGoalConfig, onComplete]);
+  }, [frequency, customDays, resolvedHours, lockDate, existingGoalConfig, setGoalConfig, onComplete, appsSelected, setBlockingEnabled]);
 
   // ── Step dots ──────────────────────────────────────────────────────────────
   const StepDots = () => (
@@ -285,9 +290,9 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
 
   // ── FREQUENCY desc ─────────────────────────────────────────────────────────
   const freqMeta: Record<GoalFrequency, { icon: any; text: string }> = {
-    daily:    { icon: 'sunny-outline',     text: 'Apps are blocked every day until your study session is done.' },
-    weekdays: { icon: 'briefcase-outline', text: 'Apps are blocked Mon–Fri. Weekends are free — no pressure.' },
-    custom:   { icon: 'calendar-outline',  text: 'Apps are only blocked on the days you choose.' },
+    daily:    { icon: 'sunny-outline',     text: 'You\'ll get a daily reminder to complete your study session.' },
+    weekdays: { icon: 'briefcase-outline', text: 'Study reminders Mon–Fri. Weekends are free — no pressure.' },
+    custom:   { icon: 'calendar-outline',  text: 'You\'ll get reminders on the days you choose.' },
   };
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -312,7 +317,7 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
               <Text style={S.badgeText}>Learning Goal</Text>
             </View>
             <Text style={S.title}>How often do you{'\n'}want to learn?</Text>
-            <Text style={S.subtitle}>Apps only block on your chosen days.</Text>
+            <Text style={S.subtitle}>Pick when you want to study each week.</Text>
           </Animated.View>
 
           {/* ── Frequency chips (clay blocks) ── */}
@@ -465,15 +470,15 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
           <Animated.View entering={FadeInDown.duration(300)} style={{ gap: Spacing.sm }}>
             <View style={S.badge}>
               <Text style={S.badgeEmoji}>⏰</Text>
-              <Text style={S.badgeText}>Block Settings</Text>
+              <Text style={S.badgeText}>Study Session</Text>
             </View>
-            <Text style={S.title}>How long stay{'\n'}locked?</Text>
-            <Text style={S.subtitle}>Pick a duration and a daily reminder time.</Text>
+            <Text style={S.title}>Plan your{'\n'}study session</Text>
+            <Text style={S.subtitle}>Pick a session length and a daily reminder time.</Text>
           </Animated.View>
 
           {/* ── Duration tiles ── */}
           <Animated.View entering={FadeInDown.delay(80).duration(300)}>
-            <Text style={S.sectionLabel}>Block Duration</Text>
+            <Text style={S.sectionLabel}>Session Duration</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginTop: 8 }}>
               {BLOCK_DURATION_OPTIONS.map((opt, i) => {
                 const selected = blockDurationHours === opt.hours;
@@ -626,11 +631,11 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
         <Animated.View entering={FadeInDown.duration(300)} style={{ gap: Spacing.sm }}>
           <View style={S.badge}>
             <Text style={S.badgeEmoji}>📱</Text>
-            <Text style={S.badgeText}>Screen Time</Text>
+            <Text style={S.badgeText}>Select Apps</Text>
           </View>
           <Text style={S.title}>Which apps steal{'\n'}your focus?</Text>
           <Text style={S.subtitle}>
-            Blocked on goal days until your session is done.
+            They'll be blocked at {(() => { const h = lockDate.getHours(); const m = lockDate.getMinutes(); const ampm = h >= 12 ? 'PM' : 'AM'; return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${ampm}`; })()} on your study days.
           </Text>
         </Animated.View>
 
@@ -641,7 +646,6 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
             depth={7}
             innerStyle={{ padding: Spacing.md, gap: Spacing.md }}
           >
-            {/* Status row */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
               <View style={{
                 width: 56, height: 56, borderRadius: 18,
@@ -660,38 +664,24 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
                 </Text>
               </View>
               {appsSelected && (
-                <View style={{
-                  width: 28, height: 28, borderRadius: 14,
-                  backgroundColor: CLAY_PRIMARY, justifyContent: 'center', alignItems: 'center',
-                }}>
+                <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: CLAY_PRIMARY, justifyContent: 'center', alignItems: 'center' }}>
                   <Ionicons name="checkmark" size={16} color="#fff" />
                 </View>
               )}
             </View>
 
-            {/* Divider */}
             <View style={{ height: 1, backgroundColor: CLAY_BORDER }} />
 
-            {/* Open picker button */}
             <View style={{ position: 'relative', marginBottom: 4 }}>
-              <View style={{
-                position: 'absolute',
-                bottom: -4, left: 0, right: 0, top: 0,
-                borderRadius: 16,
-                backgroundColor: `${CLAY_PRIMARY}50`,
-              }} />
+              <View style={{ position: 'absolute', bottom: -4, left: 0, right: 0, top: 0, borderRadius: 16, backgroundColor: `${CLAY_PRIMARY}50` }} />
               <TouchableOpacity
                 onPress={handleOpenPicker}
                 disabled={pickerLoading}
                 activeOpacity={0.82}
                 style={{
-                  borderRadius: 16,
-                  backgroundColor: CLAY_PRIMARY,
-                  paddingVertical: 14,
+                  borderRadius: 16, backgroundColor: CLAY_PRIMARY, paddingVertical: 14,
                   flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-                  gap: 8,
-                  transform: [{ translateY: -4 }],
-                  opacity: pickerLoading ? 0.6 : 1,
+                  gap: 8, transform: [{ translateY: -4 }], opacity: pickerLoading ? 0.6 : 1,
                 }}
               >
                 {pickerLoading ? (
@@ -713,11 +703,7 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
         <Animated.View entering={FadeInDown.delay(160).duration(300)}>
           <ClayCard shadowColor={`${CLAY_PRIMARY}20`} depth={4} innerStyle={{ padding: Spacing.sm }}>
             <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
-              <View style={{
-                width: 28, height: 28, borderRadius: 10,
-                backgroundColor: `${CLAY_PRIMARY}18`,
-                justifyContent: 'center', alignItems: 'center', marginTop: 1,
-              }}>
+              <View style={{ width: 28, height: 28, borderRadius: 10, backgroundColor: `${CLAY_PRIMARY}18`, justifyContent: 'center', alignItems: 'center', marginTop: 1 }}>
                 <Ionicons name="shield-checkmark-outline" size={15} color={CLAY_PRIMARY} />
               </View>
               <Text style={{ flex: 1, fontSize: 12, fontFamily: 'Nunito-SemiBold', color: CLAY_SUB, lineHeight: 18 }}>
@@ -730,7 +716,7 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
         {/* ── CTA ── */}
         <Animated.View entering={FadeInDown.delay(240).duration(300)} style={{ gap: Spacing.sm }}>
           <StepDots />
-          <ClayButton label="Get Started 🔓" onPress={handleSave} />
+          <ClayButton label={appsSelected ? 'Save & Start Blocking 🔒' : 'Skip for now →'} onPress={handleSave} />
           <TouchableOpacity onPress={() => setStep('session')} style={S.backBtn}>
             <Text style={S.backBtnText}>← Back</Text>
           </TouchableOpacity>

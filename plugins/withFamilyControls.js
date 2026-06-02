@@ -180,13 +180,16 @@ class FamilyControlsModule: NSObject {
   }
 
   @objc func startMonitoring(
-    _ resolve: @escaping RCTPromiseResolveBlock,
+    _ lockHour: NSInteger,
+    lockMinute: NSInteger,
+    resolver resolve: @escaping RCTPromiseResolveBlock,
     rejecter reject: @escaping RCTPromiseRejectBlock
   ) {
     if #available(iOS 16, *) {
       let center = DeviceActivityCenter()
+      center.stopMonitoring() // clear any previous schedule before setting a new one
       let schedule = DeviceActivitySchedule(
-        intervalStart: DateComponents(hour: 0, minute: 0),
+        intervalStart: DateComponents(hour: lockHour, minute: lockMinute),
         intervalEnd: DateComponents(hour: 23, minute: 59),
         repeats: true
       )
@@ -304,7 +307,9 @@ RCT_EXTERN_METHOD(
 )
 
 RCT_EXTERN_METHOD(
-  startMonitoring:(RCTPromiseResolveBlock)resolve
+  startMonitoring:(NSInteger)lockHour
+  lockMinute:(NSInteger)lockMinute
+  resolver:(RCTPromiseResolveBlock)resolve
   rejecter:(RCTPromiseRejectBlock)reject
 )
 
