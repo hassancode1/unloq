@@ -57,8 +57,18 @@ export function blockApps(): Promise<boolean> {
 }
 
 /**
- * Removes all ManagedSettings shields.
- * Call this when the user meets their daily lesson target.
+ * Removes ManagedSettings shields without recording lesson completion.
+ * Call this when shields should be lifted for non-completion reasons
+ * (e.g. before lock time, non-goal day, blocking disabled).
+ */
+export function clearShields(): Promise<boolean> {
+  return mod ? mod.clearShields() : Promise.resolve(true);
+}
+
+/**
+ * Removes all ManagedSettings shields AND records today as completed.
+ * Call this ONLY when the user has met their daily lesson target — this
+ * prevents the background UnloqMonitor extension from re-applying shields.
  */
 export function unblockApps(): Promise<boolean> {
   return mod ? mod.unblockApps() : Promise.resolve(true);

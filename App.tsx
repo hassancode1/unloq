@@ -27,7 +27,7 @@ import {
   Nunito_800ExtraBold,
 } from "@expo-google-fonts/nunito";
 import { useAppStore, type GoalConfig } from "./store/useAppStore";
-import { blockApps, unblockApps } from "./lib/familyControls";
+import { blockApps, unblockApps, clearShields } from "./lib/familyControls";
 import ScreenBlocking from "./lib/screenBlocking";
 import { setupNotificationHandler } from "./lib/notifications";
 import AppSplashScreen from "./app/splash";
@@ -104,15 +104,24 @@ function LockCheck() {
     if (flow !== 'home' && flow !== 'locked') return;
     if (!blockingEnabled) {
       if (flow === 'locked') setFlow('home');
-      unblockApps().catch(() => {});
+      clearShields().catch(() => {}); // remove shields without stamping completion date
       return;
     }
     if (courses === undefined) return; // still loading
     const shouldLock = computeShouldLock(goalConfig, dailyProgress, courses);
     setFlow(shouldLock ? 'locked' : 'home');
-    // Sync native Screen Time shields with lock state
-    if (shouldLock) blockApps().catch(() => {});
-    else unblockApps().catch(() => {});
+    if (shouldLock) {
+      blockApps().catch(() => {});
+    } else {
+      // Only stamp today's completion date when lessons are genuinely done — doing so
+      // prematurely (e.g. before lock time) would cause the background UnloqMonitor
+      // extension to skip blocking when the lock time eventually arrives.
+      const todayDate = new Date().toLocaleDateString('en-CA');
+      const todayDone = dailyProgress.date === todayDate ? dailyProgress.count : 0;
+      const lessonsDone = goalConfig != null && todayDone >= goalConfig.lessonTarget;
+      if (lessonsDone) unblockApps().catch(() => {});
+      else clearShields().catch(() => {});
+    }
   }, []);
 
   // Lock when app comes back to foreground

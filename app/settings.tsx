@@ -26,7 +26,7 @@ import {
   getBlockedCount,
   startMonitoring,
   stopMonitoring,
-  unblockApps,
+  clearShields,
 } from '../lib/familyControls';
 import { Spacing } from '../constants/spacing';
 import type { AppColors } from '../constants/Colors';
@@ -66,7 +66,7 @@ export default function SettingsScreen({ onNavigateToCourses: _onNavigateToCours
       startMonitoring(lh ?? 8, lm ?? 0).catch(() => {});
     } else {
       stopMonitoring().catch(() => {});
-      unblockApps().catch(() => {});
+      clearShields().catch(() => {}); // remove shields without stamping completion date
       setBlockedCount(0);
     }
   };
