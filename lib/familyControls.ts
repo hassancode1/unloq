@@ -47,13 +47,20 @@ export function getBlockedCount(): Promise<number> {
   return mod ? mod.getBlockedCount() : Promise.resolve(0);
 }
 
+function call(method: string, ...args: any[]): Promise<any> {
+  if (mod && typeof (mod as any)[method] === 'function') {
+    return (mod as any)[method](...args);
+  }
+  return Promise.resolve(null);
+}
+
 /**
  * Applies ManagedSettings shields to the selected apps.
  * Call this when the user hasn't met their lesson goal yet.
  * Returns true if any apps were shielded, false if no selection exists.
  */
 export function blockApps(): Promise<boolean> {
-  return mod ? mod.blockApps() : Promise.resolve(false);
+  return call('blockApps').then((v) => v ?? false);
 }
 
 /**
@@ -62,7 +69,7 @@ export function blockApps(): Promise<boolean> {
  * (e.g. before lock time, non-goal day, blocking disabled).
  */
 export function clearShields(): Promise<boolean> {
-  return mod ? mod.clearShields() : Promise.resolve(true);
+  return call('clearShields').then((v) => v ?? true);
 }
 
 /**
@@ -71,7 +78,7 @@ export function clearShields(): Promise<boolean> {
  * prevents the background UnloqMonitor extension from re-applying shields.
  */
 export function unblockApps(): Promise<boolean> {
-  return mod ? mod.unblockApps() : Promise.resolve(true);
+  return call('unblockApps').then((v) => v ?? true);
 }
 
 /**
@@ -84,7 +91,7 @@ export function unblockApps(): Promise<boolean> {
  * passed today, so shields apply right away on first enable too.
  */
 export function startMonitoring(lockHour: number, lockMinute: number): Promise<boolean> {
-  return mod ? mod.startMonitoring(lockHour, lockMinute) : Promise.resolve(false);
+  return call('startMonitoring', lockHour, lockMinute).then((v) => v ?? false);
 }
 
 /**
@@ -92,7 +99,7 @@ export function startMonitoring(lockHour: number, lockMinute: number): Promise<b
  * Only call this if the user disables blocking entirely.
  */
 export function stopMonitoring(): Promise<boolean> {
-  return mod ? mod.stopMonitoring() : Promise.resolve(true);
+  return call('stopMonitoring').then((v) => v ?? true);
 }
 
 /**

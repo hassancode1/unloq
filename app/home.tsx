@@ -54,6 +54,31 @@ import GradientCard from '../components/GradientCard';
 import CreateModal, { type CreateOptionKey } from '../components/CreateModal';
 import FeynmanScreen from './feynman';
 
+// ── Reading quotes ───────────────────────────────────────────────────────────
+
+const READING_QUOTES = [
+  { text: "The more that you read, the more things you will know. The more that you learn, the more places you'll go.", author: "Dr. Seuss" },
+  { text: "A reader lives a thousand lives before he dies. The man who never reads lives only one.", author: "George R.R. Martin" },
+  { text: "Not all those who wander are lost — but all who read are found.", author: "Anonymous" },
+  { text: "Reading is to the mind what exercise is to the body.", author: "Joseph Addison" },
+  { text: "Once you learn to read, you will be forever free.", author: "Frederick Douglass" },
+  { text: "The reading of all good books is like a conversation with the finest minds of past centuries.", author: "René Descartes" },
+  { text: "A book is a dream that you hold in your hands.", author: "Neil Gaiman" },
+  { text: "There is no friend as loyal as a book.", author: "Ernest Hemingway" },
+  { text: "In the case of good books, the point is not to see how many of them you can get through, but rather how many can get through to you.", author: "Mortimer J. Adler" },
+  { text: "Today a reader, tomorrow a leader.", author: "Margaret Fuller" },
+  { text: "Books are a uniquely portable magic.", author: "Stephen King" },
+  { text: "That's the thing about books. They let you travel without moving your feet.", author: "Jhumpa Lahiri" },
+  { text: "I am part of everything that I have read.", author: "Theodore Roosevelt" },
+  { text: "A book is a loaded gun in the house next door. Who knows who might be the target of the well-read man?", author: "Ray Bradbury" },
+  { text: "We read to know we are not alone.", author: "C.S. Lewis" },
+  { text: "Show me a family of readers, and I will show you the people who move the world.", author: "Napoléon Bonaparte" },
+  { text: "Reading gives us someplace to go when we have to stay where we are.", author: "Mason Cooley" },
+  { text: "The world belongs to those who read.", author: "Rick Holland" },
+  { text: "One must always be careful of books, and what is inside them, for words have the power to change us.", author: "Cassandra Clare" },
+  { text: "A mind needs books as a sword needs a whetstone, if it is to keep its edge.", author: "George R.R. Martin" },
+];
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 
@@ -132,7 +157,8 @@ function AppsLockedBanner({ width, blockedCount, blockDurationHours, todayDone, 
   width: number; blockedCount: number; blockDurationHours: number;
   todayDone: number; lessonTarget: number; isDark: boolean; onStudy: () => void;
 }) {
-  const durationLabel = blockDurationHours === 0.5 ? '30 min' : `${blockDurationHours}h`;
+  const totalMins = Math.round(blockDurationHours * 60);
+  const durationLabel = totalMins < 60 ? `${totalMins} min` : totalMins === 60 ? '1 hour' : `${blockDurationHours}h`;
   const pct = lessonTarget > 0 ? Math.min(1, todayDone / lessonTarget) : 0;
   const pctLabel = `${Math.round(pct * 100)}%`;
   return (
@@ -275,6 +301,49 @@ function HomeMascot() {
   );
 }
 
+// ── Daily quote ───────────────────────────────────────────────────────────────
+
+function DailyQuote({ C, fs, F }: { C: AppColors; fs: (n: number) => number; F: any }) {
+  const [quoteIndex] = useState(() => Math.floor(Math.random() * READING_QUOTES.length));
+  const { text, author } = READING_QUOTES[quoteIndex];
+
+  return (
+    <Animated.View
+      entering={FadeInDown.delay(60).duration(340)}
+      style={{
+        marginHorizontal: Spacing.lg,
+        marginTop: Spacing.md,
+        borderRadius: 14,
+        backgroundColor: `${C.primary}0E`,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        overflow: 'hidden',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+      }}
+    >
+      <Text style={{
+        fontSize: 28,
+        lineHeight: 32,
+        color: `${C.primary}50`,
+        fontFamily: F.extraBold,
+        marginTop: -4,
+      }}>
+        "
+      </Text>
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontFamily: F.semiBold, fontSize: fs(11), color: C.text, lineHeight: 17 }} numberOfLines={2}>
+          {text}
+        </Text>
+        <Text style={{ fontFamily: F.bold, fontSize: fs(10), color: C.primary, marginTop: 3, opacity: 0.8 }}>
+          — {author}
+        </Text>
+      </View>
+    </Animated.View>
+  );
+}
+
 // ── Home tab ─────────────────────────────────────────────────────────────────
 
 function HomeTabContent({ onUpload, onCourseSelect, onSeeAll, onGoalSetup, onOpenFeynman, onUpgrade, C, fs, F, isDark }: {
@@ -299,7 +368,7 @@ function HomeTabContent({ onUpload, onCourseSelect, onSeeAll, onGoalSetup, onOpe
     getBlockedCount().then(setBlockedCount).catch(() => setBlockedCount(0));
   }, [blockingEnabled]);
 
-  const todayStr  = new Date().toISOString().slice(0, 10);
+  const todayStr  = new Date().toLocaleDateString('en-CA');
   const todayDone = dailyProgress.date === todayStr ? dailyProgress.count : 0;
   const lessonTarget = goalConfig?.lessonTarget ?? 1;
   const firstName = viewer?.name?.split(' ')[0] ?? 'Learner';
@@ -351,8 +420,9 @@ function HomeTabContent({ onUpload, onCourseSelect, onSeeAll, onGoalSetup, onOpe
         </View>
       </View>
 
-      {/* ── Home mascot ── */}
-      {/* <HomeMascot /> */}
+
+      {/* ── Daily quote ── */}
+      <DailyQuote C={C} fs={fs} F={F} />
 
       {/* ── Gradient cards ── */}
       <View style={{ paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, gap: 12 }}>

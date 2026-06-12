@@ -8,7 +8,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -16,7 +15,6 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Spacing } from '../constants/spacing';
 import { useAppStore } from '../store/useAppStore';
-import { useTheme } from '../hooks/useTheme';
 import { scheduleStudyReminders, showNotificationPermissionAlert } from '../lib/notifications';
 import {
   getAuthorizationStatus,
@@ -25,6 +23,8 @@ import {
   hasSelection,
   getBlockedCount,
   startMonitoring,
+  stopMonitoring,
+  clearShields,
 } from '../lib/familyControls';
 
 // ─── Design tokens (clay aesthetic) ──────────────────────────────────────────
@@ -117,11 +117,10 @@ type GoalFrequency = 'daily' | 'weekdays' | 'custom';
 type Step          = 'frequency' | 'session' | 'apps';
 
 const BLOCK_DURATION_OPTIONS = [
-  { hours: 0.5, label: '30 mins', emoji: '⚡', desc: 'Quick sprint' },
-  { hours: 1,   label: '1 hour',  emoji: '⏱️', desc: 'Light session' },
-  { hours: 2,   label: '2 hours', emoji: '🔒', desc: 'Steady focus' },
-  { hours: 3,   label: '3 hours', emoji: '💪', desc: 'Deep focus' },
-  { hours: -1,  label: 'Custom',  emoji: '✏️', desc: 'Set your own' },
+  { hours: 10 / 60, label: '10 mins', emoji: '⚡', desc: 'Quick burst' },
+  { hours: 20 / 60, label: '20 mins', emoji: '🎯', desc: 'Focused flow' },
+  { hours: 0.5,     label: '30 mins', emoji: '⏱️', desc: 'Light session' },
+  { hours: 1,       label: '1 hour',  emoji: '🔒', desc: 'Deep focus' },
 ];
 
 function toTimeString(date: Date) {
@@ -183,21 +182,15 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
   const existingGoalConfig      = useAppStore((s) => s.goalConfig);
   const setBlockDurationHoursStore = useAppStore((s) => s.setBlockDurationHours);
   const setBlockingEnabled      = useAppStore((s) => s.setBlockingEnabled);
-  const { F } = useTheme();
-
   const [step, setStep]               = useState<Step>('frequency');
   const [frequency, setFrequency]     = useState<GoalFrequency>('daily');
   const [customDays, setCustomDays]   = useState<number[]>([1, 3, 5]);
   const defaultTime = new Date(); defaultTime.setHours(9, 0, 0, 0);
   const [lockDate, setLockDate]       = useState(defaultTime);
-  const [blockDurationHours, setBlockDurationHours] = useState(2);
-  const [customHoursInput, setCustomHoursInput] = useState('');
+  const [blockDurationHours, setBlockDurationHours] = useState(0.5);
   const [appsSelected, setAppsSelected] = useState(false);
   const [blockedCount, setBlockedCount] = useState(0);
   const [pickerLoading, setPickerLoading] = useState(false);
-
-  const isCustomDuration = blockDurationHours === -1;
-  const resolvedHours    = isCustomDuration ? (parseInt(customHoursInput, 10) || 0) : blockDurationHours;
 
   const totalSteps = 3;
   const stepIndex  = step === 'frequency' ? 0 : step === 'session' ? 1 : 2;
@@ -264,7 +257,7 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
       goalSetDate: existingGoalConfig?.goalSetDate ?? today,
     };
     setGoalConfig(cfg);
-    setBlockDurationHoursStore(resolvedHours);
+    setBlockDurationHoursStore(blockDurationHours);
     try {
       const scheduled = await scheduleStudyReminders(cfg);
       if (!scheduled) showNotificationPermissionAlert();
@@ -274,10 +267,15 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
     if (appsSelected) {
       setBlockingEnabled(true);
       const [lh, lm] = toTimeString(lockDate).split(':').map(Number);
-      startMonitoring(lh ?? 8, lm ?? 0).catch(() => {});
+      startMonitoring(lh ?? 8, lm ?? 0)
+        .then(() => clearShields()) // don't block on goal setup — wait for next lock time
+        .catch(() => {});
+    } else {
+      setBlockingEnabled(false);
+      stopMonitoring().catch(() => {});
     }
     onComplete();
-  }, [frequency, customDays, resolvedHours, lockDate, existingGoalConfig, setGoalConfig, onComplete, appsSelected, setBlockingEnabled]);
+  }, [frequency, customDays, blockDurationHours, lockDate, existingGoalConfig, setGoalConfig, onComplete, appsSelected, setBlockingEnabled]);
 
   // ── Step dots ──────────────────────────────────────────────────────────────
   const StepDots = () => (
@@ -521,46 +519,6 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
             </View>
           </Animated.View>
 
-          {/* ── Custom hours input ── */}
-          {isCustomDuration && (
-            <Animated.View entering={FadeInDown.duration(250)}>
-              <ClayCard shadowColor={`${CLAY_PRIMARY}40`} depth={6} innerStyle={{ padding: Spacing.md }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
-                  <View style={{
-                    width: 52, height: 52, borderRadius: 16,
-                    backgroundColor: `${CLAY_PRIMARY}14`,
-                    justifyContent: 'center', alignItems: 'center',
-                  }}>
-                    <Text style={{ fontSize: 28 }}>✏️</Text>
-                  </View>
-                  <View style={{ flex: 1, gap: 6 }}>
-                    <Text style={{ fontFamily: 'Nunito-ExtraBold', fontSize: 14, color: CLAY_TEXT }}>
-                      Custom duration
-                    </Text>
-                    <TextInput
-                      style={{
-                        fontFamily: F.regular, fontSize: 15, color: CLAY_TEXT,
-                        borderWidth: 1.5,
-                        borderColor: customHoursInput ? CLAY_PRIMARY : CLAY_BORDER,
-                        borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8,
-                        backgroundColor: customHoursInput ? `${CLAY_PRIMARY}08` : '#FAFAFA',
-                      }}
-                      placeholder="e.g. 5"
-                      placeholderTextColor={CLAY_MUTED}
-                      keyboardType="number-pad"
-                      value={customHoursInput}
-                      onChangeText={setCustomHoursInput}
-                      maxLength={2}
-                    />
-                    <Text style={{ fontFamily: F.regular, fontSize: 12, color: CLAY_MUTED }}>
-                      hours per day
-                    </Text>
-                  </View>
-                </View>
-              </ClayCard>
-            </Animated.View>
-          )}
-
           {/* ── Reminder time ── */}
           <Animated.View entering={FadeInDown.delay(200).duration(300)}>
             <Text style={[S.sectionLabel, { marginBottom: 8 }]}>Reminder Time</Text>
@@ -602,7 +560,7 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
                 setStep('apps');
                 loadSelectionInfo();
               }}
-              disabled={isCustomDuration && resolvedHours < 1}
+              disabled={false}
             />
             <TouchableOpacity onPress={() => setStep('frequency')} style={S.backBtn}>
               <Text style={S.backBtnText}>← Back</Text>

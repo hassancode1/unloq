@@ -73,7 +73,7 @@ export const useAppStore = create<AppState>()(
       onboardingRole: null,
       semesterGoal: null,
       hoursLost: null,
-      blockDurationHours: 2,
+      blockDurationHours: 0.5,
       blockingEnabled: false,
 
       setFlow: (flow) => set({ flow }),
