@@ -112,6 +112,7 @@ function NoAppsBlockedBanner({ width, isDark, onSetup }: {
 }) {
   return (
     <GradientCard
+      flex
       width={width}
       title="No apps blocked"
       subtitle="Set up your goal to start locking distractions"
@@ -151,21 +152,101 @@ function AppsLockedMascot() {
   );
 }
 
+// ── Session complete modal ────────────────────────────────────────────────────
+
+function SessionCompleteModal({ visible, lockTime, studiedMins, firstName, onDismiss, C, F, fs }: {
+  visible: boolean; lockTime: string; studiedMins: number;
+  firstName: string; onDismiss: () => void; C: AppColors; F: any; fs: (n: number) => number;
+}) {
+  const [h, m] = lockTime.split(':').map(Number);
+  const ampm   = (h ?? 0) >= 12 ? 'PM' : 'AM';
+  const h12    = (h ?? 0) % 12 === 0 ? 12 : (h ?? 0) % 12;
+  const timeStr = `${h12}:${String(m ?? 0).padStart(2, '0')} ${ampm}`;
+
+  return (
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onDismiss}>
+      <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+        <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onDismiss} />
+        <Animated.View entering={FadeInDown.springify().damping(18).stiffness(120)} style={{
+          backgroundColor: C.bg,
+          borderTopLeftRadius: 32, borderTopRightRadius: 32,
+          paddingHorizontal: Spacing.lg,
+          paddingTop: Spacing.lg,
+          paddingBottom: Spacing.xxl,
+          gap: Spacing.lg,
+        }}>
+          {/* Handle */}
+          <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: C.borderStrong, alignSelf: 'center', marginBottom: 4 }} />
+
+          {/* Hero */}
+          <View style={{ alignItems: 'center', gap: 10 }}>
+            <View style={{
+              width: 72, height: 72, borderRadius: 36,
+              backgroundColor: '#ECFDF5',
+              justifyContent: 'center', alignItems: 'center',
+            }}>
+              <Text style={{ fontSize: 38 }}>🎉</Text>
+            </View>
+            <Text style={{ fontFamily: F.extraBold, fontSize: fs(24), color: C.text, letterSpacing: -0.5 }}>
+              Well done, {firstName}!
+            </Text>
+            <Text style={{ fontFamily: F.semiBold, fontSize: fs(13), color: C.muted, textAlign: 'center', lineHeight: 20 }}>
+              You crushed your session. Apps are unlocked for the rest of the day.
+            </Text>
+          </View>
+
+          {/* Single stat */}
+          <View style={{ backgroundColor: C.surface, borderRadius: 18, borderWidth: 1, borderColor: C.border, paddingVertical: 20, alignItems: 'center', gap: 4 }}>
+            <Text style={{ fontFamily: F.extraBold, fontSize: fs(36), color: C.text }}>{studiedMins}</Text>
+            <Text style={{ fontFamily: F.semiBold, fontSize: fs(12), color: C.muted }}>minutes studied today</Text>
+          </View>
+
+          {/* Tomorrow note */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: `${'#6366F1'}0D`, borderRadius: 14, padding: 14 }}>
+            <Ionicons name="alarm-outline" size={18} color="#6366F1" />
+            <Text style={{ fontFamily: F.semiBold, fontSize: fs(13), color: C.text, flex: 1 }}>
+              Next session starts at <Text style={{ fontFamily: F.extraBold, color: '#6366F1' }}>{timeStr} tomorrow</Text>
+            </Text>
+          </View>
+
+          {/* CTA */}
+          <View style={{ position: 'relative', marginTop: 4 }}>
+            <View style={{ position: 'absolute', bottom: -5, left: 0, right: 0, top: 0, borderRadius: 18, backgroundColor: '#4338CA' }} />
+            <TouchableOpacity
+              onPress={() => { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); onDismiss(); }}
+              activeOpacity={0.85}
+              style={{ borderRadius: 18, backgroundColor: '#6366F1', paddingVertical: 16, alignItems: 'center', transform: [{ translateY: -5 }] }}
+            >
+              <Text style={{ fontFamily: F.extraBold, fontSize: fs(16), color: '#fff' }}>See you tomorrow 👋</Text>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+}
+
 // ── Apps locked banner ────────────────────────────────────────────────────────
 
-function AppsLockedBanner({ width, blockedCount, blockDurationHours, todayDone, lessonTarget, isDark, onStudy }: {
+function AppsLockedBanner({ width, blockedCount, blockDurationHours, elapsedSeconds, isDark, onStudy }: {
   width: number; blockedCount: number; blockDurationHours: number;
-  todayDone: number; lessonTarget: number; isDark: boolean; onStudy: () => void;
+  elapsedSeconds: number; isDark: boolean; onStudy: () => void; flex?: boolean;
 }) {
-  const totalMins = Math.round(blockDurationHours * 60);
-  const durationLabel = totalMins < 60 ? `${totalMins} min` : totalMins === 60 ? '1 hour' : `${blockDurationHours}h`;
-  const pct = lessonTarget > 0 ? Math.min(1, todayDone / lessonTarget) : 0;
+  const goalSecs = blockDurationHours * 3600;
+  const goalMins = Math.round(blockDurationHours * 60);
+  const durationLabel = goalMins < 60 ? `${goalMins} min` : goalMins === 60 ? '1 hour' : `${blockDurationHours}h`;
+  const pct = goalSecs > 0 ? Math.min(1, elapsedSeconds / goalSecs) : 0;
   const pctLabel = `${Math.round(pct * 100)}%`;
+  const remainingSecs = Math.max(0, goalSecs - elapsedSeconds);
+  const remMins = Math.floor(remainingSecs / 60);
+  const remSecs = Math.floor(remainingSecs % 60);
+  const timeLabel = pct >= 1 ? 'Done ✓' : `${remMins}:${String(remSecs).padStart(2, '0')} left`;
   return (
     <TouchableOpacity
       activeOpacity={0.80}
       onPress={onStudy}
       style={{
+        flex: 1,
         width,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 12 },
@@ -174,7 +255,7 @@ function AppsLockedBanner({ width, blockedCount, blockDurationHours, todayDone, 
         elevation: 14,
       }}
     >
-      <View style={{ height: 182, borderRadius: 24, overflow: 'hidden', opacity: isDark ? 0.92 : 1, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
+      <View style={{ flex: 1, borderRadius: 24, overflow: 'hidden', opacity: isDark ? 0.92 : 1, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
         <LinearGradient
           colors={[...CardGradients.indigo] as [string, string]}
           start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
@@ -204,13 +285,11 @@ function AppsLockedBanner({ width, blockedCount, blockDurationHours, todayDone, 
             <View style={{ gap: 5 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Text style={{ color: 'rgba(255,255,255,0.55)', fontSize: 10, fontFamily: 'Nunito-SemiBold' }}>
-                  {todayDone > 0 ? `${todayDone} session${todayDone !== 1 ? 's' : ''} done` : 'Study to unlock apps'}
+                  {elapsedSeconds > 0 ? 'Counting down…' : 'Study to unlock apps'}
                 </Text>
-                {pct > 0 && (
-                  <Text style={{ color: '#fff', fontSize: 11, fontFamily: 'Nunito-ExtraBold', letterSpacing: 0.2 }}>
-                    {pct >= 1 ? 'Done ✓' : pctLabel}
-                  </Text>
-                )}
+                <Text style={{ color: '#fff', fontSize: 11, fontFamily: 'Nunito-ExtraBold', letterSpacing: 0.2 }}>
+                  {timeLabel}
+                </Text>
               </View>
               <View style={{ height: 9, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.18)' }}>
                 <View style={{
@@ -352,7 +431,7 @@ function HomeTabContent({ onUpload, onCourseSelect, onSeeAll, onGoalSetup, onOpe
   C: AppColors; fs: (n: number) => number; F: any; isDark: boolean;
 }) {
   const styles = React.useMemo(() => makeSharedStyles(C), [C]);
-  const { goalConfig, dailyProgress, blockDurationHours, blockingEnabled } = useAppStore();
+  const { goalConfig, dailyProgress, blockDurationHours, blockingEnabled, startBlockSession } = useAppStore();
   const { isPremium } = useEntitlement();
   const viewer = useQuery(api.users.currentUser);
   const rawCourses = useQuery(api.courses.listMine);
@@ -361,6 +440,9 @@ function HomeTabContent({ onUpload, onCourseSelect, onSeeAll, onGoalSetup, onOpe
   const personalCourses = (rawCourses ?? []) as any[];
   const [appsSelected, setAppsSelected] = useState(true);
   const [blockedCount, setBlockedCount] = useState(0);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [showComplete, setShowComplete] = useState(false);
+  const completionFiredRef = React.useRef(false);
 
   React.useEffect(() => {
     if (!blockingEnabled) return;
@@ -368,9 +450,29 @@ function HomeTabContent({ onUpload, onCourseSelect, onSeeAll, onGoalSetup, onOpe
     getBlockedCount().then(setBlockedCount).catch(() => setBlockedCount(0));
   }, [blockingEnabled]);
 
-  const todayStr  = new Date().toLocaleDateString('en-CA');
-  const todayDone = dailyProgress.date === todayStr ? dailyProgress.count : 0;
-  const lessonTarget = goalConfig?.lessonTarget ?? 1;
+  // Start session timestamp the moment blocking is active
+  React.useEffect(() => {
+    if (blockingEnabled && appsSelected) startBlockSession();
+  }, [blockingEnabled, appsSelected]);
+
+  // Live countdown — ticks every second from session start
+  React.useEffect(() => {
+    if (!blockingEnabled || !appsSelected) return;
+    const goalSecs = blockDurationHours * 3600;
+    const tick = () => {
+      const start = dailyProgress.sessionStartMs;
+      if (!start) return;
+      const elapsed = Math.floor((Date.now() - start) / 1000);
+      setElapsedSeconds(elapsed);
+      if (elapsed >= goalSecs && !completionFiredRef.current) {
+        completionFiredRef.current = true;
+        setShowComplete(true);
+      }
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [blockingEnabled, appsSelected, dailyProgress.sessionStartMs, blockDurationHours]);
   const firstName = viewer?.name?.split(' ')[0] ?? 'Learner';
 
   const cardWidth = Dimensions.get('window').width - Spacing.lg * 2;
@@ -380,7 +482,7 @@ function HomeTabContent({ onUpload, onCourseSelect, onSeeAll, onGoalSetup, onOpe
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
 
   return (
-    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: Spacing.xl }}>
+    <View style={{ flex: 1 }}>
       {/* ── Header ── */}
       <View style={[headerStyles.bar, { borderBottomColor: C.border }]}>
         <View style={{ flex: 1 }}>
@@ -425,7 +527,7 @@ function HomeTabContent({ onUpload, onCourseSelect, onSeeAll, onGoalSetup, onOpe
       <DailyQuote C={C} fs={fs} F={F} />
 
       {/* ── Gradient cards ── */}
-      <View style={{ paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, gap: 12 }}>
+      <View style={{ flex: 1, paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm, paddingBottom: Spacing.sm, gap: 10 }}>
         {(() => {
           const lifetimeCount = myStats?.totalNotesCreated ?? personalCourses.length;
           const atLimit = !isPremium && lifetimeCount >= FREE_NOTE_LIMIT;
@@ -435,6 +537,7 @@ function HomeTabContent({ onUpload, onCourseSelect, onSeeAll, onGoalSetup, onOpe
             : undefined;
           return (
             <GradientCard
+              flex
               width={cardWidth}
               title="Create a note"
               subtitle={atLimit ? 'Upgrade to add unlimited notes' : 'Upload a PDF and AI generates your lessons'}
@@ -450,10 +553,11 @@ function HomeTabContent({ onUpload, onCourseSelect, onSeeAll, onGoalSetup, onOpe
         {blockingEnabled && (
           !appsSelected
             ? <NoAppsBlockedBanner width={cardWidth} isDark={isDark} onSetup={onGoalSetup} />
-            : <AppsLockedBanner width={cardWidth} blockedCount={blockedCount} blockDurationHours={blockDurationHours} todayDone={todayDone} lessonTarget={lessonTarget} isDark={isDark} onStudy={onSeeAll} />
+            : <AppsLockedBanner width={cardWidth} blockedCount={blockedCount} blockDurationHours={blockDurationHours} elapsedSeconds={elapsedSeconds} isDark={isDark} onStudy={onSeeAll} />
         )}
         {/* ── Feynman card ── */}
         <GradientCard
+          flex
           width={cardWidth}
           title="Feynman AI"
           subtitle="Explain it to an AI character — the fastest way to truly learn"
@@ -464,6 +568,16 @@ function HomeTabContent({ onUpload, onCourseSelect, onSeeAll, onGoalSetup, onOpe
           imageSource={require('../assets/Fyenman-mascot.png')}
         />
       </View>
+
+      {/* ── Session complete modal ── */}
+      <SessionCompleteModal
+        visible={showComplete}
+        lockTime={goalConfig?.lockTime ?? '09:00'}
+        studiedMins={Math.floor(elapsedSeconds / 60)}
+        firstName={viewer?.name?.split(' ')[0] ?? 'Learner'}
+        onDismiss={() => setShowComplete(false)}
+        C={C} F={F} fs={fs}
+      />
 
       {/* ── My Courses loading skeleton ── */}
       {/* {isCoursesLoading && (
@@ -541,7 +655,7 @@ function HomeTabContent({ onUpload, onCourseSelect, onSeeAll, onGoalSetup, onOpe
           </Text>
         </Animated.View>
       )}  */}
-    </ScrollView>
+    </View>
   );
 }
 

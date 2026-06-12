@@ -15,6 +15,7 @@ interface Props {
   imageSource?: ImageSourcePropType;
   actionLabel?: string;
   width?: number;
+  flex?: boolean;
 }
 
 function AnimatedMascot({ source }: { source: ImageSourcePropType }) {
@@ -51,15 +52,15 @@ function AnimatedMascot({ source }: { source: ImageSourcePropType }) {
 
 export default function GradientCard({
   title, subtitle, gradientColors, onPress, badge, isDark,
-  imageSource, actionLabel, width = 220,
+  imageSource, actionLabel, width = 220, flex: flexFill,
 }: Props) {
   return (
     <TouchableOpacity
       activeOpacity={0.80}
       onPress={onPress}
-      style={[styles.shadow, { width }]}
+      style={[styles.shadow, { width }, flexFill && { flex: 1, width: undefined }]}
     >
-      <View style={[styles.wrapper, { opacity: isDark ? 0.92 : 1 }]}>
+      <View style={[styles.wrapper, { opacity: isDark ? 0.92 : 1 }, flexFill && { height: undefined, flex: 1 }]}>
         <LinearGradient
           colors={[...gradientColors] as [string, string]}
           start={{ x: 0, y: 0 }}

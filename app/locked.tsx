@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, {
   FadeInDown,
@@ -21,7 +21,12 @@ import { Spacing } from '../constants/spacing';
 export default function LockedScreen() {
   const { C, F, fs } = useTheme();
   const insets = useSafeAreaInsets();
-  const { setFlow, blockDurationHours } = useAppStore();
+  const { setFlow, blockDurationHours, dailyProgress } = useAppStore();
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  const goalSecs = blockDurationHours * 3600;
+  const pct      = goalSecs > 0 ? Math.min(1, elapsedSeconds / goalSecs) : 0;
+  const isDone   = pct >= 1;
 
   // Pulsing glow rings
   const outerScale = useSharedValue(1);
@@ -40,8 +45,23 @@ export default function LockedScreen() {
       withSequence(withTiming(1.10, { duration: 1200 }), withTiming(1, { duration: 1200 })),
       -1, true,
     );
-    barWidth.value = withTiming(0.65, { duration: 1800 });
   }, []);
+
+  // Sync bar to real progress
+  useEffect(() => {
+    barWidth.value = withTiming(pct, { duration: 600 });
+  }, [pct]);
+
+  // Live timer
+  useEffect(() => {
+    const tick = () => {
+      const start = dailyProgress.sessionStartMs;
+      if (start) setElapsedSeconds(Math.floor((Date.now() - start) / 1000));
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [dailyProgress.sessionStartMs]);
 
   const outerGlowStyle = useAnimatedStyle(() => ({
     transform: [{ scale: outerScale.value }],
@@ -86,22 +106,30 @@ export default function LockedScreen() {
         style={[S.card, { backgroundColor: C.surface, borderColor: C.border }]}
       >
         <Text style={[S.title, { fontFamily: F.extraBold, fontSize: fs(26), color: C.text }]}>
-          Focus Mode
+          {isDone ? 'You\'re done! 🎉' : 'Focus Mode'}
         </Text>
         <Text style={[S.sub, { fontFamily: F.regular, fontSize: fs(15), color: C.sub }]}>
-          You set up a{' '}
-          <Text style={{ fontFamily: F.bold, color: C.primary }}>
-            {blockDurationHours === 0.5 ? '30 min' : `${blockDurationHours}h`} focus session
-          </Text>
-          {' '}today. Complete your study to unlock your apps.
+          {isDone
+            ? 'Session complete. Your apps are unlocked for the rest of the day.'
+            : <>You set up a{' '}
+                <Text style={{ fontFamily: F.bold, color: C.primary }}>
+                  {(() => { const m = Math.round(blockDurationHours * 60); return m < 60 ? `${m} min` : m === 60 ? '1 hour' : `${blockDurationHours}h`; })()} focus session
+                </Text>
+                {' '}today. Complete your study to unlock your apps.</>
+          }
         </Text>
 
         {/* Progress bar */}
-        <View style={[S.trackBg, { backgroundColor: `${C.primary}18` }]}>
-          <Animated.View style={[S.trackFill, { backgroundColor: C.primary }, barStyle]} />
+        <View style={[S.trackBg, { backgroundColor: isDone ? '#D1FAE5' : `${C.primary}18` }]}>
+          <Animated.View style={[S.trackFill, { backgroundColor: isDone ? '#10B981' : C.primary }, barStyle]} />
         </View>
-        <Text style={[S.trackLabel, { fontFamily: F.semiBold, fontSize: fs(12), color: C.muted }]}>
-          Session in progress
+        <Text style={[S.trackLabel, { fontFamily: F.semiBold, fontSize: fs(12), color: isDone ? '#10B981' : C.muted }]}>
+          {isDone ? 'Session complete ✓' : (() => {
+            const rem = Math.max(0, goalSecs - elapsedSeconds);
+            const m = Math.floor(rem / 60);
+            const s = Math.floor(rem % 60);
+            return `${m}:${String(s).padStart(2, '0')} remaining`;
+          })()}
         </Text>
       </Animated.View>
 
@@ -123,9 +151,9 @@ export default function LockedScreen() {
             style={S.btn}
           >
             <Text style={[S.btnTxt, { fontFamily: F.bold, fontSize: fs(16) }]}>
-              Start Studying
+              {isDone ? 'Go to app' : 'Start Studying'}
             </Text>
-            <Ionicons name="arrow-forward" size={18} color="#fff" />
+            <Ionicons name={isDone ? 'checkmark' : 'arrow-forward'} size={18} color="#fff" />
           </LinearGradient>
         </TouchableOpacity>
       </Animated.View>

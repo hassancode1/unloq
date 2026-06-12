@@ -15,8 +15,9 @@ export interface GoalConfig {
 }
 
 interface DailyProgress {
-  date: string; // 'YYYY-MM-DD'
+  date: string;           // 'YYYY-MM-DD'
   count: number;
+  sessionStartMs: number | null; // ms timestamp when today's block session started
 }
 
 export const FONT_SCALE_MIN  = 0.85;
@@ -44,6 +45,7 @@ interface AppState {
   setExamDate: (date: string | null) => void;
   setActiveCourse: (id: string) => void;
   incrementDailyProgress: () => void;
+  startBlockSession: () => void;
   toggleDarkMode: () => void;
   increaseFontScale: () => void;
   decreaseFontScale: () => void;
@@ -64,7 +66,7 @@ export const useAppStore = create<AppState>()(
     (set) => ({
       flow: 'loading',
       goalConfig: { frequency: 'daily', customDays: [], lessonTarget: 1, lockTime: '08:00', examDate: null },
-      dailyProgress: { date: todayStr(), count: 0 },
+      dailyProgress: { date: todayStr(), count: 0, sessionStartMs: null },
       activeCourseId: null,
       activeLessonIndex: 0,
       darkMode: false,
@@ -88,10 +90,33 @@ export const useAppStore = create<AppState>()(
         set((s) => {
           const today = todayStr();
           const prev = s.dailyProgress;
-          const newCount = prev.date === today ? prev.count + 1 : 1;
+          const sameDay = prev.date === today;
+          const newCount = sameDay ? prev.count + 1 : 1;
           const target = s.goalConfig?.lessonTarget ?? 1;
           setStudyProgress(newCount, target).catch(() => {});
-          return { dailyProgress: { date: today, count: newCount } };
+          return {
+            dailyProgress: {
+              date: today,
+              count: newCount,
+              sessionStartMs: sameDay ? prev.sessionStartMs : null,
+            },
+          };
+        }),
+      // Call once when the user opens the app with blocking active.
+      // Sets the start timestamp for today — no-ops if already started today.
+      startBlockSession: () =>
+        set((s) => {
+          const today = todayStr();
+          const prev = s.dailyProgress;
+          const alreadyStarted = prev.date === today && prev.sessionStartMs !== null;
+          if (alreadyStarted) return {};
+          return {
+            dailyProgress: {
+              date: today,
+              count: prev.date === today ? prev.count : 0,
+              sessionStartMs: Date.now(),
+            },
+          };
         }),
       setOnboardingRole: (role) => set({ onboardingRole: role }),
       setSemesterGoal: (goal) => set({ semesterGoal: goal }),

@@ -82,7 +82,7 @@ export default function PdfViewerScreen({ url, title, onBack }: Props) {
           source={{ html, baseUrl: '' }}
           style={{ flex: 1 }}
           originWhitelist={['*']}
-          scrollEnabled={false}
+          scrollEnabled
         />
       )}
     </View>
