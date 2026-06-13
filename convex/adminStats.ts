@@ -19,6 +19,10 @@ export const getAdminStats = query({
       const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
       dayMap[d] = 0;
     }
+    for (const u of allUsers) {
+      const d = new Date(u._creationTime).toISOString().slice(0, 10);
+      if (dayMap[d] !== undefined) dayMap[d]++;
+    }
 
     // Per-course stats
     const publishedCourses = allCourses.filter((c) => c.published && c.adminCreated);
@@ -28,8 +32,8 @@ export const getAdminStats = query({
       return {
         courseId: course._id,
         title: course.title,
-        enrollments: 0,
-        completions: 0,
+        enrollments: completedCourseLessons.length > 0 ? 1 : 0, // best-effort: lesson completions as a proxy
+        completions: completedCourseLessons.length,
         averageProgress:
           courseLessons.length > 0
             ? Math.round((completedCourseLessons.length / courseLessons.length) * 100)
@@ -40,8 +44,9 @@ export const getAdminStats = query({
     return {
       users: {
         total: allUsers.length,
-        activeToday: 0,
-        activeThisWeek: 0,
+        // activeToday / activeThisWeek require a lastActiveAt field on users (not yet tracked)
+        activeToday: null as number | null,
+        activeThisWeek: null as number | null,
         newUsersLast7Days: Object.entries(dayMap).map(([date, count]) => ({ date, count })),
       },
       lessons: {

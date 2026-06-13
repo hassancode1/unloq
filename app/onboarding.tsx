@@ -208,7 +208,7 @@ function WelcomeScreen({ onNext }: { onNext: () => void }) {
 
       <Text style={ss.title}>Learn anything.{"\n"}Block distractions.</Text>
       <Text style={ss.sub}>
-        Your apps are blocking your semester goals.{"\n"}Study first — then unlock.
+        Your apps are blocking your learning goals.{"\n"}Study first — then unlock.
       </Text>
 
       <View style={{ width: "100%", marginTop: 8 }}>

@@ -19,10 +19,7 @@ export const isAdmin = query({
     const user = await ctx.db.get(userId);
     if (!user) return false;
     const adminEmails = process.env.ADMIN_EMAILS;
-    if (!adminEmails) {
-      console.warn("[isAdmin] ADMIN_EMAILS env var is not set — all admin access denied. Set it in Convex dashboard env vars.");
-      return false;
-    }
+    if (!adminEmails) return false;
     const list = adminEmails.split(",").map((e) => e.trim().toLowerCase());
     return list.includes((user.email as string)?.toLowerCase() ?? "");
   },

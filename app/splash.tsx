@@ -137,7 +137,7 @@ export default function SplashScreen() {
 
       {/* Tagline */}
       <Animated.Text style={[S.tag, tagStyle]}>
-        exam prep that actually sticks
+        learn anything. block distractions.
       </Animated.Text>
 
       {/* Dots */}

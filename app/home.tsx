@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Purchases from 'react-native-purchases';
 import RevenueCatUI, { PAYWALL_RESULT } from 'react-native-purchases-ui';
+import Toast from 'react-native-toast-message';
 import React, { useState, useMemo } from 'react';
 import {
   ActivityIndicator,
@@ -125,6 +126,38 @@ function NoAppsBlockedBanner({ width, isDark, onSetup }: {
   );
 }
 
+// ── Blocking scheduled banner ─────────────────────────────────────────────────
+
+function fmtLockTime(lockTime: string): string {
+  const [h, m] = lockTime.split(':').map(Number);
+  const ampm = (h ?? 0) >= 12 ? 'PM' : 'AM';
+  const h12 = (h ?? 0) % 12 === 0 ? 12 : (h ?? 0) % 12;
+  return `${h12}:${String(m ?? 0).padStart(2, '0')} ${ampm}`;
+}
+
+function BlockingScheduledBanner({ width, isDark, lockTime, phase, onSetup }: {
+  width: number; isDark: boolean; lockTime: string;
+  phase: 'tomorrow' | 'later-today'; onSetup: () => void;
+}) {
+  const timeStr = fmtLockTime(lockTime);
+  const subtitle = phase === 'tomorrow'
+    ? `Apps will be blocked tomorrow at ${timeStr}`
+    : `Apps will be blocked today at ${timeStr}`;
+  return (
+    <GradientCard
+      flex
+      width={width}
+      title="Blocking scheduled"
+      subtitle={subtitle}
+      gradientColors={CardGradients.indigo}
+      onPress={onSetup}
+      actionLabel="Change schedule →"
+      isDark={isDark}
+      imageSource={require('../assets/lock-banner.png')}
+    />
+  );
+}
+
 // ── Apps locked mascot (animated) ────────────────────────────────────────────
 
 function AppsLockedMascot() {
@@ -211,7 +244,7 @@ function SessionCompleteModal({ visible, lockTime, studiedMins, firstName, onDis
 
           {/* CTA */}
           <View style={{ position: 'relative', marginTop: 4 }}>
-            <View style={{ position: 'absolute', bottom: -5, left: 0, right: 0, top: 0, borderRadius: 18, backgroundColor: '#4338CA' }} />
+            <View style={{ position: 'absolute', bottom: -5, left: 0, right: 0, top: 0, borderRadius: 18, backgroundColor: '#4F46E5' }} />
             <TouchableOpacity
               onPress={() => { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); onDismiss(); }}
               activeOpacity={0.85}
@@ -431,18 +464,17 @@ function HomeTabContent({ onUpload, onCourseSelect, onSeeAll, onGoalSetup, onOpe
   C: AppColors; fs: (n: number) => number; F: any; isDark: boolean;
 }) {
   const styles = React.useMemo(() => makeSharedStyles(C), [C]);
-  const { goalConfig, dailyProgress, blockDurationHours, blockingEnabled, startBlockSession } = useAppStore();
+  const { goalConfig, dailyProgress, blockDurationHours, blockingEnabled, startBlockSession, goalSavedAt, sessionCompletedDate, setSessionCompleted } = useAppStore();
   const { isPremium } = useEntitlement();
   const viewer = useQuery(api.users.currentUser);
   const rawCourses = useQuery(api.courses.listMine);
   const myStats = useQuery(api.courses.getMyStats);
-  const isCoursesLoading = rawCourses === undefined;
   const personalCourses = (rawCourses ?? []) as any[];
   const [appsSelected, setAppsSelected] = useState(true);
   const [blockedCount, setBlockedCount] = useState(0);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [showComplete, setShowComplete] = useState(false);
-  const completionFiredRef = React.useRef(false);
+  const [blockPhase, setBlockPhase] = useState<'tomorrow' | 'later-today' | 'active'>('later-today');
 
   React.useEffect(() => {
     if (!blockingEnabled) return;
@@ -450,33 +482,52 @@ function HomeTabContent({ onUpload, onCourseSelect, onSeeAll, onGoalSetup, onOpe
     getBlockedCount().then(setBlockedCount).catch(() => setBlockedCount(0));
   }, [blockingEnabled]);
 
-  // Start session timestamp the moment blocking is active
-  React.useEffect(() => {
-    if (blockingEnabled && appsSelected) startBlockSession();
-  }, [blockingEnabled, appsSelected]);
-
-  // Live countdown — ticks every second from session start
+  // Live countdown — also handles starting the session when lockTime is reached
   React.useEffect(() => {
     if (!blockingEnabled || !appsSelected) return;
+    const lockTime = goalConfig?.lockTime;
+    if (!lockTime) return;
+
+    const [lh, lm] = lockTime.split(':').map(Number);
+    const lockMins = (lh ?? 9) * 60 + (lm ?? 0);
     const goalSecs = blockDurationHours * 3600;
+
     const tick = () => {
       const start = dailyProgress.sessionStartMs;
-      if (!start) return;
+      if (!start) {
+        const now = new Date();
+        const nowMins = now.getHours() * 60 + now.getMinutes();
+        const lockTimeTodayMs = new Date(now).setHours(lh ?? 9, lm ?? 0, 0, 0);
+        // Goal was saved after today's lock time → skip today, wait until tomorrow
+        if (goalSavedAt && goalSavedAt > lockTimeTodayMs) {
+          setBlockPhase('tomorrow');
+          return;
+        }
+        if (nowMins < lockMins) {
+          setBlockPhase('later-today');
+          return;
+        }
+        // Lock time has been reached → start the session
+        startBlockSession();
+        return;
+      }
+      setBlockPhase('active');
       const elapsed = Math.floor((Date.now() - start) / 1000);
       setElapsedSeconds(elapsed);
-      if (elapsed >= goalSecs && !completionFiredRef.current) {
-        completionFiredRef.current = true;
+      const todayDate = new Date().toLocaleDateString('en-CA');
+      if (elapsed >= goalSecs && sessionCompletedDate !== todayDate) {
+        setSessionCompleted(todayDate);
         setShowComplete(true);
       }
     };
+
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [blockingEnabled, appsSelected, dailyProgress.sessionStartMs, blockDurationHours]);
+  }, [blockingEnabled, appsSelected, dailyProgress.sessionStartMs, blockDurationHours, goalConfig?.lockTime, goalSavedAt, sessionCompletedDate, setSessionCompleted]);
   const firstName = viewer?.name?.split(' ')[0] ?? 'Learner';
 
   const cardWidth = Dimensions.get('window').width - Spacing.lg * 2;
-  const continueCourse = personalCourses.find((c: any) => c.status === 'ready');
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
@@ -553,7 +604,9 @@ function HomeTabContent({ onUpload, onCourseSelect, onSeeAll, onGoalSetup, onOpe
         {blockingEnabled && (
           !appsSelected
             ? <NoAppsBlockedBanner width={cardWidth} isDark={isDark} onSetup={onGoalSetup} />
-            : <AppsLockedBanner width={cardWidth} blockedCount={blockedCount} blockDurationHours={blockDurationHours} elapsedSeconds={elapsedSeconds} isDark={isDark} onStudy={onSeeAll} />
+            : blockPhase === 'active'
+              ? <AppsLockedBanner width={cardWidth} blockedCount={blockedCount} blockDurationHours={blockDurationHours} elapsedSeconds={elapsedSeconds} isDark={isDark} onStudy={onSeeAll} />
+              : <BlockingScheduledBanner width={cardWidth} isDark={isDark} lockTime={goalConfig?.lockTime ?? '09:00'} phase={blockPhase} onSetup={onGoalSetup} />
         )}
         {/* ── Feynman card ── */}
         <GradientCard
@@ -579,82 +632,6 @@ function HomeTabContent({ onUpload, onCourseSelect, onSeeAll, onGoalSetup, onOpe
         C={C} F={F} fs={fs}
       />
 
-      {/* ── My Courses loading skeleton ── */}
-      {/* {isCoursesLoading && (
-        <Animated.View entering={FadeInDown.delay(80).duration(260)} style={{ paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg, gap: 10 }}>
-          <View style={{ height: 24, width: 130, borderRadius: 8, backgroundColor: C.borderStrong, marginBottom: 4 }} />
-          {[1, 2, 3].map((i) => (
-            <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 15 }}>
-              <View style={{ width: 30, height: 30, borderRadius: 8, backgroundColor: C.borderStrong }} />
-              <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: C.borderStrong }} />
-              <View style={{ flex: 1, gap: 6 }}>
-                <View style={{ height: 13, width: '60%', borderRadius: 6, backgroundColor: C.borderStrong }} />
-                <View style={{ height: 11, width: '35%', borderRadius: 6, backgroundColor: C.borderStrong }} />
-              </View>
-            </View>
-          ))}
-        </Animated.View>
-      )}
-
-      {/* ── Continue Learning (most recent course only) ── */}
-      {/* {!isCoursesLoading && continueCourse && (
-        <Animated.View entering={FadeInDown.delay(80).duration(260)} style={{ paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg }}>
-          <Text style={[{ fontFamily: F.extraBold, fontSize: fs(20), color: C.text, letterSpacing: -0.3, marginBottom: 10 }]}>
-            Continue Learning
-          </Text>
-          {(() => {
-            const { emoji, color } = topicColor(continueCourse.title);
-            const isGenerating = continueCourse.status === 'generating';
-            return (
-              <TouchableOpacity
-                style={[{
-                  flexDirection: 'row', alignItems: 'center', gap: 14,
-                  padding: 14, borderRadius: 16,
-                  backgroundColor: C.surface,
-                  borderWidth: StyleSheet.hairlineWidth,
-                  borderColor: C.border,
-                }]}
-                activeOpacity={0.7}
-                onPress={() => { Haptics.selectionAsync(); onCourseSelect(continueCourse._id as Id<'courses'>); }}
-              >
-                <View style={{
-                  width: 44, height: 44, borderRadius: 12,
-                  backgroundColor: `${color}18`, borderWidth: 1, borderColor: `${color}30`,
-                  justifyContent: 'center', alignItems: 'center',
-                }}>
-                  <Text style={{ fontSize: 22 }}>{isGenerating ? '⏳' : emoji}</Text>
-                </View>
-                <View style={{ flex: 1, gap: 2 }}>
-                  <Text style={[{ fontFamily: F.bold, fontSize: fs(14), color: C.text, lineHeight: 19 }]} numberOfLines={1}>
-                    {continueCourse.title}
-                  </Text>
-                  <Text style={[{ fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>
-                    {isGenerating ? 'Generating…' : `${continueCourse.totalLessons ?? 0} lessons`}
-                  </Text>
-                </View>
-                <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: `${color}14`, justifyContent: 'center', alignItems: 'center' }}>
-                  <Ionicons name="arrow-forward" size={15} color={color} />
-                </View>
-              </TouchableOpacity>
-            );
-          })()}
-        </Animated.View>
-      )} */}
-
-      {/* Empty state */}
-      {/* {!isCoursesLoading && personalCourses.length === 0 && (
-        <Animated.View entering={FadeInDown.delay(60).duration(260)} style={[styles.empty, { marginTop: Spacing.lg }]}>
-          <View style={[styles.emptyIcon, { backgroundColor: C.primaryBg, borderColor: C.border }]}>
-            <Text style={{ fontSize: 34 }}>📄</Text>
-          </View>
-          <Text style={[styles.emptyTitle, { fontSize: fs(17), fontFamily: F.semiBold, color: C.text }]}>
-            No courses yet
-          </Text>
-          <Text style={[styles.emptySub, { fontSize: fs(13), fontFamily: F.regular, color: C.sub }]}>
-            Tap + to upload a PDF and AI will generate lessons for you.
-          </Text>
-        </Animated.View>
-      )}  */}
     </View>
   );
 }
@@ -1193,7 +1170,8 @@ const headerStyles = StyleSheet.create({
 
 // ── Root ─────────────────────────────────────────────────────────────────────
 
-const FREE_NOTE_LIMIT = 3;
+const FREE_NOTE_LIMIT = 1;
+const CANCEL_FLOW_OFFERING = 'com.loqlearn.app.premium_monthly_exclusive';
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
@@ -1226,7 +1204,7 @@ export default function HomeScreen() {
       }
       if (result === PAYWALL_RESULT.CANCELLED) {
         const offerings = await Purchases.getOfferings();
-        const cancelOffering = offerings.all['com.loqlearn.app.premium_monthly_exclusive'];
+        const cancelOffering = offerings.all[CANCEL_FLOW_OFFERING];
         if (cancelOffering) {
           const cancelResult = await RevenueCatUI.presentPaywall({ offering: cancelOffering });
           if (cancelResult === PAYWALL_RESULT.PURCHASED || cancelResult === PAYWALL_RESULT.RESTORED) {
@@ -1235,7 +1213,7 @@ export default function HomeScreen() {
         }
       }
     } catch {
-      // paywall errors are non-fatal
+      Toast.show({ type: 'error', text1: 'Upgrade unavailable', text2: 'Check your connection and try again.' });
     }
   };
 

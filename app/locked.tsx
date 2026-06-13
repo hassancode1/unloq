@@ -47,9 +47,15 @@ export default function LockedScreen() {
     );
   }, []);
 
-  // Sync bar to real progress
+  // Sync bar to real progress — animate once per full percentage point to avoid
+  // queuing 3600 withTiming calls (one per second) over a long session.
+  const lastBarPct = React.useRef(-1);
   useEffect(() => {
-    barWidth.value = withTiming(pct, { duration: 600 });
+    const rounded = Math.round(pct * 100);
+    if (rounded !== lastBarPct.current) {
+      lastBarPct.current = rounded;
+      barWidth.value = withTiming(pct, { duration: 800 });
+    }
   }, [pct]);
 
   // Live timer

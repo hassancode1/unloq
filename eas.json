@@ -15,8 +15,7 @@
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_CONVEX_URL": "https://dynamic-clownfish-603.convex.cloud",
-        "EXPO_PUBLIC_CONVEX_SITE_URL": "https://dynamic-clownfish-603.convex.site",
-        "EXPO_PUBLIC_REVENUECAT_IOS_KEY": "appl_mDWOATNCVtpCegXEOLASPTnPfqH"
+        "EXPO_PUBLIC_CONVEX_SITE_URL": "https://dynamic-clownfish-603.convex.site"
       }
     }
   },

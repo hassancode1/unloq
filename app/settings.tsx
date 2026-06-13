@@ -82,7 +82,7 @@ export default function SettingsScreen({ onNavigateToCourses: _onNavigateToCours
 
   const handleShareApp = () => {
     Share.share({
-      message: 'Check out LoqLearn — block distracting apps until you finish your daily study session! https://loqlearn.com',
+      message: 'Check out Unloq — block distracting apps until you finish your daily study session! https://loqlearn.com',
     });
   };
 
@@ -157,14 +157,16 @@ export default function SettingsScreen({ onNavigateToCourses: _onNavigateToCours
           >
             {viewer?.name ?? "Learner"}
           </Text>
-          <Text
-            style={[
-              styles.identitySub,
-              { fontSize: fs(12), fontFamily: F.regular, color: C.muted },
-            ]}
-          >
-            Seeker of Knowledge
-          </Text>
+          {viewer?.email && (
+            <Text
+              style={[
+                styles.identitySub,
+                { fontSize: fs(12), fontFamily: F.regular, color: C.muted },
+              ]}
+            >
+              {viewer.email}
+            </Text>
+          )}
         </Animated.View>
 
         {/* ── Appearance ── */}
@@ -419,7 +421,7 @@ export default function SettingsScreen({ onNavigateToCourses: _onNavigateToCours
                 <Ionicons name="star-outline" size={15} color={C.primary} />
               </View>
               <Text style={[styles.rowLabel, { fontSize: fs(14), fontFamily: F.medium, color: C.sub }]}>
-                Rate LoqLearn
+                Rate Unloq
               </Text>
               <Ionicons name="open-outline" size={14} color={C.muted} />
             </TouchableOpacity>
@@ -433,7 +435,7 @@ export default function SettingsScreen({ onNavigateToCourses: _onNavigateToCours
                 <Ionicons name="share-social-outline" size={15} color={C.primary} />
               </View>
               <Text style={[styles.rowLabel, { fontSize: fs(14), fontFamily: F.medium, color: C.sub }]}>
-                Share LoqLearn
+                Share Unloq
               </Text>
               <Ionicons name="arrow-forward" size={14} color={C.muted} />
             </TouchableOpacity>

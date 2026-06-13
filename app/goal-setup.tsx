@@ -25,6 +25,7 @@ import {
   startMonitoring,
   stopMonitoring,
   clearShields,
+  unblockApps,
 } from '../lib/familyControls';
 
 // ─── Design tokens (clay aesthetic) ──────────────────────────────────────────
@@ -182,6 +183,7 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
   const existingGoalConfig      = useAppStore((s) => s.goalConfig);
   const setBlockDurationHoursStore = useAppStore((s) => s.setBlockDurationHours);
   const setBlockingEnabled      = useAppStore((s) => s.setBlockingEnabled);
+  const setGoalSavedAt          = useAppStore((s) => s.setGoalSavedAt);
   const [step, setStep]               = useState<Step>('frequency');
   const [frequency, setFrequency]     = useState<GoalFrequency>('daily');
   const [customDays, setCustomDays]   = useState<number[]>([1, 3, 5]);
@@ -254,7 +256,10 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
       lessonTarget: 1,
       lockTime: toTimeString(lockDate),
       examDate: null,
-      goalSetDate: existingGoalConfig?.goalSetDate ?? today,
+      // Preserve the original goalSetDate so the grace period only applies on
+      // the day the goal was first configured, not on every subsequent edit.
+      // If this is a brand new goal, stamp today as the start date.
+      goalSetDate: existingGoalConfig ? existingGoalConfig.goalSetDate ?? today : today,
     };
     setGoalConfig(cfg);
     setBlockDurationHoursStore(blockDurationHours);
@@ -264,18 +269,31 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
     } catch (e) {
       if (__DEV__) console.error('[Notifications] Failed to schedule reminders:', e);
     }
+    const savedAt = Date.now();
+    setGoalSavedAt(savedAt);
     if (appsSelected) {
       setBlockingEnabled(true);
       const [lh, lm] = toTimeString(lockDate).split(':').map(Number);
+      const lockTimeTodayMs = new Date().setHours(lh ?? 8, lm ?? 0, 0, 0);
+      const pastLockTime = savedAt > lockTimeTodayMs;
       startMonitoring(lh ?? 8, lm ?? 0)
-        .then(() => clearShields()) // don't block on goal setup — wait for next lock time
+        .then(() => {
+          if (pastLockTime) {
+            // Lock time already passed — iOS fires intervalDidStart immediately,
+            // so call unblockApps() to mark today as done and stop the native
+            // extension from reapplying shields tonight.
+            unblockApps().catch(() => {});
+          } else {
+            clearShields().catch(() => {});
+          }
+        })
         .catch(() => {});
     } else {
       setBlockingEnabled(false);
       stopMonitoring().catch(() => {});
     }
     onComplete();
-  }, [frequency, customDays, blockDurationHours, lockDate, existingGoalConfig, setGoalConfig, onComplete, appsSelected, setBlockingEnabled]);
+  }, [frequency, customDays, blockDurationHours, lockDate, existingGoalConfig, setGoalConfig, onComplete, appsSelected, setBlockingEnabled, setGoalSavedAt]);
 
   // ── Step dots ──────────────────────────────────────────────────────────────
   const StepDots = () => (

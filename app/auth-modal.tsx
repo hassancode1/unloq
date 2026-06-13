@@ -165,7 +165,7 @@ export default function AuthModal({ visible, onDismiss, onAuthSuccess }: Props) 
               {isSignUp ? 'Create an account' : 'Sign in to upload'}
             </Text>
             <Text style={[styles.subtitle, { fontSize: fs(13), fontFamily: F.regular, color: C.sub }]}>
-              Your courses are saved to your account and synced across devices.
+              Your courses are saved to the cloud and backed up to your account.
             </Text>
 
             {/* Apple button — only shown on iOS 13+ where Sign in with Apple is available */}

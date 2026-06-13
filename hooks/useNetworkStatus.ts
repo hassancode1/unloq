@@ -10,14 +10,16 @@ export function useNetworkStatus() {
   }, []);
 
   useEffect(() => {
+    let mounted = true;
     NetInfo.fetch().then((s: NetInfoState) => {
+      if (!mounted) return;
       setIsConnected(s.isConnected ?? true);
       setNetworkLoading(false);
     });
     const unsub = NetInfo.addEventListener((s: NetInfoState) => {
       setIsConnected(s.isConnected ?? true);
     });
-    return () => unsub();
+    return () => { mounted = false; unsub(); };
   }, []);
 
   return { isConnected, networkLoading, recheck };

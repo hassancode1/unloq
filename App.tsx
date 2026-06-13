@@ -35,6 +35,7 @@ import OnboardingScreen from "./app/onboarding";
 import GoalSetupScreen from "./app/goal-setup";
 import HomeScreen from "./app/home";
 import LockedScreen from "./app/locked";
+import SessionTimerBanner from "./components/SessionTimerBanner";
 
 const convex = new ConvexReactClient(process.env.EXPO_PUBLIC_CONVEX_URL!);
 
@@ -42,7 +43,9 @@ const convex = new ConvexReactClient(process.env.EXPO_PUBLIC_CONVEX_URL!);
 
 function computeShouldLock(
   goalConfig: GoalConfig | null,
-  dailyProgress: { date: string; count: number },
+  dailyProgress: { date: string; count: number; sessionStartMs: number | null },
+  blockDurationHours: number,
+  sessionCompletedDate: string | null,
   courses: any[] | undefined,
 ): boolean {
   if (!goalConfig) return false;
@@ -84,23 +87,42 @@ function computeShouldLock(
   // Grace period: don't lock on the day the goal was first set
   if (goalConfig.goalSetDate === todayDate) return false;
 
-  // Daily goal already met → don't lock
-  const todayDone = dailyProgress.date === todayDate ? dailyProgress.count : 0;
-  return todayDone < goalConfig.lessonTarget;
+  // Session already marked complete today (set when duration goal is met)
+  if (sessionCompletedDate === todayDate) return false;
+
+  // Duration goal already met today — check elapsed wall-clock time
+  if (dailyProgress.date === todayDate && dailyProgress.sessionStartMs !== null) {
+    const elapsed = Date.now() - dailyProgress.sessionStartMs;
+    if (elapsed >= blockDurationHours * 3_600_000) return false;
+  }
+
+  return true;
 }
 
 function LockCheck() {
-  const { flow, setFlow, goalConfig, dailyProgress, blockingEnabled } = useAppStore();
+  const {
+    flow, setFlow, goalConfig, dailyProgress, blockingEnabled,
+    blockDurationHours, startBlockSession, sessionCompletedDate,
+  } = useAppStore();
   const courses = useQuery(api.courses.listMineWithProgress);
 
   // Stable ref so the AppState handler always sees the latest values
-  const ref = useRef({ flow, setFlow, goalConfig, dailyProgress, courses, blockingEnabled });
+  const ref = useRef({
+    flow, setFlow, goalConfig, dailyProgress, courses, blockingEnabled,
+    blockDurationHours, startBlockSession, sessionCompletedDate,
+  });
   useEffect(() => {
-    ref.current = { flow, setFlow, goalConfig, dailyProgress, courses, blockingEnabled };
+    ref.current = {
+      flow, setFlow, goalConfig, dailyProgress, courses, blockingEnabled,
+      blockDurationHours, startBlockSession, sessionCompletedDate,
+    };
   });
 
   const check = useCallback(() => {
-    const { flow, setFlow, goalConfig, dailyProgress, courses, blockingEnabled } = ref.current;
+    const {
+      flow, setFlow, goalConfig, dailyProgress, courses, blockingEnabled,
+      blockDurationHours, startBlockSession, sessionCompletedDate,
+    } = ref.current;
     if (flow !== 'home' && flow !== 'locked') return;
     if (!blockingEnabled) {
       if (flow === 'locked') setFlow('home');
@@ -108,19 +130,25 @@ function LockCheck() {
       return;
     }
     if (courses === undefined) return; // still loading
-    const shouldLock = computeShouldLock(goalConfig, dailyProgress, courses);
+    const shouldLock = computeShouldLock(
+      goalConfig, dailyProgress, blockDurationHours, sessionCompletedDate, courses,
+    );
     setFlow(shouldLock ? 'locked' : 'home');
     if (shouldLock) {
-      blockApps().catch(() => {});
+      startBlockSession(); // stamp session start time so duration tracking begins
+      blockApps().catch((e) => {
+        Toast.show({ type: 'error', text1: 'Blocking unavailable', text2: 'Could not lock apps. Check Screen Time permissions in Settings.' });
+      });
     } else {
-      // Only stamp today's completion date when lessons are genuinely done — doing so
-      // prematurely (e.g. before lock time) would cause the background UnloqMonitor
-      // extension to skip blocking when the lock time eventually arrives.
+      // Only stamp today's completion date when duration goal is genuinely done —
+      // doing so prematurely would cause the background UnloqMonitor extension to
+      // skip blocking when the lock time eventually arrives.
       const todayDate = new Date().toLocaleDateString('en-CA');
-      const todayDone = dailyProgress.date === todayDate ? dailyProgress.count : 0;
-      const lessonsDone = goalConfig != null && todayDone >= goalConfig.lessonTarget;
-      if (lessonsDone) unblockApps().catch(() => {});
-      else clearShields().catch(() => {});
+      if (sessionCompletedDate === todayDate) {
+        unblockApps().catch(() => {});
+      } else {
+        clearShields().catch(() => {});
+      }
     }
   }, []);
 
@@ -240,6 +268,7 @@ export default function App() {
           )}
           {flow === "home" && <HomeScreen />}
           {flow === "locked" && <LockedScreen />}
+          <SessionTimerBanner />
         </SafeAreaProvider>
         <Toast />
       </AppGate>

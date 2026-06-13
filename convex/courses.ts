@@ -1,8 +1,10 @@
 import { mutation, query, internalMutation } from "./_generated/server";
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { requireAdmin } from "./lib/requireAdmin";
+
+const FREE_COURSE_LIMIT = 1;
 
 // ── Admin queries/mutations ───────────────────────────────────────────────────
 
@@ -164,23 +166,12 @@ export const listMineWithProgress = query({
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .order("desc")
       .collect();
-    return Promise.all(
-      userCourses.map(async (course) => {
-        // Use the denormalized counter when available (set by completeLesson).
-        // Fall back to counting lesson docs for courses created before this field existed.
-        let completedCount: number;
-        if (course.completedLessons !== undefined) {
-          completedCount = course.completedLessons;
-        } else {
-          const lessons = await ctx.db
-            .query("lessons")
-            .withIndex("by_course", (q) => q.eq("courseId", course._id))
-            .collect();
-          completedCount = lessons.filter((l) => l.completed).length;
-        }
-        return { ...course, completedCount, lessonCount: course.totalLessons };
-      }),
-    );
+    // Use denormalized counters — no per-course lesson queries (eliminates N+1)
+    return userCourses.map((course) => ({
+      ...course,
+      completedCount: course.completedLessons ?? 0,
+      lessonCount: course.totalLessons ?? 0,
+    }));
   },
 });
 
@@ -200,16 +191,12 @@ export const listWithProgress = query({
       .collect();
     const seen = new Set(userCourses.map((c) => c._id));
     const allCourses = [...userCourses, ...adminCourses.filter((c) => !seen.has(c._id))];
-    return Promise.all(
-      allCourses.map(async (course) => {
-        const lessons = await ctx.db
-          .query("lessons")
-          .withIndex("by_course", (q) => q.eq("courseId", course._id))
-          .collect();
-        const completedCount = lessons.filter((l) => l.completed).length;
-        return { ...course, completedCount, lessonCount: lessons.length };
-      }),
-    );
+    // Use denormalized counters — no per-course lesson queries (eliminates N+1)
+    return allCourses.map((course) => ({
+      ...course,
+      completedCount: course.completedLessons ?? 0,
+      lessonCount: course.totalLessons ?? 0,
+    }));
   },
 });
 
@@ -256,12 +243,41 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Must be signed in to create a course");
-    const stats = await ctx.db.query("userStats").withIndex("by_user", (q) => q.eq("userId", userId)).first();
-    if (stats) {
-      await ctx.db.patch(stats._id, { totalNotesCreated: stats.totalNotesCreated + 1 });
+
+    // Server-side free tier enforcement. Premium bypass requires a RevenueCat
+    // webhook to set user.isPremium — until then the limit applies to all users.
+    // Client-side isPremium check in guardNoteLimit() still gates the UI for
+    // legitimate premium users before this mutation is reached.
+    const existingCourses = await ctx.db
+      .query("courses")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    if (existingCourses.length >= FREE_COURSE_LIMIT) {
+      throw new ConvexError("FREE_LIMIT_REACHED");
+    }
+
+    // Rate limit: prevent spamming course generation within 30 seconds
+    const recentCourse = await ctx.db
+      .query("courses")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .order("desc")
+      .first();
+    if (recentCourse && Date.now() - recentCourse.createdAt < 30_000) {
+      throw new ConvexError("RATE_LIMIT");
+    }
+
+    // Upsert stats: patch if row exists, otherwise insert.
+    // Using collect() + filter avoids duplicate inserts under concurrent calls.
+    const allStats = await ctx.db
+      .query("userStats")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    if (allStats.length > 0) {
+      await ctx.db.patch(allStats[0]._id, { totalNotesCreated: allStats[0].totalNotesCreated + 1 });
     } else {
       await ctx.db.insert("userStats", { userId, totalNotesCreated: 1 });
     }
+
     return ctx.db.insert("courses", {
       ...args,
       userId,

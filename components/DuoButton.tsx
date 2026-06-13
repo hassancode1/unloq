@@ -25,7 +25,7 @@ function makeStyles(C: AppColors) {
       marginBottom: 4,
     },
     shadowPrimary: {
-      backgroundColor: '#1E3A8A',
+      backgroundColor: '#4F46E5',
     },
     shadowOutline: {
       backgroundColor: C.borderStrong,

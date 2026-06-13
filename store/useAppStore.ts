@@ -38,6 +38,10 @@ interface AppState {
   hoursLost: string | null;
   blockDurationHours: number;
   blockingEnabled: boolean;
+  goalSavedAt: number | null;
+  // YYYY-MM-DD on which the user completed their session — prevents the
+  // completion modal from re-firing when HomeScreen remounts on the same day.
+  sessionCompletedDate: string | null;
 
   setFlow: (flow: AppFlow) => void;
   setRevenueCatReady: (ready: boolean) => void;
@@ -54,6 +58,8 @@ interface AppState {
   setHoursLost: (h: string) => void;
   setBlockDurationHours: (hours: number) => void;
   setBlockingEnabled: (enabled: boolean) => void;
+  setGoalSavedAt: (ts: number) => void;
+  setSessionCompleted: (date: string | null) => void;
 }
 
 function todayStr() {
@@ -77,6 +83,8 @@ export const useAppStore = create<AppState>()(
       hoursLost: null,
       blockDurationHours: 0.5,
       blockingEnabled: false,
+      goalSavedAt: null,
+      sessionCompletedDate: null,
 
       setFlow: (flow) => set({ flow }),
       setRevenueCatReady: (ready) => set({ revenueCatReady: ready }),
@@ -123,6 +131,8 @@ export const useAppStore = create<AppState>()(
       setHoursLost: (h) => set({ hoursLost: h }),
       setBlockDurationHours: (hours) => set({ blockDurationHours: hours }),
       setBlockingEnabled: (enabled) => set({ blockingEnabled: enabled }),
+      setGoalSavedAt: (ts) => set({ goalSavedAt: ts }),
+      setSessionCompleted: (date) => set({ sessionCompletedDate: date }),
       toggleDarkMode: () => set((s) => ({ darkMode: !s.darkMode })),
       increaseFontScale: () =>
         set((s) => ({
@@ -150,12 +160,14 @@ export const useAppStore = create<AppState>()(
         activeLessonIndex: s.activeLessonIndex,
         darkMode: s.darkMode,
         fontScale: s.fontScale,
-        revenueCatReady: s.revenueCatReady,
+        // revenueCatReady intentionally NOT persisted — must be re-verified on every cold start
         onboardingRole: s.onboardingRole,
         semesterGoal: s.semesterGoal,
         hoursLost: s.hoursLost,
         blockDurationHours: s.blockDurationHours,
         blockingEnabled: s.blockingEnabled,
+        goalSavedAt: s.goalSavedAt,
+        sessionCompletedDate: s.sessionCompletedDate,
       }),
     },
   ),
