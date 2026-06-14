@@ -160,6 +160,13 @@ function LockCheck() {
     return () => sub.remove();
   }, [check]);
 
+  // Periodic check while app is in foreground — catches lockTime crossing without an AppState event
+  useEffect(() => {
+    if (flow !== 'home') return;
+    const id = setInterval(check, 30_000);
+    return () => clearInterval(id);
+  }, [flow, check]);
+
   // Initial check once courses have loaded from Convex (run only once — not on every live-query update)
   const didInitialCheck = useRef(false);
 
@@ -196,7 +203,12 @@ function RevenueCatSync() {
   useEffect(() => {
     if (isAuthenticated && user?._id) {
       Purchases.logIn(user._id)
-        .then(() => setRevenueCatReady(true))
+        .then(() => {
+          setRevenueCatReady(true);
+          // Silently sync the App Store receipt so prior purchases are recognised
+          // after a reinstall without requiring the user to manually tap "Restore".
+          Purchases.restorePurchases().catch(() => {});
+        })
         .catch(() => {});
     } else if (!isAuthenticated) {
       setRevenueCatReady(false);

@@ -17,6 +17,7 @@ import {
 
 import { useQuery } from 'convex/react';
 import { useAuthActions } from "@convex-dev/auth/react";
+import Purchases from 'react-native-purchases';
 import { api } from '../convex/_generated/api';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -84,6 +85,36 @@ export default function SettingsScreen({ onNavigateToCourses: _onNavigateToCours
     Share.share({
       message: 'Check out Unloq — block distracting apps until you finish your daily study session! https://loqlearn.com',
     });
+  };
+
+  const handleRestorePurchases = async () => {
+    Haptics.selectionAsync();
+    try {
+      const info = await Purchases.restorePurchases();
+      const isActive =
+        !!info.entitlements.active['premium'] || info.activeSubscriptions.length > 0;
+      if (isActive) {
+        Alert.alert('Subscription Restored', 'Your premium subscription has been restored.');
+      } else {
+        Alert.alert(
+          'No Active Subscription',
+          'No active subscription was found for this Apple ID. If you believe this is an error, contact us and we\'ll sort it out.',
+          [
+            { text: 'Contact Support', onPress: () => Linking.openURL('mailto:iamthewebdev@gmail.com?subject=Subscription%20Restore%20Issue') },
+            { text: 'OK', style: 'cancel' },
+          ],
+        );
+      }
+    } catch {
+      Alert.alert(
+        'Restore Failed',
+        'Could not reach the App Store. Check your connection and try again.',
+        [
+          { text: 'Contact Support', onPress: () => Linking.openURL('mailto:iamthewebdev@gmail.com?subject=Subscription%20Restore%20Issue') },
+          { text: 'OK', style: 'cancel' },
+        ],
+      );
+    }
   };
 
   const handleSignOut = () => {
@@ -373,6 +404,28 @@ export default function SettingsScreen({ onNavigateToCourses: _onNavigateToCours
           </View>
         </Animated.View>
 
+        {/* ── Subscription ── */}
+        <Animated.View entering={FadeInDown.delay(180).duration(280)}>
+          <Text style={[styles.cap, { fontSize: fs(10), fontFamily: F.extraBold, color: C.muted }]}>
+            Subscription
+          </Text>
+          <View style={styles.card}>
+            <TouchableOpacity
+              style={styles.actionRow}
+              activeOpacity={0.7}
+              onPress={handleRestorePurchases}
+            >
+              <View style={[styles.iconBox, { backgroundColor: `${C.primary}12` }]}>
+                <Ionicons name="refresh-outline" size={15} color={C.primary} />
+              </View>
+              <Text style={[styles.actionTxt, { fontSize: fs(14), fontFamily: F.medium, color: C.primary }]}>
+                Restore Purchases
+              </Text>
+              <Ionicons name="chevron-forward" size={14} color={C.muted} />
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+
         {/* ── App Info ── */}
         <Animated.View entering={FadeInDown.delay(210).duration(280)}>
           <Text
@@ -523,7 +576,7 @@ export default function SettingsScreen({ onNavigateToCourses: _onNavigateToCours
               activeOpacity={0.7}
               onPress={() =>
                 Linking.openURL(
-                  "mailto:support@loqlearn.com?subject=Delete%20My%20Account",
+                  "mailto:iamthewebdev@gmail.com?subject=Delete%20My%20Account",
                 )
               }
             >

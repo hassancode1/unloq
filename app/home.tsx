@@ -1196,6 +1196,7 @@ export default function HomeScreen() {
   const [pdfView, setPdfView] = useState<{ url: string; title: string } | null>(null);
 
   const showUpgradeWall = async () => {
+    if (!isAuthenticated) { setShowAuthModal(true); return; }
     try {
       const result = await RevenueCatUI.presentPaywall();
       if (result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED) {
