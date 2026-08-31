@@ -493,7 +493,9 @@ function HomeTabContent({ onUpload, onCourseSelect, onSeeAll, onGoalSetup, onOpe
     const goalSecs = blockDurationHours * 3600;
 
     const tick = () => {
-      const start = dailyProgress.sessionStartMs;
+      const todayDate = new Date().toLocaleDateString('en-CA');
+      // New day — treat as if no session has started yet so startBlockSession resets properly
+      const start = dailyProgress.date === todayDate ? dailyProgress.sessionStartMs : null;
       if (!start) {
         const now = new Date();
         const nowMins = now.getHours() * 60 + now.getMinutes();
@@ -514,7 +516,6 @@ function HomeTabContent({ onUpload, onCourseSelect, onSeeAll, onGoalSetup, onOpe
       setBlockPhase('active');
       const elapsed = Math.floor((Date.now() - start) / 1000);
       setElapsedSeconds(elapsed);
-      const todayDate = new Date().toLocaleDateString('en-CA');
       if (elapsed >= goalSecs && sessionCompletedDate !== todayDate) {
         setSessionCompleted(todayDate);
         setShowComplete(true);

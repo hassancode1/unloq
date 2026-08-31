@@ -165,6 +165,16 @@ class FamilyControlsModule: NSObject {
     resolve(true)
   }
 
+  @objc func clearShields(
+    _ resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    if #available(iOS 16, *) {
+      store.clearAllSettings()
+    }
+    resolve(true)
+  }
+
   @objc func unblockApps(
     _ resolve: @escaping RCTPromiseResolveBlock,
     rejecter reject: @escaping RCTPromiseRejectBlock
@@ -298,6 +308,11 @@ RCT_EXTERN_METHOD(
 
 RCT_EXTERN_METHOD(
   blockApps:(RCTPromiseResolveBlock)resolve
+  rejecter:(RCTPromiseRejectBlock)reject
+)
+
+RCT_EXTERN_METHOD(
+  clearShields:(RCTPromiseResolveBlock)resolve
   rejecter:(RCTPromiseRejectBlock)reject
 )
 
