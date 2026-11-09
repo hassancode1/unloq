@@ -78,7 +78,7 @@ export default function TodayTab({ onStartQuest, C, fs, F }: Props) {
   const status = today?.readOnly
     ? 'You read together today.'
     : today
-    ? `${glim.name} is glowing.`
+    ? `${glim.name} learned something today.`
     : sad
       ? `${glim.name} missed you.`
       : `${glim.name} is hungry to learn.`;

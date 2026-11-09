@@ -16,6 +16,7 @@ import type * as crons from "../crons.js";
 import type * as curatedPaths from "../curatedPaths.js";
 import type * as groups from "../groups.js";
 import type * as http from "../http.js";
+import type * as illustrations from "../illustrations.js";
 import type * as lib_demoFacts from "../lib/demoFacts.js";
 import type * as lib_gemini from "../lib/gemini.js";
 import type * as lib_requireAdmin from "../lib/requireAdmin.js";
@@ -24,6 +25,7 @@ import type * as lib_xp from "../lib/xp.js";
 import type * as paths from "../paths.js";
 import type * as pathsAi from "../pathsAi.js";
 import type * as progress from "../progress.js";
+import type * as studio from "../studio.js";
 import type * as usage from "../usage.js";
 import type * as users from "../users.js";
 
@@ -42,6 +44,7 @@ declare const fullApi: ApiFromModules<{
   curatedPaths: typeof curatedPaths;
   groups: typeof groups;
   http: typeof http;
+  illustrations: typeof illustrations;
   "lib/demoFacts": typeof lib_demoFacts;
   "lib/gemini": typeof lib_gemini;
   "lib/requireAdmin": typeof lib_requireAdmin;
@@ -50,6 +53,7 @@ declare const fullApi: ApiFromModules<{
   paths: typeof paths;
   pathsAi: typeof pathsAi;
   progress: typeof progress;
+  studio: typeof studio;
   usage: typeof usage;
   users: typeof users;
 }>;

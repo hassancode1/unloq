@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { setStudyProgress } from '../lib/familyControls';
-import { dayKey, stageForXp, type QuestEntry } from '../lib/quests';
+import { dayKey, stageForXp, type QuestEntry, xpAfterQuest } from '../lib/quests';
 import { REVIEW_AFTER_DAYS } from '../convex/lib/xp';
 
 export type AppFlow = 'loading' | 'onboarding' | 'goalsetup' | 'home' | 'locked';
@@ -242,7 +242,7 @@ export const useAppStore = create<AppState>()(
       completeQuest: (entry) => set((s) => {
         const key = dayKey(new Date(entry.completedAt));
         const extra = !!s.questLog[key]; // the day's first quest is the daily one
-        const xp = s.glim.xp + entry.xp;
+        const xp = xpAfterQuest(s.glim.xp, entry.xp);
         const active = entry.pathId ? s.activePaths[entry.pathId] : undefined;
         return {
           ...(extra

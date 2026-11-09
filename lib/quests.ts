@@ -209,10 +209,19 @@ export function lastWeek(log: Record<string, QuestEntry>, now = new Date()) {
 /** Total XP needed to reach each stage. */
 // Onboarding starts Glim at 25 (Glow). Realistic, not a quick hook — at
 // ~15–20 XP a good quest, one a day:
-//   Drop    150  → ~1 week   (the end of the 7-day commitment from onboarding)
+//   Drop    200  → ~10 days  (just past the 7-day commitment: a visible, earned first step)
 //   Bloom   700  → ~6 weeks
 //   Radiant 2500 → ~5 months (extra quests can roughly halve that, no more)
-export const STAGE_XP = [0, 25, 150, 700, 2500] as const;
+export const STAGE_XP = [0, 25, 200, 700, 2500] as const;
+
+/**
+ * XP after earning `gained`. The first thing Glim learns lifts a Spark to Glow
+ * (normally the onboarding demo does this; if that was skipped or failed, the
+ * first earned quest does) — so the bar then measures real progress to Drop.
+ */
+export function xpAfterQuest(before: number, gained: number) {
+  return gained > 0 && before < STAGE_XP[1] ? STAGE_XP[1] + gained : before + gained;
+}
 
 export function stageForXp(xp: number): GlimStage {
   let s = 0;

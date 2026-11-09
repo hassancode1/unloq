@@ -14,7 +14,7 @@ const pathSummary = (p: any) => ({
 
 const topicPublic = (t: any) => ({
   _id: t._id, pathId: t.pathId, order: t.order, title: t.title, concept: t.concept ?? null, summary: t.summary,
-  reading: t.reading ?? null, hook: t.hook ?? null, points: t.points ?? [], keyIdeas: t.keyIdeas ?? [], keywords: t.keywords ?? [],
+  reading: t.reading ?? null, hook: t.hook ?? null, points: t.points ?? [], figure: t.figure ?? null, keyIdeas: t.keyIdeas ?? [], keywords: t.keywords ?? [],
   sources: t.sources ?? [], status: t.status,
 });
 
@@ -87,7 +87,8 @@ export const getTopic = query({
     const path = await ctx.db.get(t.pathId);
     if (!path) return null;
     if (!path.curated && path.ownerId !== (await getAuthUserId(ctx))) return null;
-    return topicPublic(t);
+    const illustrationUrl = t.illustration?.status === "approved" ? await ctx.storage.getUrl(t.illustration.storageId) : null;
+    return { ...topicPublic(t), illustrationUrl };
   },
 });
 
@@ -133,6 +134,7 @@ export const _saveTopic = internalMutation({
     reading: v.string(),
     hook: v.optional(v.string()),
     points: v.array(v.string()),
+    figure: v.optional(v.any()),
     keyIdeas: v.array(v.string()),
     keywords: v.array(v.array(v.string())),
     sources: v.array(v.string()),
@@ -148,7 +150,7 @@ export const _resetReading = internalMutation({
   handler: async (ctx, { topicId, title, concept }) => {
     await ctx.db.patch(topicId, {
       ...(title ? { title } : {}), ...(concept ? { concept } : {}),
-      reading: undefined, hook: undefined, points: undefined,
+      reading: undefined, hook: undefined, points: undefined, figure: undefined,
       keyIdeas: undefined, keywords: undefined, sources: undefined, status: "pending",
     });
   },
@@ -257,7 +259,7 @@ export const seedCurated = internalMutation({
         await ctx.db.patch(t._id, {
           title: want.title, concept: want.concept, summary: want.summary,
           ...(contentChanged && t.status !== "pending"
-            ? { reading: undefined, hook: undefined, points: undefined, keyIdeas: undefined, keywords: undefined, sources: undefined, status: "pending" as const }
+            ? { reading: undefined, hook: undefined, points: undefined, figure: undefined, keyIdeas: undefined, keywords: undefined, sources: undefined, status: "pending" as const }
             : {}),
         });
         if (contentChanged) renamed++;

@@ -12,7 +12,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.loqlearn.app",
-      "buildNumber": "62",
+      "buildNumber": "63",
       "minimumOsVersion": "16.0",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
@@ -36,10 +36,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#06050A",
-          "dark": {
-            "backgroundColor": "#06050A"
-          }
+          "backgroundColor": "#06050A"
         }
       ],
       "expo-font",

@@ -4,6 +4,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import CoachTip from '../components/guide/CoachTip';
 import Spotlight from '../components/guide/Spotlight';
+import LessonIllustration from '../components/paths/LessonIllustration';
 import { useAction, useConvexAuth, useQuery } from 'convex/react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -179,7 +180,9 @@ function QuestFlow({ onClose }: { onClose: () => void }) {
 
   const topic = useQuery(api.paths.getTopic, pick?.topicId ? { topicId: pick.topicId as Id<'pathTopics'> } : 'skip');
   const reading = pick?.kind === 'local' ? pick.body ?? '' : topic?.status === 'ready' ? topic.reading ?? '' : '';
-  const readingFailed = readError || topic?.status === 'error';
+  // Only our own attempt failing counts: a topic marked "error" from an earlier
+  // failure is retried automatically when the quest opens (prepare below).
+  const readingFailed = readError;
   const concept: string | null = topic?.concept ?? pick?.concept ?? null;
 
   const spinAgain = () => {
@@ -206,8 +209,8 @@ function QuestFlow({ onClose }: { onClose: () => void }) {
     setPhase('grading');
     let g: Grade | null = null;
     if (pick.topicId) {
-      // Signed in → account; otherwise RevenueCat's anonymous id proves Pro.
-      const rcUserId = isAuthenticated ? undefined : await Purchases.getAppUserID().catch(() => undefined);
+      // The RevenueCat id proves Pro (the subscription may not be on the account).
+      const rcUserId = await Purchases.getAppUserID().catch(() => undefined);
       try {
         const res = await gradeOnServer({
           topicId: pick.topicId as Id<'pathTopics'>,
@@ -340,6 +343,8 @@ function QuestFlow({ onClose }: { onClose: () => void }) {
               {!!concept && <Text style={[s.concept, { color: accent }]}>{concept}</Text>}
               <Text style={[s.title, { textAlign: 'left' }]}>{pick.title}</Text>
             </View>
+
+            <LessonIllustration url={topic?.illustrationUrl} />
 
             {reading ? (
               <>
@@ -594,3 +599,4 @@ const s = StyleSheet.create({
   track: { height: 8, borderRadius: 4, backgroundColor: O.card, overflow: 'hidden' },
   fill: { height: 8, borderRadius: 4 },
 });
+

@@ -498,7 +498,7 @@ export default function OnboardingScreen({ onComplete }: Props) {
           <>
             <Body>
               <Caption text={`Commit to 7 days with ${petName}?`} size={26} />
-              <Sub delay={400} style={{ marginTop: 10 }}>A week of explaining and {petName} reaches its next form.</Sub>
+              <Sub delay={400} style={{ marginTop: 10 }}>About ten days of explaining and {petName} reaches its next form.</Sub>
             </Body>
             <Footer>
               <HoldButton

@@ -18,10 +18,14 @@ export async function hasPro(userId: string): Promise<boolean> {
       return true;
     }
     const data: any = await res.json();
-    const ent = data?.subscriber?.entitlements?.[ENTITLEMENT];
-    if (!ent) return false;
-    // null expiry = lifetime; trials count (they have a future expiry).
-    return !ent.expires_date || new Date(ent.expires_date).getTime() > Date.now();
+    const now = Date.now();
+    const live = (x: any) => !!x && (!x.expires_date || new Date(x.expires_date).getTime() > now);
+    // Same rule as the app (hooks/useEntitlement.ts): the "premium" entitlement,
+    // or any active subscription — so a product that isn't attached to the
+    // entitlement in RevenueCat still counts. Trials have a future expiry.
+    if (live(data?.subscriber?.entitlements?.[ENTITLEMENT])) return true;
+    const subs = Object.values(data?.subscriber?.subscriptions ?? {}) as any[];
+    return subs.some((sub) => live(sub) && !sub.refunded_at);
   } catch (e) {
     console.warn("RevenueCat lookup error", e instanceof Error ? e.message : e);
     return true;

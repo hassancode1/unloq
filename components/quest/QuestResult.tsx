@@ -15,7 +15,7 @@ import Animated, {
   Easing, FadeIn, FadeInDown, useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming,
 } from 'react-native-reanimated';
 import { XP_GREAT_SCORE, XP_MIN_SCORE } from '../../convex/lib/xp';
-import { stageForXp, stageProgress } from '../../lib/quests';
+import { stageForXp, stageProgress, xpAfterQuest } from '../../lib/quests';
 import { maybeAskForReview } from '../../lib/review';
 import { playReveal } from '../../lib/sfx';
 import Glim, { GLIM_STAGES, GlimHandle, GlimStage } from '../mascot/Glim';
@@ -49,7 +49,7 @@ interface Props {
 
 export default function QuestResult({ initialTab = 'result', grade, xpBefore, glimName, palette, accent, extra, reviewDays = 3, extraQuest = false, onDone }: Props) {
   const glim = useRef<GlimHandle>(null);
-  const xpAfter = xpBefore + grade.xp;
+  const xpAfter = xpAfterQuest(xpBefore, grade.xp);
   const stageBefore = stageForXp(xpBefore);
   const stageAfter = stageForXp(xpAfter);
   const evolves = stageAfter > stageBefore;

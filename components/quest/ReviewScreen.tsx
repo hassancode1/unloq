@@ -56,7 +56,7 @@ function ReviewFlow({ day, entry, onClose }: { day: string; entry: QuestEntry; o
     setPhase('grading');
     let g: { score: number; feedback: string; missed?: string[] } | null = null;
     try {
-      const rcUserId = isAuthenticated ? undefined : await Purchases.getAppUserID().catch(() => undefined);
+      const rcUserId = await Purchases.getAppUserID().catch(() => undefined);
       const res = await grade({
         topicId: entry.topicId as Id<'pathTopics'>,
         rcUserId,

@@ -19,6 +19,7 @@ import { useAppStore } from '../../store/useAppStore';
 import { useEntitlement } from '../../hooks/useEntitlement';
 import { usePathStyles } from '../../lib/pathColors';
 import { PaywallModal } from '../paywall/PaywallHost';
+import Purchases from 'react-native-purchases';
 import { SigilTile } from './PathSigil';
 import PathDetailSheet from './PathDetailSheet';
 
@@ -179,7 +180,8 @@ function PathsSheet({ visible, onClose, C, F, fs, onRequireAuth }: Props & { vis
     setCreating(true);
     setError(null);
     try {
-      const { pathId } = await createPath({ prompt: text.trim() });
+      const rcUserId = await Purchases.getAppUserID().catch(() => undefined);
+      const { pathId } = await createPath({ prompt: text.trim(), rcUserId });
       addPath(pathId);
       setPrompt('');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});

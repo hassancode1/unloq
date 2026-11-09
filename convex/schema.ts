@@ -101,6 +101,15 @@ export default defineSchema({
     reading: v.optional(v.string()), // paragraphs; key phrases wrapped in **bold**
     hook: v.optional(v.string()),    // headline that answers/teases the title (≤ 14 words)
     points: v.optional(v.array(v.string())), // "You'll explain": 3 short lines shown before reading
+    figure: v.optional(v.any()),     // legacy: explainer figure data (no longer shown)
+    // One explainer illustration (curated paths only). Hidden until approved
+    // in the review gallery (components/profile/IllustrationReview.tsx).
+    illustration: v.optional(v.object({
+      storageId: v.id("_storage"),
+      brief: v.string(),
+      status: v.union(v.literal("review"), v.literal("approved"), v.literal("rejected")),
+      createdAt: v.number(),
+    })),
     keyIdeas: v.optional(v.array(v.string())),
     keywords: v.optional(v.array(v.array(v.string()))), // offline grader variants per key idea
     sources: v.optional(v.array(v.string())),
