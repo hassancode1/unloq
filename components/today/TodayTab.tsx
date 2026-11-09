@@ -24,6 +24,7 @@ import { F as OF, O, alpha } from '../onboarding/ui';
 import PathSigil from '../paths/PathSigil';
 import { Coin, ScoreRing, useEntryLook } from '../marks';
 import Spotlight from '../guide/Spotlight';
+import ReminderCard, { useReminderCardVisible } from './ReminderCard';
 import { GUIDE_PREVIEW } from '../../lib/features';
 import Svg, { Circle } from 'react-native-svg';
 
@@ -40,6 +41,7 @@ export default function TodayTab({ onStartQuest, C, fs, F }: Props) {
   const glim = useAppStore((s) => s.glim);
   const guidePending = useAppStore((s) => s.guidePending);
   const questCardRef = useRef<View>(null);
+  const showReminder = useReminderCardVisible();
   const questLog = useAppStore((s) => s.questLog);
   const items = useTodayItems();
   const styleFor = usePathStyles();
@@ -110,7 +112,7 @@ export default function TodayTab({ onStartQuest, C, fs, F }: Props) {
         </Animated.View>
 
         {/* Glim, big and centred in the space under the week */}
-        <Pressable onPress={() => glimRef.current?.poke()} style={s.stage}>
+        <Pressable onPress={() => glimRef.current?.poke()} style={[s.stage, showReminder && { minHeight: 170, paddingBottom: 36 }]}>
           <Glim ref={glimRef} size={250} stage={glim.stage} mood={mood} droop={droop} palette={palette} />
         </Pressable>
 
@@ -232,6 +234,8 @@ export default function TodayTab({ onStartQuest, C, fs, F }: Props) {
             </>
           )}
         </Animated.View>
+
+        {showReminder && <ReminderCard C={C} F={F} fs={fs} />}
 
         {review && (
           <Animated.View entering={FadeInDown.delay(180).duration(360)} style={{ marginTop: 10 }}>

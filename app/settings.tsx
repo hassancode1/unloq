@@ -37,7 +37,7 @@ import { dayKey, stageProgress } from '../lib/quests';
 import { allLearned, summarize } from '../lib/learningStats';
 import StatsScreen from '../components/profile/StatsScreen';
 import Sheet from '../components/profile/Sheet';
-import { scheduleStudyReminders, showNotificationPermissionAlert } from '../lib/notifications';
+import { requestNotificationPermission, showNotificationPermissionAlert, turnOnReminders, useNotificationStatus } from '../lib/notifications';
 
 const APP_STORE_ID = '6761177417';
 const SUPPORT = 'mailto:iamthewebdev@gmail.com';
@@ -71,6 +71,7 @@ export default function SettingsScreen(_props: { onNavigateToCourses?: () => voi
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(glim.name);
   const [showTime, setShowTime] = useState(false);
+  const { status: notifStatus, refresh: refreshNotif } = useNotificationStatus();
 
   const palette = useMemo(() => paletteForInterests(glim.interests), [glim.interests]);
   const accent = palette[1];
@@ -100,12 +101,9 @@ export default function SettingsScreen(_props: { onNavigateToCourses?: () => voi
   };
 
   const setReminder = async (hhmm: string) => {
-    updateGlim({ reminderTime: hhmm });
+    updateGlim({ reminderTime: hhmm }); // useReminderSync (home) rebuilds the plan
     try {
-      const ok = await scheduleStudyReminders({
-        frequency: 'daily', customDays: [], lessonTarget: 1, lockTime: hhmm, examDate: null,
-      });
-      if (!ok) showNotificationPermissionAlert();
+      if (!(await requestNotificationPermission())) showNotificationPermissionAlert();
     } catch {}
   };
 
@@ -257,8 +255,13 @@ export default function SettingsScreen(_props: { onNavigateToCourses?: () => voi
           </View>
 
           <View style={st.card}>
-            <Row C={C} F={F} fs={fs} icon="notifications-outline" label="Daily reminder" value={fmtTime(glim.reminderTime)}
-              onPress={() => { Haptics.selectionAsync(); setShowTime((v) => !v); }} chevron={showTime ? 'chevron-up' : 'chevron-down'} first />
+            {notifStatus === 'granted' || notifStatus === 'unknown' ? (
+              <Row C={C} F={F} fs={fs} icon="notifications-outline" label="Daily reminder" value={fmtTime(glim.reminderTime)}
+                onPress={() => { Haptics.selectionAsync(); setShowTime((v) => !v); }} chevron={showTime ? 'chevron-up' : 'chevron-down'} first />
+            ) : (
+              <Row C={C} F={F} fs={fs} icon="notifications-off-outline" label="Daily reminder" value="Off · Turn on"
+                onPress={async () => { Haptics.selectionAsync(); await turnOnReminders(); refreshNotif(); }} first />
+            )}
             {showTime && (
               <DateTimePicker
                 value={toDate(glim.reminderTime)}

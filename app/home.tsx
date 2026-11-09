@@ -36,6 +36,7 @@ import AuthModal, { type AuthReason } from './auth-modal';
 import BottomTabBar, { type HomeTab } from '../components/BottomTabBar';
 import CreateModal, { type CreateOptionKey } from '../components/CreateModal';
 import { GUIDE_PREVIEW, NOTES_ENABLED } from '../lib/features';
+import { offerRemindersOnce, useReminderSync } from '../lib/notifications';
 import { openPaywall } from '../lib/pro';
 import FeynmanScreen from './feynman';
 import QuestScreen from './quest';
@@ -640,6 +641,14 @@ export default function HomeScreen() {
     const t = setTimeout(() => { setAskToSaveAccount(false); askAuth('save'); }, 700);
     return () => clearTimeout(t);
   }, [askToSaveAccount, isAuthenticated, showQuest, showAuthModal, questCount, guidePending]);
+  useReminderSync();
+  const petName = useAppStore((s) => s.glim.name);
+  // After the first quest, once everything else has closed: one friendly "want reminders?"
+  useEffect(() => {
+    if (questCount === 0 || showQuest || showAuthModal || askToSaveAccount) return;
+    const t = setTimeout(() => offerRemindersOnce(petName), 2500);
+    return () => clearTimeout(t);
+  }, [questCount, showQuest, showAuthModal, askToSaveAccount]);
   const [detailCourse, setDetailCourse] = useState<Id<'courses'> | null>(null);
   const [activeCourse, setActiveCourse] = useState<Id<'courses'> | null>(null);
   const [playerMode, setPlayerMode] = useState<'flashcards' | 'quiz' | 'diagram' | undefined>(undefined);

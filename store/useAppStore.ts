@@ -98,6 +98,12 @@ interface AppState {
   /** Guided first quest after the first unlock (components/guide/CoachTip.tsx). */
   guidePending: boolean;
   setGuidePending: (v: boolean) => void;
+  /** When the "Reminders are off" card on Today was dismissed (it returns after 14 days). */
+  reminderCardDismissedAt: number | null;
+  dismissReminderCard: () => void;
+  /** We offered the one-time "want reminders?" after the first quest (for people who said Not now). */
+  reminderAsked: boolean;
+  setReminderAsked: (v: boolean) => void;
   /** When we last asked for an App Store rating (lib/review.ts). */
   reviewAskedAt: number | null;
   setReviewAskedAt: (t: number) => void;
@@ -170,6 +176,10 @@ export const useAppStore = create<AppState>()(
       todaySpin: null,
       guidePending: false,
       setGuidePending: (v) => set({ guidePending: v }),
+      reminderCardDismissedAt: null,
+      dismissReminderCard: () => set({ reminderCardDismissedAt: Date.now() }),
+      reminderAsked: false,
+      setReminderAsked: (v) => set({ reminderAsked: v }),
       reviewAskedAt: null,
       setReviewAskedAt: (t) => set({ reviewAskedAt: t }),
       setTodaySpin: (v) => set({ todaySpin: v }),
@@ -311,6 +321,8 @@ export const useAppStore = create<AppState>()(
         seededInterests: s.seededInterests,
         todaySpin: s.todaySpin,
         reviewAskedAt: s.reviewAskedAt,
+        reminderAsked: s.reminderAsked,
+        reminderCardDismissedAt: s.reminderCardDismissedAt,
         guidePending: s.guidePending,
       }),
     },
