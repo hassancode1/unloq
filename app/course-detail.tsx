@@ -38,20 +38,6 @@ type Props = {
   onOpenFeynman?: (title: string, feynmanTopics: any[]) => void;
 };
 
-function topicEmoji(title: string): string {
-  const t = title.toLowerCase();
-  if (t.includes('math') || t.includes('calculus')) return '📐';
-  if (t.includes('history')) return '🏛️';
-  if (t.includes('science') || t.includes('physics') || t.includes('chem')) return '⚗️';
-  if (t.includes('biology') || t.includes('bio')) return '🧬';
-  if (t.includes('english') || t.includes('writing')) return '✍️';
-  if (t.includes('code') || t.includes('program')) return '💻';
-  if (t.includes('law') || t.includes('legal') || t.includes('bar')) return '⚖️';
-  if (t.includes('finance') || t.includes('econ')) return '📈';
-  if (t.includes('islam') || t.includes('quran') || t.includes('muslim')) return '☪️';
-  return '📚';
-}
-
 // ── Skeleton ──────────────────────────────────────────────────────────────────
 
 function Skeleton({ C, onBack }: { C: AppColors; onBack: () => void }) {
@@ -80,26 +66,23 @@ function Skeleton({ C, onBack }: { C: AppColors; onBack: () => void }) {
 
 // ── Feature tile (Duo-style shadow + custom icon) ────────────────────────────
 
-function Tile({ icon, label, sublabel, bg, color, border, shadow, onPress, disabled, loading, C }: {
+function Tile({ icon, label, sublabel, color, onPress, disabled, loading, C }: {
   icon: string; label: string; sublabel?: string;
-  bg: string; color: string; border: string; shadow: string;
+  color: string; bg?: string; border?: string; shadow?: string;
   onPress?: () => void; disabled?: boolean; loading?: boolean; C: AppColors;
 }) {
   return (
     <View style={[T.wrap, { opacity: disabled ? 0.42 : 1 }]}>
-      <View style={[T.shadow, { backgroundColor: shadow, borderRadius: 16 }]} />
       <TouchableOpacity
-        style={[T.tile, { backgroundColor: bg, borderColor: border }]}
+        style={[T.tile, { backgroundColor: C.surface, borderColor: C.border }]}
         onPress={disabled ? undefined : onPress}
-        activeOpacity={disabled ? 1 : 0.82}
+        activeOpacity={disabled ? 1 : 0.7}
       >
-        <View style={[T.iconCircle, { backgroundColor: color + '28' }]}>
-          {loading
-            ? <Ionicons name="sync-outline" size={20} color={color} />
-            : <Ionicons name={icon as any} size={20} color={color} />}
+        <View style={[T.iconCircle, { backgroundColor: color + '1F' }]}>
+          <Ionicons name={(loading ? 'sync-outline' : icon) as any} size={19} color={color} />
         </View>
         <View style={T.textCol}>
-          <Text style={[T.label, { color }]} numberOfLines={1}>{label}</Text>
+          <Text style={[T.label, { color: C.text }]} numberOfLines={1}>{label}</Text>
           {sublabel ? <Text style={[T.sublabel, { color: C.muted }]} numberOfLines={1}>{sublabel}</Text> : null}
         </View>
       </TouchableOpacity>
@@ -108,13 +91,12 @@ function Tile({ icon, label, sublabel, bg, color, border, shadow, onPress, disab
 }
 
 const T = StyleSheet.create({
-  wrap:       { flex: 1, marginBottom: 5 },
-  shadow:     { position: 'absolute', bottom: -5, left: 1, right: -1, top: 0 },
-  tile:       { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 68, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 16, borderWidth: 2, transform: [{ translateY: -5 }] },
-  iconCircle: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  textCol:    { flex: 1 },
-  label:      { fontSize: 14, fontFamily: 'Nunito-Bold' },
-  sublabel:   { fontSize: 11, fontFamily: 'Nunito-Regular', marginTop: 2 },
+  wrap:       { flex: 1 },
+  tile:       { gap: 14, minHeight: 112, padding: 16, borderRadius: 20, borderWidth: 1 },
+  iconCircle: { width: 38, height: 38, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  textCol:    { gap: 2 },
+  label:      { fontSize: 15, fontFamily: 'Inter-SemiBold' },
+  sublabel:   { fontSize: 12, fontFamily: 'Inter-Regular' },
 });
 
 // ── Section header ────────────────────────────────────────────────────────────
@@ -122,7 +104,7 @@ const T = StyleSheet.create({
 function SectionHead({ label, C }: { label: string; C: AppColors }) {
   return <Text style={[SH.label, { color: C.text }]}>{label}</Text>;
 }
-const SH = StyleSheet.create({ label: { fontSize: 18, fontFamily: 'Nunito-Bold' } });
+const SH = StyleSheet.create({ label: { fontSize: 13, fontFamily: 'Inter-SemiBold', opacity: 0.6 } });
 
 // ── Folder modal ──────────────────────────────────────────────────────────────
 
@@ -204,8 +186,8 @@ function FolderModal({ visible, onClose, courseId, currentFolderId, C, F, fs }: 
 }
 
 const FM = StyleSheet.create({
-  backdrop:   { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
-  sheet:      { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingBottom: 40, paddingTop: 12, gap: 8 },
+  backdrop:   { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
+  sheet:      { borderTopLeftRadius: 28, borderTopRightRadius: 28, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', paddingHorizontal: 20, paddingBottom: 40, paddingTop: 12, gap: 8 },
   handle:     { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 8 },
   title:      { fontSize: 17, marginBottom: 4 },
   removeRow:  { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, paddingHorizontal: 4 },
@@ -223,7 +205,7 @@ export default function CourseDetailScreen({
   courseId, onBack, onOpenFlashcards, onOpenQuiz, onOpenDiagram, onOpenPdf, onOpenFeynman,
 }: Props) {
   const insets = useSafeAreaInsets();
-  const { C, fs, F, isDark } = useTheme();
+  const { C, fs, F } = useTheme();
 
   const course     = useQuery(api.courses.get, { courseId }) as any;
   const rawLessons = useQuery(api.courses.getLessons, { courseId });
@@ -241,6 +223,10 @@ export default function CourseDetailScreen({
   const isLoading    = course === undefined || rawLessons === undefined;
   const isGenerating = course?.status === 'generating';
 
+  const allCards   = lessons.reduce((n: number, l: any) => n + (l.flashcards?.length ?? 0), 0);
+  const allQuiz    = lessons.reduce((n: number, l: any) => n + (l.quiz?.length ?? 0), 0);
+  const hasDiagram = lessons.some((l: any) => l.diagram);
+
   useEffect(() => {
     if (quizReady && allQuiz > 0) {
       setQuizReady(false);
@@ -248,9 +234,6 @@ export default function CourseDetailScreen({
     }
   }, [quizReady, allQuiz]);
 
-  const allCards   = lessons.reduce((n: number, l: any) => n + (l.flashcards?.length ?? 0), 0);
-  const allQuiz    = lessons.reduce((n: number, l: any) => n + (l.quiz?.length ?? 0), 0);
-  const hasDiagram = lessons.some((l: any) => l.diagram);
 
   const dateStr = course?._creationTime
     ? new Date(course._creationTime).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
@@ -290,19 +273,11 @@ export default function CourseDetailScreen({
 
   if (isLoading) return <Skeleton C={C} onBack={onBack} />;
 
-  // Tile color sets — Claymorphism vibrant palette
-  const flash = isDark
-    ? { bg: '#0D1F3C', color: '#818CF8', border: '#2E2E60', shadow: '#060E1E' }
-    : { bg: '#EEF2FF', color: '#4F46E5', border: '#6366F1', shadow: '#3730A3' };
-  const quiz = isDark
-    ? { bg: '#2A0A14', color: '#FB7185', border: '#5A1525', shadow: '#150408' }
-    : { bg: '#FFF1F2', color: '#E11D48', border: '#F43F5E', shadow: '#9F1239' };
-  const mindmap = isDark
-    ? { bg: '#1C1200', color: '#FCD34D', border: '#3A2600', shadow: '#0E0900' }
-    : { bg: '#FFFBEB', color: '#D97706', border: '#F59E0B', shadow: '#92400E' };
-  const pdf = isDark
-    ? { bg: '#041F1A', color: '#34D399', border: '#0A4035', shadow: '#020F0D' }
-    : { bg: '#ECFDF5', color: '#059669', border: '#10B981', shadow: '#065F46' };
+  // One accent per tool; everything else stays greyscale.
+  const flash = { color: '#818CF8' };
+  const quiz = { color: '#FB7185' };
+  const mindmap = { color: '#FCD34D' };
+  const pdf = { color: '#34D399' };
 
   return (
     <View style={[S.root, { backgroundColor: C.bg, paddingTop: insets.top }]}>
@@ -344,13 +319,13 @@ export default function CourseDetailScreen({
 
         {/* Memory Practice */}
         <Animated.View entering={FadeInDown.delay(50).duration(240)} style={S.section}>
-          <SectionHead label="Memory Practice" C={C} />
+          <SectionHead label="Practice" C={C} />
           <View style={S.tileRow}>
             <Tile
               icon="albums-outline"
               label="Flashcards"
               sublabel={allCards > 0 ? `${allCards} cards` : 'None yet'}
-              bg={flash.bg} color={flash.color} border={flash.border} shadow={flash.shadow}
+              color={flash.color}
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onOpenFlashcards(); }}
               disabled={allCards === 0}
               C={C}
@@ -359,7 +334,7 @@ export default function CourseDetailScreen({
               icon="clipboard-outline"
               label="Quiz"
               sublabel={generatingQuiz ? 'Generating…' : allQuiz > 0 ? `${allQuiz} questions` : 'Tap to generate'}
-              bg={quiz.bg} color={quiz.color} border={quiz.border} shadow={quiz.shadow}
+              color={quiz.color}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 if (allQuiz > 0) onOpenQuiz(); else handleGenerateQuiz();
@@ -373,13 +348,13 @@ export default function CourseDetailScreen({
 
         {/* Visual */}
         <Animated.View entering={FadeInDown.delay(90).duration(240)} style={S.section}>
-          <SectionHead label="Visual" C={C} />
+          <SectionHead label="Explore" C={C} />
           <View style={S.tileRow}>
             <Tile
               icon="git-network-outline"
               label="Mind Map"
               sublabel={generatingDiagram ? 'Generating…' : hasDiagram ? 'Tap to explore' : 'Tap to generate'}
-              bg={mindmap.bg} color={mindmap.color} border={mindmap.border} shadow={mindmap.shadow}
+              color={mindmap.color}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 if (hasDiagram) onOpenDiagram(); else handleGenerateDiagram();
@@ -392,10 +367,7 @@ export default function CourseDetailScreen({
               icon="document-text-outline"
               label="PDF Preview"
               sublabel={pdfUrl ? 'View source' : 'No PDF'}
-              bg={pdfUrl ? pdf.bg : C.surfaceAlt}
               color={pdfUrl ? pdf.color : C.muted}
-              border={pdfUrl ? pdf.border : C.border}
-              shadow={pdfUrl ? pdf.shadow : C.border}
               onPress={pdfUrl ? () => { Haptics.selectionAsync(); onOpenPdf?.(pdfUrl, course?.title ?? 'PDF'); } : undefined}
               disabled={!pdfUrl}
               C={C}
@@ -414,10 +386,10 @@ export default function CourseDetailScreen({
 
         {/* Smart Notes */}
         <Animated.View entering={FadeInDown.delay(170).duration(240)} style={S.section}>
-          <Text style={[SH.label, { color: C.text }]}>Smart Notes</Text>
+          <Text style={[SH.label, { color: C.text }]}>Notes</Text>
 
           <View style={[S.notesCard, { backgroundColor: C.surface, borderColor: C.border }]}>
-            <Text style={[S.notesTitle, { color: C.primary, fontFamily: F.bold }]}>{course?.title}</Text>
+            <Text style={[S.notesTitle, { color: C.text, fontFamily: F.extraBold }]}>{course?.title}</Text>
             {course?.description ? (
               <Text style={[S.notesSub, { color: C.sub, fontFamily: F.regular }]}>{course.description}</Text>
             ) : null}
@@ -431,14 +403,14 @@ export default function CourseDetailScreen({
 
             {isGenerating && (
               <View style={{ alignItems: 'center', paddingVertical: 28, gap: 10 }}>
-                <Text style={{ fontSize: 34 }}>⏳</Text>
+                <Ionicons name="hourglass-outline" size={26} color={C.muted} />
                 <Text style={[{ fontSize: 14, fontFamily: F.semiBold, color: C.muted }]}>Notes are being generated…</Text>
               </View>
             )}
 
             {!isGenerating && allContent.length === 0 && (
               <View style={{ alignItems: 'center', paddingVertical: 28, gap: 10 }}>
-                <Text style={{ fontSize: 34 }}>📄</Text>
+                <Ionicons name="document-outline" size={26} color={C.muted} />
                 <Text style={[{ fontSize: 14, fontFamily: F.semiBold, color: C.muted }]}>No notes yet</Text>
               </View>
             )}
@@ -468,21 +440,17 @@ export default function CourseDetailScreen({
           </View>
         </View>
         */}
-        {/* Feynman */}
-        <View style={S.duoWrap}>
-          <View style={[S.duoShadow, { backgroundColor: '#3730A3' }]} />
-          <TouchableOpacity
-            style={[S.duoBtn, { backgroundColor: '#4F46E5', borderWidth: 2, borderColor: 'rgba(255,255,255,0.22)', transform: [{ translateY: -5 }] }]}
-            activeOpacity={0.85}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              onOpenFeynman?.(course?.title ?? '', course?.feynmanTopics ?? []);
-            }}
-          >
-            <Text style={{ fontSize: 20 }}>✨</Text>
-            <Text style={[S.duoBtnTxt, { fontFamily: F.bold, color: '#fff' }]}>Feynman AI</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          style={[S.cta, { backgroundColor: C.text }]}
+          activeOpacity={0.85}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            onOpenFeynman?.(course?.title ?? '', course?.feynmanTopics ?? []);
+          }}
+        >
+          <Ionicons name="mic" size={18} color={C.bg} />
+          <Text style={[S.ctaTxt, { fontFamily: F.semiBold, color: C.bg }]}>Explain it out loud</Text>
+        </TouchableOpacity>
       </View>
 
       <FolderModal
@@ -502,7 +470,6 @@ const S = StyleSheet.create({
   headerBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: Spacing.lg, paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   iconBtn:     { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
   headerEmoji: { fontSize: 20 },
@@ -510,7 +477,7 @@ const S = StyleSheet.create({
 
   scroll: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg, gap: Spacing.lg },
 
-  title:       { fontSize: 26, fontFamily: 'Nunito-ExtraBold', lineHeight: 34 },
+  title:       { fontSize: 28, fontFamily: 'SpaceGrotesk-Bold', lineHeight: 33, letterSpacing: -0.6 },
   metaRow:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   metaDate:    { fontSize: 12 },
   folderChip:  { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 20, borderWidth: 1.5, paddingHorizontal: 12, paddingVertical: 6 },
@@ -519,21 +486,23 @@ const S = StyleSheet.create({
   section:      { gap: 10 },
   tileRow:      { flexDirection: 'row', gap: 10 },
 
-  notesCard:    { borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: 16 },
+  notesCard:    { borderRadius: 20, borderWidth: 1, padding: 18 },
   notesTitle:   { fontSize: 18, lineHeight: 26, marginBottom: 6 },
   notesSub:     { fontSize: 13, lineHeight: 20 },
   notesDivider: { height: StyleSheet.hairlineWidth, marginVertical: 14 },
-  notesHeading: { fontSize: 14, lineHeight: 20, marginBottom: 4 },
-  notesBody:    { fontSize: 13, lineHeight: 21 },
+  notesHeading: { fontSize: 16, lineHeight: 22, marginBottom: 6 },
+  notesBody:    { fontSize: 15, lineHeight: 24 },
 
-  bottomBar:    { flexDirection: 'row', gap: 10, paddingHorizontal: Spacing.lg, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
+  bottomBar:    { flexDirection: 'row', gap: 10, paddingHorizontal: Spacing.lg, paddingTop: 10 },
   bottomBtn:    { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 50, borderRadius: 14 },
   bottomBtnTxt: { fontSize: 15 },
 
+  cta:       { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 54, borderRadius: 999 },
+  ctaTxt:    { fontSize: 16 },
   duoWrap:   { flex: 1, borderRadius: 16, marginBottom: 5 },
   duoShadow: { position: 'absolute', bottom: -5, left: 1, right: -1, height: 50, borderRadius: 16 },
   duoBtn:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 50, borderRadius: 16 },
   duoBtnTxt: { fontSize: 18, color: '#fff' },
   soonTag:   { position: 'absolute', top: -6, right: 8, backgroundColor: 'rgba(0,0,0,0.35)', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
-  soonTagTxt:{ fontSize: 9, fontFamily: 'Nunito-Bold', color: '#fff', letterSpacing: 0.5 },
+  soonTagTxt:{ fontSize: 9, fontFamily: 'Inter-SemiBold', color: '#fff', letterSpacing: 0.5 },
 });

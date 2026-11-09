@@ -1,7 +1,10 @@
+// Floating dark pill tab bar. The active highlight is one object that slides
+// between tabs (it stays mounted — motion has a cause, nothing pops).
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import React, { useRef } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import type { AppColors } from '../constants/Colors';
 import { FontFamily } from '../constants/theme';
@@ -19,135 +22,87 @@ interface Props {
 }
 
 const TAB_ITEMS: { id: HomeTab; label: string; icon: string; iconFilled: string }[] = [
-  { id: 'home',    label: 'Home',    icon: 'home-outline',    iconFilled: 'home-sharp' },
-  { id: 'library', label: 'Library', icon: 'library-outline', iconFilled: 'library' },
+  { id: 'home',    label: 'Today',   icon: 'sunny-outline',   iconFilled: 'sunny' },
+  { id: 'library', label: 'Library', icon: 'albums-outline',  iconFilled: 'albums' },
   { id: 'profile', label: 'Profile', icon: 'person-outline',  iconFilled: 'person' },
 ];
 
-function TabItem({
-  item,
-  isActive,
-  onPress,
-  C,
-  F,
-  fs,
-}: {
-  item: (typeof TAB_ITEMS)[number];
-  isActive: boolean;
-  onPress: () => void;
-  C: AppColors;
-  F: typeof FontFamily;
-  fs: (n: number) => number;
-}) {
-  const scale = useRef(new Animated.Value(1)).current;
-
-  const handlePressIn = () => {
-    Animated.spring(scale, { toValue: 0.85, useNativeDriver: true, speed: 50, bounciness: 0 }).start();
-  };
-  const handlePressOut = () => {
-    Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 50, bounciness: 4 }).start();
-  };
-
-  return (
-    <Pressable
-      style={styles.tabItem}
-      onPress={onPress}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-    >
-      <Animated.View style={[styles.tabItemInner, { transform: [{ scale }] }]}>
-        <Ionicons
-          name={(isActive ? item.iconFilled : item.icon) as any}
-          size={24}
-          color={isActive ? C.text : C.muted}
-        />
-        <Text style={[styles.tabLabel, { color: isActive ? C.text : C.muted, fontFamily: F.semiBold, fontSize: fs(11) }]}>
-          {item.label}
-        </Text>
-      </Animated.View>
-    </Pressable>
-  );
-}
-
-function CreateButton({ onPress, C }: { onPress: () => void; C: AppColors }) {
-  const scale = useRef(new Animated.Value(1)).current;
-
-  const handlePressIn = () => {
-    Animated.spring(scale, { toValue: 0.9, useNativeDriver: true, speed: 50, bounciness: 0 }).start();
-  };
-  const handlePressOut = () => {
-    Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 50, bounciness: 6 }).start();
-  };
-
-  return (
-    <Pressable
-      style={styles.createButtonWrapper}
-      onPress={onPress}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-    >
-      <Animated.View style={[styles.createButton, { backgroundColor: C.text, transform: [{ scale }] }]}>
-        <Ionicons name="add" size={32} color={C.bg} />
-      </Animated.View>
-    </Pressable>
-  );
-}
+const EASE = Easing.bezier(0.25, 0.8, 0.25, 1);
+const PAD = 5;
 
 export default function BottomTabBar({ activeTab, onTabPress, onCreatePress, C, F, fs, bottomInset }: Props) {
-  const handleTabPress = (tab: HomeTab) => {
-    Haptics.selectionAsync();
+  const [tabsW, setTabsW] = useState(0);
+  const idx = TAB_ITEMS.findIndex((t) => t.id === activeTab);
+  const tabW = tabsW / TAB_ITEMS.length;
+
+  const x = useSharedValue(0);
+  useEffect(() => {
+    if (tabW) x.value = withTiming(idx * tabW, { duration: 320, easing: EASE });
+  }, [idx, tabW]);
+  const pillStyle = useAnimatedStyle(() => ({ transform: [{ translateX: x.value }] }));
+
+  const press = (tab: HomeTab) => {
+    if (tab !== activeTab) Haptics.selectionAsync().catch(() => {});
     onTabPress(tab);
   };
 
-  const handleCreate = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    onCreatePress();
-  };
-
   return (
-    <View style={[styles.container, { backgroundColor: C.surface, borderTopColor: C.border, paddingBottom: bottomInset || 8 }]}>
-      <TabItem item={TAB_ITEMS[0]} isActive={activeTab === 'home'}    onPress={() => handleTabPress('home')}    C={C} F={F} fs={fs} />
-      <TabItem item={TAB_ITEMS[1]} isActive={activeTab === 'library'} onPress={() => handleTabPress('library')} C={C} F={F} fs={fs} />
-      <CreateButton onPress={handleCreate} C={C} />
-      <TabItem item={TAB_ITEMS[2]} isActive={activeTab === 'profile'} onPress={() => handleTabPress('profile')} C={C} F={F} fs={fs} />
+    <View pointerEvents="box-none" style={[styles.wrap, { paddingBottom: Math.max(bottomInset, 12) }]}>
+      <View style={[styles.bar, { backgroundColor: C.surface, borderColor: C.border }]}>
+        <View style={{ flex: 1, flexDirection: 'row' }} onLayout={(e: LayoutChangeEvent) => setTabsW(e.nativeEvent.layout.width)}>
+          {tabW > 0 && (
+            <Animated.View
+              pointerEvents="none"
+              style={[styles.pill, { width: tabW - PAD * 2, backgroundColor: C.surfaceAlt, borderColor: C.borderStrong }, pillStyle]}
+            />
+          )}
+          {TAB_ITEMS.map((item) => {
+            const on = item.id === activeTab;
+            return (
+              <Pressable key={item.id} onPress={() => press(item.id)} style={styles.tab} hitSlop={4}>
+                <Ionicons name={(on ? item.iconFilled : item.icon) as any} size={19} color={on ? C.text : C.muted} />
+                <Text style={{ color: on ? C.text : C.muted, fontFamily: F.semiBold, fontSize: fs(11), marginTop: 3 }}>
+                  {item.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <Pressable
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); onCreatePress(); }}
+          style={({ pressed }) => [styles.create, { backgroundColor: C.text, opacity: pressed ? 0.85 : 1, transform: [{ scale: pressed ? 0.95 : 1 }] }]}
+          accessibilityLabel="Learn something new"
+        >
+          <Ionicons name="add" size={24} color={C.bg} />
+        </Pressable>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  wrap: { paddingHorizontal: 16, paddingTop: 8 },
+  bar: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderTopWidth: 1,
-    paddingTop: 8,
+    borderRadius: 30,
+    borderWidth: 1,
+    padding: PAD,
+    gap: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.5,
+    shadowRadius: 24,
+    elevation: 12,
   },
-  tabItem: {
-    flex: 1,
-    alignItems: 'center',
+  pill: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: PAD,
+    borderRadius: 24,
+    borderWidth: 1,
   },
-  tabItemInner: {
-    alignItems: 'center',
-    gap: 2,
-    paddingVertical: 4,
-  },
-  tabLabel: {
-    marginTop: 2,
-  },
-  createButtonWrapper: {
-    flex: 1,
-    alignItems: 'center',
-    marginTop: -20,
-  },
-  createButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 8,
-  },
+  tab: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 8 },
+  create: { width: 50, height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center' },
 });

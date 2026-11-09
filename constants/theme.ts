@@ -1,10 +1,11 @@
-// Font families — Nunito (loaded in App.tsx via expo-google-fonts)
+// Font families — same system as onboarding: Inter for text, Space Grotesk for
+// headlines / big numbers (`extraBold`). Loaded in App.tsx via expo-google-fonts.
 export const FontFamily = {
-  regular:   'Nunito-Regular',
-  medium:    'Nunito-Medium',
-  semiBold:  'Nunito-SemiBold',
-  bold:      'Nunito-Bold',
-  extraBold: 'Nunito-ExtraBold',
+  regular:   'Inter-Regular',
+  medium:    'Inter-Medium',
+  semiBold:  'Inter-SemiBold',
+  bold:      'Inter-SemiBold',
+  extraBold: 'SpaceGrotesk-Bold',
 };
 
 // Legacy flat color set — used by onboarding/goal-setup (kept for compatibility)

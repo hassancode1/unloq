@@ -54,7 +54,7 @@ interface Character {
 }
 
 const CHARACTERS: Character[] = [
-  { id: 'nova', name: 'Nova', age: 5,  level: 'super_hard', levelLabel: 'Super Hard', levelColor: '#EF4444', image: require('../assets/nova.png'),  prompt: "like I'm 5 years old — use very simple words, no jargon!" },
+  { id: 'nova', name: 'Nova', age: 5,  level: 'super_hard', levelLabel: 'Super Hard', levelColor: '#F87171', image: require('../assets/nova.png'),  prompt: "like I'm 5 years old — use very simple words, no jargon!" },
   { id: 'zara', name: 'Zara', age: 12, level: 'hard',       levelLabel: 'Hard',       levelColor: '#F97316', image: require('../assets/zara.png'),  prompt: "like I'm 12 — keep it clear, some detail is ok but stay simple" },
   { id: 'rex',  name: 'Rex',  age: 16, level: 'medium',     levelLabel: 'Medium',     levelColor: '#EAB308', image: require('../assets/Rex.png'),   prompt: "like I'm 16 — you can use moderate complexity, but explain concepts properly" },
   { id: 'kai',  name: 'Kai',  age: 22, level: 'easy',       levelLabel: 'Easy',       levelColor: '#22C55E', image: require('../assets/kai.png'),   prompt: "like I'm a college student — full depth, technical terms ok" },
@@ -71,11 +71,11 @@ function orbitDots(angles: number[], radius: number, baseDot: number, brightIdx:
       <View key={i} style={{
         position: 'absolute',
         width: s, height: s, borderRadius: s / 2,
-        backgroundColor: isBright ? '#EDE9FE' : '#A78BFA',
+        backgroundColor: isBright ? '#1A2140' : '#9DB2FF',
         opacity: isBright ? 1 : 0.55,
         left: radius + radius * Math.cos(θ) - s / 2,
         top:  radius + radius * Math.sin(θ) - s / 2,
-        shadowColor: '#C4B5FD',
+        shadowColor: '#9DB2FF',
         shadowRadius: isBright ? 6 : 2,
         shadowOpacity: 1,
       }} />
@@ -135,30 +135,30 @@ function GlowMascot({ size = 'medium', pulseFast = false, characterImage }: {
     <Animated.View style={[{ width: totalSize, height: totalSize, alignItems: 'center', justifyContent: 'center' }, floatStyle]}>
 
       {/* Ambient halos — pulsing radial glow layers */}
-      <Animated.View style={[{ position: 'absolute', width: d3 + 36, height: d3 + 36, borderRadius: (d3 + 36) / 2, backgroundColor: '#3B0764' }, outerHaze]} />
-      <Animated.View style={[{ position: 'absolute', width: d1 + 28, height: d1 + 28, borderRadius: (d1 + 28) / 2, backgroundColor: '#7C3AED' }, innerHaze]} />
+      <Animated.View style={[{ position: 'absolute', width: d3 + 36, height: d3 + 36, borderRadius: (d3 + 36) / 2, backgroundColor: '#121A3A' }, outerHaze]} />
+      <Animated.View style={[{ position: 'absolute', width: d1 + 28, height: d1 + 28, borderRadius: (d1 + 28) / 2, backgroundColor: '#6E8BFF' }, innerHaze]} />
 
       {/* Ring 3 — outermost, slow CW, constellation dots */}
       <Animated.View style={[{ position: 'absolute', width: d3, height: d3, borderRadius: r3, alignItems: 'center', justifyContent: 'center' }, ring3Style]}>
         <View style={{ position: 'absolute', width: d3, height: d3, borderRadius: r3,
-          borderWidth: 1, borderTopColor: '#A78BFA55', borderRightColor: '#A78BFA18',
-          borderBottomColor: '#A78BFA44', borderLeftColor: 'transparent' }} />
+          borderWidth: 1, borderTopColor: '#9DB2FF55', borderRightColor: '#9DB2FF18',
+          borderBottomColor: '#9DB2FF44', borderLeftColor: 'transparent' }} />
         {orbitDots([20, 115, 215, 310], r3, size === 'large' ? 3 : 2, [0, 2])}
       </Animated.View>
 
       {/* Ring 2 — middle, CCW, constellation dots */}
       <Animated.View style={[{ position: 'absolute', width: d2, height: d2, borderRadius: r2, alignItems: 'center', justifyContent: 'center' }, ring2Style]}>
         <View style={{ position: 'absolute', width: d2, height: d2, borderRadius: r2,
-          borderWidth: 1.5, borderTopColor: 'transparent', borderRightColor: '#8B5CF6BB',
-          borderBottomColor: '#8B5CF630', borderLeftColor: '#7C3AEDAA' }} />
+          borderWidth: 1.5, borderTopColor: 'transparent', borderRightColor: '#6E8BFFBB',
+          borderBottomColor: '#6E8BFF30', borderLeftColor: '#6E8BFFAA' }} />
         {orbitDots([50, 145, 235, 330], r2, size === 'large' ? 4 : 3, [1, 3])}
       </Animated.View>
 
       {/* Ring 1 — inner, faster CW, constellation dots */}
       <Animated.View style={[{ position: 'absolute', width: d1, height: d1, borderRadius: r1, alignItems: 'center', justifyContent: 'center' }, ring1Style]}>
         <View style={{ position: 'absolute', width: d1, height: d1, borderRadius: r1,
-          borderWidth: 2, borderTopColor: '#9333EACC', borderRightColor: 'transparent',
-          borderBottomColor: '#7C3AEDAA', borderLeftColor: '#9333EA44' }} />
+          borderWidth: 2, borderTopColor: '#7F9BFFCC', borderRightColor: 'transparent',
+          borderBottomColor: '#6E8BFFAA', borderLeftColor: '#7F9BFF44' }} />
         {orbitDots([0, 130, 260], r1, size === 'large' ? 5 : 4, [0])}
       </Animated.View>
 
@@ -166,9 +166,9 @@ function GlowMascot({ size = 'medium', pulseFast = false, characterImage }: {
       <Animated.View style={[{
         width: imageSize + 12, height: imageSize + 12,
         borderRadius: (imageSize + 12) / 2,
-        backgroundColor: '#0D0B1E',
+        backgroundColor: '#0B0C16',
         alignItems: 'center', justifyContent: 'center',
-        shadowColor: '#7C3AED',
+        shadowColor: '#6E8BFF',
         shadowRadius: 24, shadowOpacity: 0.9,
         shadowOffset: { width: 0, height: 0 },
       }, pulseStyle]}>
@@ -177,7 +177,7 @@ function GlowMascot({ size = 'medium', pulseFast = false, characterImage }: {
           width: imageSize + 6, height: imageSize + 6,
           borderRadius: (imageSize + 6) / 2,
           borderWidth: StyleSheet.hairlineWidth,
-          borderColor: '#7C3AED88',
+          borderColor: '#6E8BFF88',
         }} />
         <Image source={mascotSrc}
           style={{ width: imageSize, height: imageSize, borderRadius: imageSize / 2 }}
@@ -202,7 +202,7 @@ function UnderstandingBar({ score, C, F, fs }: { score: number; C: any; F: any; 
     width: `${barWidth.value * 100}%` as any,
   }));
 
-  const color = score >= 75 ? '#22C55E' : score >= 40 ? '#EAB308' : '#EF4444';
+  const color = score >= 75 ? '#22C55E' : score >= 40 ? '#EAB308' : '#F87171';
 
   return (
     <View style={{ paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg }}>
@@ -225,7 +225,7 @@ function NoteBreakdownScreen({ courseTitle, feynmanTopics, C, F, fs, insets, isD
   C: any; F: any; fs: (n: number) => number; insets: any; isDark: boolean;
   onSection: (title: string, summary: string) => void;
 }) {
-  const cardBg = isDark ? '#1E1E2E' : '#F5F5F5';
+  const cardBg = isDark ? '#17161F' : '#17161F';
 
   return (
     <ScrollView
@@ -244,8 +244,8 @@ function NoteBreakdownScreen({ courseTitle, feynmanTopics, C, F, fs, insets, isD
 
       {feynmanTopics.length === 0 ? (
         <Animated.View entering={FadeInDown.delay(80).duration(280)} style={{ alignItems: 'center', paddingTop: Spacing.xl, paddingHorizontal: Spacing.lg, gap: Spacing.md }}>
-          <View style={{ width: 56, height: 56, borderRadius: 16, backgroundColor: '#EDE9FE', alignItems: 'center', justifyContent: 'center' }}>
-            <Ionicons name="bulb-outline" size={26} color="#7C3AED" />
+          <View style={{ width: 56, height: 56, borderRadius: 16, backgroundColor: '#1A2140', alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name="bulb-outline" size={26} color="#6E8BFF" />
           </View>
           <Text style={{ fontFamily: F.extraBold, fontSize: fs(16), color: C.text, textAlign: 'center' }}>
             No Feynman topics yet
@@ -306,7 +306,7 @@ function TopicPicker({
       <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <Animated.View entering={FadeInDown.delay(60).duration(300)} style={{ alignItems: 'center', paddingTop: Spacing.xl }}>
           <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-            <View pointerEvents="none" style={{ position: 'absolute', width: 280, height: 280, borderRadius: 140, backgroundColor: '#5B21B6', opacity: 0.09 }} />
+            <View pointerEvents="none" style={{ position: 'absolute', width: 280, height: 280, borderRadius: 140, backgroundColor: '#2A3D8F', opacity: 0.09 }} />
             <GlowMascot size="large" />
           </View>
           <Text style={[styles.bigTitle, { color: C.text, fontFamily: F.extraBold, fontSize: fs(26), marginTop: Spacing.lg }]}>
@@ -319,7 +319,7 @@ function TopicPicker({
 
         {coursesLoading && (
           <Animated.View entering={FadeInDown.delay(120).duration(300)} style={{ alignItems: 'center', marginTop: Spacing.xl }}>
-            <ActivityIndicator size="small" color="#7C3AED" />
+            <ActivityIndicator size="small" color="#6E8BFF" />
           </Animated.View>
         )}
 
@@ -331,7 +331,7 @@ function TopicPicker({
               activeOpacity={0.7}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Ionicons name="library-outline" size={16} color="#7C3AED" />
+                <Ionicons name="library-outline" size={16} color="#6E8BFF" />
                 <Text style={{ fontFamily: F.semiBold, fontSize: fs(13), color: C.sub }}>From your notes</Text>
               </View>
               <Ionicons name="arrow-forward" size={16} color={C.muted} />
@@ -343,7 +343,7 @@ function TopicPicker({
       {/* Input bar */}
       <Animated.View entering={FadeInUp.delay(100).duration(300)} style={[styles.inputBar, { backgroundColor: C.surface, borderTopColor: C.border }]}>
         <View style={[styles.inputRow, { backgroundColor: C.surfaceAlt, borderColor: C.border }]}>
-          <Text style={{ fontSize: 16 }}>✨</Text>
+          <Ionicons name="search" size={15} color={C.muted} />
           <TextInput
             placeholder="Enter any topic…"
             placeholderTextColor={C.muted}
@@ -356,7 +356,7 @@ function TopicPicker({
           <TouchableOpacity
             onPress={handleFreeText}
             disabled={!text.trim()}
-            style={[styles.sendBtn, { backgroundColor: text.trim() ? '#7C3AED' : C.border }]}
+            style={[styles.sendBtn, { backgroundColor: text.trim() ? '#6E8BFF' : C.border }]}
             activeOpacity={0.8}
           >
             <Ionicons name="arrow-forward" size={18} color="#fff" />
@@ -375,7 +375,7 @@ function CharacterPicker({
   C: any; F: any; fs: (n: number) => number; isDark: boolean;
   onCharacterChosen: (character: Character) => void;
 }) {
-  const cardBg = isDark ? '#2A2A2A' : '#EBEBEB';
+  const cardBg = isDark ? '#17161F' : '#17161F';
   return (
     <ScrollView contentContainerStyle={{ paddingBottom: Spacing.xl }} showsVerticalScrollIndicator={false}>
       <Animated.View entering={FadeInDown.delay(40).duration(300)} style={{ alignItems: 'center', paddingTop: Spacing.lg, paddingBottom: Spacing.md }}>
@@ -593,10 +593,10 @@ function SessionView({
             )}
             <TouchableOpacity
               onPress={() => { setHasResult(false); setTranscript(''); setScore(0); setFeedback(''); setGaps([]); }}
-              style={[styles.tryAgainBtn, { borderColor: '#7C3AED' }]}
+              style={[styles.tryAgainBtn, { borderColor: '#6E8BFF' }]}
               activeOpacity={0.7}
             >
-              <Text style={{ fontFamily: F.bold, fontSize: fs(13), color: '#7C3AED' }}>Try again</Text>
+              <Text style={{ fontFamily: F.bold, fontSize: fs(13), color: '#6E8BFF' }}>Try again</Text>
             </TouchableOpacity>
           </Animated.View>
         )}
@@ -615,7 +615,7 @@ function SessionView({
             <TouchableOpacity
               onPress={handleTextSubmit}
               disabled={!textInput.trim() || loading}
-              style={[styles.submitTextBtn, { backgroundColor: textInput.trim() && !loading ? '#7C3AED' : C.border }]}
+              style={[styles.submitTextBtn, { backgroundColor: textInput.trim() && !loading ? '#6E8BFF' : C.border }]}
               activeOpacity={0.8}
             >
               <Text style={{ fontFamily: F.bold, fontSize: fs(14), color: '#fff' }}>
@@ -629,14 +629,14 @@ function SessionView({
         {!useTextMode && !hasResult && (
           <View style={{ alignItems: 'center', marginTop: Spacing.xl, gap: Spacing.sm }}>
             {loading ? (
-              <ActivityIndicator size="large" color="#7C3AED" />
+              <ActivityIndicator size="large" color="#6E8BFF" />
             ) : (
               <>
                 <Text style={{ fontFamily: F.semiBold, fontSize: fs(13), color: C.muted }}>
                   {isRecording ? 'Listening… tap to stop' : 'Press to talk'}
                 </Text>
                 <TouchableOpacity onPress={handleMicPress} activeOpacity={0.8} style={styles.micWrapper} accessibilityLabel={isRecording ? 'Stop recording' : 'Start recording'} accessibilityRole="button">
-                  <View style={[styles.micBtn, { backgroundColor: isRecording ? '#EF4444' : '#1a1a2e' }]}>
+                  <View style={[styles.micBtn, { backgroundColor: isRecording ? '#F87171' : '#17161F' }]}>
                     <Ionicons name={isRecording ? 'stop' : 'mic'} size={28} color="#fff" />
                     {!isPremium && !isRecording && (
                       <View style={styles.lockBadge}>

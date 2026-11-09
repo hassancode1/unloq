@@ -1,14 +1,10 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import Purchases from 'react-native-purchases';
-import RevenueCatUI, { PAYWALL_RESULT } from 'react-native-purchases-ui';
 import Toast from 'react-native-toast-message';
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Dimensions,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -19,622 +15,57 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import Animated, {
-  FadeIn,
-  FadeInDown,
-  useSharedValue,
-  useAnimatedStyle,
-  withRepeat,
-  withTiming,
-  withSequence,
-  Easing,
-  interpolate,
-} from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useConvexAuth } from 'convex/react';
-import { Image } from 'react-native';
 import { api } from '../convex/_generated/api';
 import { Id } from '../convex/_generated/dataModel';
 
 import { useTheme } from '../hooks/useTheme';
 import { useEntitlement } from '../hooks/useEntitlement';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
-import { hasSelection, getBlockedCount } from '../lib/familyControls';
 import { useAppStore } from '../store/useAppStore';
 import { Spacing } from '../constants/spacing';
 import type { AppColors } from '../constants/Colors';
-import { CardGradients } from '../constants/Colors';
 import UploadScreen from './upload';
 import SettingsScreen from './settings';
 import LessonPlayer from './lesson-player';
 import CourseDetailScreen from './course-detail';
 import PdfViewerScreen from './pdf-viewer';
-import AuthModal from './auth-modal';
+import AuthModal, { type AuthReason } from './auth-modal';
 import BottomTabBar, { type HomeTab } from '../components/BottomTabBar';
-import GradientCard from '../components/GradientCard';
 import CreateModal, { type CreateOptionKey } from '../components/CreateModal';
+import { GUIDE_PREVIEW, NOTES_ENABLED } from '../lib/features';
+import { openPaywall } from '../lib/pro';
 import FeynmanScreen from './feynman';
-
-// ── Reading quotes ───────────────────────────────────────────────────────────
-
-const READING_QUOTES = [
-  { text: "The more that you read, the more things you will know. The more that you learn, the more places you'll go.", author: "Dr. Seuss" },
-  { text: "A reader lives a thousand lives before he dies. The man who never reads lives only one.", author: "George R.R. Martin" },
-  { text: "Not all those who wander are lost — but all who read are found.", author: "Anonymous" },
-  { text: "Reading is to the mind what exercise is to the body.", author: "Joseph Addison" },
-  { text: "Once you learn to read, you will be forever free.", author: "Frederick Douglass" },
-  { text: "The reading of all good books is like a conversation with the finest minds of past centuries.", author: "René Descartes" },
-  { text: "A book is a dream that you hold in your hands.", author: "Neil Gaiman" },
-  { text: "There is no friend as loyal as a book.", author: "Ernest Hemingway" },
-  { text: "In the case of good books, the point is not to see how many of them you can get through, but rather how many can get through to you.", author: "Mortimer J. Adler" },
-  { text: "Today a reader, tomorrow a leader.", author: "Margaret Fuller" },
-  { text: "Books are a uniquely portable magic.", author: "Stephen King" },
-  { text: "That's the thing about books. They let you travel without moving your feet.", author: "Jhumpa Lahiri" },
-  { text: "I am part of everything that I have read.", author: "Theodore Roosevelt" },
-  { text: "A book is a loaded gun in the house next door. Who knows who might be the target of the well-read man?", author: "Ray Bradbury" },
-  { text: "We read to know we are not alone.", author: "C.S. Lewis" },
-  { text: "Show me a family of readers, and I will show you the people who move the world.", author: "Napoléon Bonaparte" },
-  { text: "Reading gives us someplace to go when we have to stay where we are.", author: "Mason Cooley" },
-  { text: "The world belongs to those who read.", author: "Rick Holland" },
-  { text: "One must always be careful of books, and what is inside them, for words have the power to change us.", author: "Cassandra Clare" },
-  { text: "A mind needs books as a sword needs a whetstone, if it is to keep its edge.", author: "George R.R. Martin" },
-];
+import QuestScreen from './quest';
+import TodayTab from '../components/today/TodayTab';
+import PathsSection from '../components/paths/PathsSection';
+import Glim from '../components/mascot/Glim';
+import { paletteForInterests } from '../components/mascot/palettes';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
-function topicColor(title: string): { emoji: string; color: string } {
-  const t = title.toLowerCase();
-  if (t.includes('math') || t.includes('calculus') || t.includes('algebra'))
-    return { emoji: '📐', color: '#7C3AED' };
-  if (t.includes('history'))
-    return { emoji: '🏛️', color: '#16A34A' };
-  if (t.includes('science') || t.includes('physics') || t.includes('chem'))
-    return { emoji: '⚗️', color: '#0EA5E9' };
-  if (t.includes('biology') || t.includes('bio'))
-    return { emoji: '🧬', color: '#0D9488' };
-  if (t.includes('english') || t.includes('writing'))
-    return { emoji: '✍️', color: '#EA580C' };
-  if (t.includes('code') || t.includes('program'))
-    return { emoji: '💻', color: '#6366F1' };
-  if (t.includes('law') || t.includes('legal') || t.includes('bar') || t.includes('mbe') || t.includes('mee'))
-    return { emoji: '⚖️', color: '#0EA5E9' };
-  if (t.includes('finance') || t.includes('econ'))
-    return { emoji: '📈', color: '#16A34A' };
-  return { emoji: '📚', color: '#6366F1' };
+/** Quiet glyph + accent per subject. One accent per row, greyscale everywhere else. */
+export function topicIcon(title: string): { icon: IconName; color: string } {
+  const t = (title ?? '').toLowerCase();
+  if (/math|calculus|algebra|geometr|statist/.test(t)) return { icon: 'calculator-outline', color: '#A78BFA' };
+  if (/history|war|ancient/.test(t))                    return { icon: 'hourglass-outline', color: '#F5A65B' };
+  if (/physics|chem|science/.test(t))                    return { icon: 'flask-outline', color: '#38BDF8' };
+  if (/bio|anatomy|medic|health/.test(t))               return { icon: 'leaf-outline', color: '#34D399' };
+  if (/english|writing|literat|essay/.test(t))          return { icon: 'create-outline', color: '#FB7185' };
+  if (/code|program|software|computer/.test(t))         return { icon: 'code-slash-outline', color: '#818CF8' };
+  if (/law|legal|\bbar\b|mbe|mee/.test(t))               return { icon: 'scale-outline', color: '#7DD3FC' };
+  if (/finance|econ|money|account/.test(t))             return { icon: 'trending-up-outline', color: '#FACC15' };
+  if (/psych|mind/.test(t))                              return { icon: 'happy-outline', color: '#F472B6' };
+  return { icon: 'document-text-outline', color: '#8E8C9E' };
 }
 
-
-
-// ── No apps blocked banner ────────────────────────────────────────────────────
-
-function NoAppsBlockedBanner({ width, isDark, onSetup }: {
-  width: number; isDark: boolean; onSetup: () => void;
-}) {
-  return (
-    <GradientCard
-      flex
-      width={width}
-      title="No apps blocked"
-      subtitle="Set up your goal to start locking distractions"
-      gradientColors={CardGradients.indigo}
-      onPress={onSetup}
-      actionLabel="Set up Goal →"
-      isDark={isDark}
-      imageSource={require('../assets/lock-banner.png')}
-    />
-  );
-}
-
-// ── Blocking scheduled banner ─────────────────────────────────────────────────
-
-function fmtLockTime(lockTime: string): string {
-  const [h, m] = lockTime.split(':').map(Number);
-  const ampm = (h ?? 0) >= 12 ? 'PM' : 'AM';
-  const h12 = (h ?? 0) % 12 === 0 ? 12 : (h ?? 0) % 12;
-  return `${h12}:${String(m ?? 0).padStart(2, '0')} ${ampm}`;
-}
-
-function BlockingScheduledBanner({ width, isDark, lockTime, phase, onSetup }: {
-  width: number; isDark: boolean; lockTime: string;
-  phase: 'tomorrow' | 'later-today'; onSetup: () => void;
-}) {
-  const timeStr = fmtLockTime(lockTime);
-  const subtitle = phase === 'tomorrow'
-    ? `Apps will be blocked tomorrow at ${timeStr}`
-    : `Apps will be blocked today at ${timeStr}`;
-  return (
-    <GradientCard
-      flex
-      width={width}
-      title="Blocking scheduled"
-      subtitle={subtitle}
-      gradientColors={CardGradients.indigo}
-      onPress={onSetup}
-      actionLabel="Change schedule →"
-      isDark={isDark}
-      imageSource={require('../assets/lock-banner.png')}
-    />
-  );
-}
-
-// ── Apps locked mascot (animated) ────────────────────────────────────────────
-
-function AppsLockedMascot() {
-  const float = useSharedValue(0);
-  const scale = useSharedValue(1);
-  React.useEffect(() => {
-    float.value = withRepeat(withSequence(
-      withTiming(-6, { duration: 1600, easing: Easing.inOut(Easing.ease) }),
-      withTiming(0,  { duration: 1600, easing: Easing.inOut(Easing.ease) }),
-    ), -1, false);
-    scale.value = withRepeat(withSequence(
-      withTiming(1.04, { duration: 1800, easing: Easing.inOut(Easing.ease) }),
-      withTiming(1.00, { duration: 1800, easing: Easing.inOut(Easing.ease) }),
-    ), -1, false);
-  }, []);
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: float.value }, { scale: scale.value }, { rotate: '15deg' }],
-  }));
-  return (
-    <Animated.Image
-      source={require('../assets/lock-banner.png')}
-      style={[{ position: 'absolute', right: -20, bottom: -10, width: 160, height: 200 }, animStyle]}
-      resizeMode="contain"
-    />
-  );
-}
-
-// ── Session complete modal ────────────────────────────────────────────────────
-
-function SessionCompleteModal({ visible, lockTime, studiedMins, firstName, onDismiss, C, F, fs }: {
-  visible: boolean; lockTime: string; studiedMins: number;
-  firstName: string; onDismiss: () => void; C: AppColors; F: any; fs: (n: number) => number;
-}) {
-  const [h, m] = lockTime.split(':').map(Number);
-  const ampm   = (h ?? 0) >= 12 ? 'PM' : 'AM';
-  const h12    = (h ?? 0) % 12 === 0 ? 12 : (h ?? 0) % 12;
-  const timeStr = `${h12}:${String(m ?? 0).padStart(2, '0')} ${ampm}`;
-
-  return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={onDismiss}>
-      <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
-        <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onDismiss} />
-        <Animated.View entering={FadeInDown.springify().damping(18).stiffness(120)} style={{
-          backgroundColor: C.bg,
-          borderTopLeftRadius: 32, borderTopRightRadius: 32,
-          paddingHorizontal: Spacing.lg,
-          paddingTop: Spacing.lg,
-          paddingBottom: Spacing.xxl,
-          gap: Spacing.lg,
-        }}>
-          {/* Handle */}
-          <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: C.borderStrong, alignSelf: 'center', marginBottom: 4 }} />
-
-          {/* Hero */}
-          <View style={{ alignItems: 'center', gap: 10 }}>
-            <View style={{
-              width: 72, height: 72, borderRadius: 36,
-              backgroundColor: '#ECFDF5',
-              justifyContent: 'center', alignItems: 'center',
-            }}>
-              <Text style={{ fontSize: 38 }}>🎉</Text>
-            </View>
-            <Text style={{ fontFamily: F.extraBold, fontSize: fs(24), color: C.text, letterSpacing: -0.5 }}>
-              Well done, {firstName}!
-            </Text>
-            <Text style={{ fontFamily: F.semiBold, fontSize: fs(13), color: C.muted, textAlign: 'center', lineHeight: 20 }}>
-              You crushed your session. Apps are unlocked for the rest of the day.
-            </Text>
-          </View>
-
-          {/* Single stat */}
-          <View style={{ backgroundColor: C.surface, borderRadius: 18, borderWidth: 1, borderColor: C.border, paddingVertical: 20, alignItems: 'center', gap: 4 }}>
-            <Text style={{ fontFamily: F.extraBold, fontSize: fs(36), color: C.text }}>{studiedMins}</Text>
-            <Text style={{ fontFamily: F.semiBold, fontSize: fs(12), color: C.muted }}>minutes studied today</Text>
-          </View>
-
-          {/* Tomorrow note */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: `${'#6366F1'}0D`, borderRadius: 14, padding: 14 }}>
-            <Ionicons name="alarm-outline" size={18} color="#6366F1" />
-            <Text style={{ fontFamily: F.semiBold, fontSize: fs(13), color: C.text, flex: 1 }}>
-              Next session starts at <Text style={{ fontFamily: F.extraBold, color: '#6366F1' }}>{timeStr} tomorrow</Text>
-            </Text>
-          </View>
-
-          {/* CTA */}
-          <View style={{ position: 'relative', marginTop: 4 }}>
-            <View style={{ position: 'absolute', bottom: -5, left: 0, right: 0, top: 0, borderRadius: 18, backgroundColor: '#4F46E5' }} />
-            <TouchableOpacity
-              onPress={() => { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); onDismiss(); }}
-              activeOpacity={0.85}
-              style={{ borderRadius: 18, backgroundColor: '#6366F1', paddingVertical: 16, alignItems: 'center', transform: [{ translateY: -5 }] }}
-            >
-              <Text style={{ fontFamily: F.extraBold, fontSize: fs(16), color: '#fff' }}>See you tomorrow 👋</Text>
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
-      </View>
-    </Modal>
-  );
-}
-
-// ── Apps locked banner ────────────────────────────────────────────────────────
-
-function AppsLockedBanner({ width, blockedCount, blockDurationHours, elapsedSeconds, isDark, onStudy }: {
-  width: number; blockedCount: number; blockDurationHours: number;
-  elapsedSeconds: number; isDark: boolean; onStudy: () => void; flex?: boolean;
-}) {
-  const goalSecs = blockDurationHours * 3600;
-  const goalMins = Math.round(blockDurationHours * 60);
-  const durationLabel = goalMins < 60 ? `${goalMins} min` : goalMins === 60 ? '1 hour' : `${blockDurationHours}h`;
-  const pct = goalSecs > 0 ? Math.min(1, elapsedSeconds / goalSecs) : 0;
-  const pctLabel = `${Math.round(pct * 100)}%`;
-  const remainingSecs = Math.max(0, goalSecs - elapsedSeconds);
-  const remMins = Math.floor(remainingSecs / 60);
-  const remSecs = Math.floor(remainingSecs % 60);
-  const timeLabel = pct >= 1 ? 'Done ✓' : `${remMins}:${String(remSecs).padStart(2, '0')} left`;
-  return (
-    <TouchableOpacity
-      activeOpacity={0.80}
-      onPress={onStudy}
-      style={{
-        flex: 1,
-        width,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 12 },
-        shadowOpacity: 0.30,
-        shadowRadius: 20,
-        elevation: 14,
-      }}
-    >
-      <View style={{ flex: 1, borderRadius: 24, overflow: 'hidden', opacity: isDark ? 0.92 : 1, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
-        <LinearGradient
-          colors={[...CardGradients.indigo] as [string, string]}
-          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-          style={{ flex: 1, padding: 20, justifyContent: 'flex-end' }}
-        >
-          {/* Glass sheen */}
-          <LinearGradient
-            colors={['rgba(255,255,255,0.28)', 'rgba(255,255,255,0.0)']}
-            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 100 }}
-            pointerEvents="none"
-          />
-          {/* Decorative arcs */}
-          <View style={{ position: 'absolute', width: 200, height: 200, borderRadius: 100, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.13)', top: -70, right: -40 }} pointerEvents="none" />
-          <View style={{ position: 'absolute', width: 140, height: 140, borderRadius: 70, borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)', top: -30, right: -5 }} pointerEvents="none" />
-          <View style={{ position: 'absolute', width: 90, height: 90, borderRadius: 45, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', top: 5, right: 30 }} pointerEvents="none" />
-
-          {/* All content pinned to bottom */}
-          <View style={{ paddingRight: 120, gap: 3 }}>
-            <Text style={{ color: '#fff', fontSize: 24, fontFamily: 'Nunito-ExtraBold', lineHeight: 28, letterSpacing: -0.6, textShadowColor: 'rgba(0,0,0,0.25)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 6 }}>
-              Focus Mode
-            </Text>
-            <Text style={{ color: 'rgba(255,255,255,0.76)', fontSize: 12, fontFamily: 'Nunito-SemiBold', lineHeight: 17, marginBottom: 8 }}>
-              {blockedCount} app{blockedCount !== 1 ? 's' : ''} locked · study for {durationLabel}
-            </Text>
-            {/* Progress bar */}
-            <View style={{ gap: 5 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Text style={{ color: 'rgba(255,255,255,0.55)', fontSize: 10, fontFamily: 'Nunito-SemiBold' }}>
-                  {elapsedSeconds > 0 ? 'Counting down…' : 'Study to unlock apps'}
-                </Text>
-                <Text style={{ color: '#fff', fontSize: 11, fontFamily: 'Nunito-ExtraBold', letterSpacing: 0.2 }}>
-                  {timeLabel}
-                </Text>
-              </View>
-              <View style={{ height: 9, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.18)' }}>
-                <View style={{
-                  height: '100%', borderRadius: 5,
-                  backgroundColor: '#fff',
-                  width: `${Math.round(pct * 100)}%`,
-                  shadowColor: '#fff', shadowOpacity: 0.8, shadowRadius: 6,
-                }} />
-              </View>
-            </View>
-          </View>
-        </LinearGradient>
-        <AppsLockedMascot />
-      </View>
-    </TouchableOpacity>
-  );
-}
-
-// ── Home mascot ───────────────────────────────────────────────────────────────
-
-function HomeMascot() {
-  const rot1  = useSharedValue(0);
-  const rot2  = useSharedValue(0);
-  const rot3  = useSharedValue(0);
-  const pulse = useSharedValue(1);
-  const float = useSharedValue(0);
-
-  React.useEffect(() => {
-    rot1.value  = withRepeat(withTiming(360,  { duration: 3800, easing: Easing.linear }), -1, false);
-    rot2.value  = withRepeat(withTiming(-360, { duration: 5500, easing: Easing.linear }), -1, false);
-    rot3.value  = withRepeat(withTiming(360,  { duration: 8000, easing: Easing.linear }), -1, false);
-    pulse.value = withRepeat(withSequence(
-      withTiming(1.06, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
-      withTiming(1.00, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
-    ), -1, false);
-    float.value = withRepeat(withSequence(
-      withTiming(-7, { duration: 1800, easing: Easing.inOut(Easing.ease) }),
-      withTiming(0,  { duration: 1800, easing: Easing.inOut(Easing.ease) }),
-    ), -1, false);
-  }, []);
-
-  const ring1Style = useAnimatedStyle(() => ({ transform: [{ rotate: `${rot1.value}deg` }] }));
-  const ring2Style = useAnimatedStyle(() => ({ transform: [{ rotate: `${rot2.value}deg` }] }));
-  const ring3Style = useAnimatedStyle(() => ({ transform: [{ rotate: `${rot3.value}deg` }] }));
-  const pulseStyle = useAnimatedStyle(() => ({ transform: [{ scale: pulse.value }] }));
-  const floatStyle = useAnimatedStyle(() => ({ transform: [{ translateY: float.value }] }));
-
-  const imgSize = 76; const r1 = 52; const r2 = 64; const r3 = 75; const total = (r3 + 5) * 2;
-
-  return (
-    <Animated.View entering={FadeInDown.delay(40).duration(320)} style={{ alignItems: 'center', paddingTop: 10, paddingBottom: 10 }}>
-      <Animated.View style={[{ width: total, height: total, alignItems: 'center', justifyContent: 'center' }, floatStyle]}>
-
-        {/* Ring 3 — outermost slow CW */}
-        <Animated.View style={[{ position: 'absolute', width: r3 * 2, height: r3 * 2, borderRadius: r3, alignItems: 'center', justifyContent: 'center' }, ring3Style]}>
-          <View style={{ position: 'absolute', width: r3 * 2, height: r3 * 2, borderRadius: r3,
-            borderWidth: 1.5, borderTopColor: '#A78BFA55', borderRightColor: 'transparent',
-            borderBottomColor: '#A78BFA44', borderLeftColor: 'transparent' }} />
-          <View style={{ position: 'absolute', top: 2, width: 6, height: 6, borderRadius: 3, backgroundColor: '#E9D5FF', shadowColor: '#C4B5FD', shadowRadius: 6, shadowOpacity: 1 }} />
-        </Animated.View>
-
-        {/* Ring 2 — middle CCW */}
-        <Animated.View style={[{ position: 'absolute', width: r2 * 2, height: r2 * 2, borderRadius: r2, alignItems: 'center', justifyContent: 'center' }, ring2Style]}>
-          <View style={{ position: 'absolute', width: r2 * 2, height: r2 * 2, borderRadius: r2,
-            borderWidth: 2, borderTopColor: 'transparent', borderRightColor: '#8B5CF6BB',
-            borderBottomColor: 'transparent', borderLeftColor: '#7C3AEDAA' }} />
-          <View style={{ position: 'absolute', right: 1, width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#DDD6FE', shadowColor: '#A78BFA', shadowRadius: 8, shadowOpacity: 1 }} />
-        </Animated.View>
-
-        {/* Ring 1 — inner fast CW */}
-        <Animated.View style={[{ position: 'absolute', width: r1 * 2, height: r1 * 2, borderRadius: r1, alignItems: 'center', justifyContent: 'center' }, ring1Style]}>
-          <View style={{ position: 'absolute', width: r1 * 2, height: r1 * 2, borderRadius: r1,
-            borderWidth: 2.5, borderTopColor: '#9333EACC', borderRightColor: 'transparent',
-            borderBottomColor: '#7C3AEDAA', borderLeftColor: 'transparent' }} />
-          <View style={{ position: 'absolute', top: 0, width: 8, height: 8, borderRadius: 4, backgroundColor: '#F5F3FF', shadowColor: '#9333EA', shadowRadius: 10, shadowOpacity: 1 }} />
-        </Animated.View>
-
-        {/* Purple circle + image */}
-        <Animated.View style={[{ width: imgSize + 8, height: imgSize + 8, borderRadius: (imgSize + 8) / 2,
-          backgroundColor: '#5B21B6', alignItems: 'center', justifyContent: 'center',
-          shadowColor: '#7C3AED', shadowRadius: 18, shadowOpacity: 0.7, shadowOffset: { width: 0, height: 0 },
-        }, pulseStyle]}>
-          <Image source={require('../assets/Fyenman-mascot.png')} style={{ width: imgSize, height: imgSize, borderRadius: imgSize / 2 }} resizeMode="cover" />
-        </Animated.View>
-
-      </Animated.View>
-    </Animated.View>
-  );
-}
-
-// ── Daily quote ───────────────────────────────────────────────────────────────
-
-function DailyQuote({ C, fs, F }: { C: AppColors; fs: (n: number) => number; F: any }) {
-  const [quoteIndex] = useState(() => Math.floor(Math.random() * READING_QUOTES.length));
-  const { text, author } = READING_QUOTES[quoteIndex];
-
-  return (
-    <Animated.View
-      entering={FadeInDown.delay(60).duration(340)}
-      style={{
-        marginHorizontal: Spacing.lg,
-        marginTop: Spacing.md,
-        borderRadius: 14,
-        backgroundColor: `${C.primary}0E`,
-        paddingHorizontal: 14,
-        paddingVertical: 10,
-        overflow: 'hidden',
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-      }}
-    >
-      <Text style={{
-        fontSize: 28,
-        lineHeight: 32,
-        color: `${C.primary}50`,
-        fontFamily: F.extraBold,
-        marginTop: -4,
-      }}>
-        "
-      </Text>
-      <View style={{ flex: 1 }}>
-        <Text style={{ fontFamily: F.semiBold, fontSize: fs(11), color: C.text, lineHeight: 17 }} numberOfLines={2}>
-          {text}
-        </Text>
-        <Text style={{ fontFamily: F.bold, fontSize: fs(10), color: C.primary, marginTop: 3, opacity: 0.8 }}>
-          — {author}
-        </Text>
-      </View>
-    </Animated.View>
-  );
-}
-
-// ── Home tab ─────────────────────────────────────────────────────────────────
-
-function HomeTabContent({ onUpload, onCourseSelect, onSeeAll, onGoalSetup, onOpenFeynman, onUpgrade, C, fs, F, isDark }: {
-  onUpload: () => void; onCourseSelect: (id: Id<'courses'>) => void; onSeeAll: () => void; onGoalSetup: () => void;
-  onOpenFeynman: () => void; onUpgrade: () => void;
-  C: AppColors; fs: (n: number) => number; F: any; isDark: boolean;
-}) {
-  const styles = React.useMemo(() => makeSharedStyles(C), [C]);
-  const { goalConfig, dailyProgress, blockDurationHours, blockingEnabled, startBlockSession, goalSavedAt, sessionCompletedDate, setSessionCompleted } = useAppStore();
-  const { isPremium } = useEntitlement();
-  const viewer = useQuery(api.users.currentUser);
-  const rawCourses = useQuery(api.courses.listMine);
-  const myStats = useQuery(api.courses.getMyStats);
-  const personalCourses = (rawCourses ?? []) as any[];
-  const [appsSelected, setAppsSelected] = useState(true);
-  const [blockedCount, setBlockedCount] = useState(0);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [showComplete, setShowComplete] = useState(false);
-  const [blockPhase, setBlockPhase] = useState<'tomorrow' | 'later-today' | 'active'>('later-today');
-
-  React.useEffect(() => {
-    if (!blockingEnabled) return;
-    hasSelection().then(setAppsSelected).catch(() => setAppsSelected(true));
-    getBlockedCount().then(setBlockedCount).catch(() => setBlockedCount(0));
-  }, [blockingEnabled]);
-
-  // Live countdown — also handles starting the session when lockTime is reached
-  React.useEffect(() => {
-    if (!blockingEnabled || !appsSelected) return;
-    const lockTime = goalConfig?.lockTime;
-    if (!lockTime) return;
-
-    const [lh, lm] = lockTime.split(':').map(Number);
-    const lockMins = (lh ?? 9) * 60 + (lm ?? 0);
-    const goalSecs = blockDurationHours * 3600;
-
-    const tick = () => {
-      const todayDate = new Date().toLocaleDateString('en-CA');
-      // New day — treat as if no session has started yet so startBlockSession resets properly
-      const start = dailyProgress.date === todayDate ? dailyProgress.sessionStartMs : null;
-      if (!start) {
-        const now = new Date();
-        const nowMins = now.getHours() * 60 + now.getMinutes();
-        const lockTimeTodayMs = new Date(now).setHours(lh ?? 9, lm ?? 0, 0, 0);
-        // Goal was saved after today's lock time → skip today, wait until tomorrow
-        if (goalSavedAt && goalSavedAt > lockTimeTodayMs) {
-          setBlockPhase('tomorrow');
-          return;
-        }
-        if (nowMins < lockMins) {
-          setBlockPhase('later-today');
-          return;
-        }
-        // Lock time has been reached → start the session
-        startBlockSession();
-        return;
-      }
-      setBlockPhase('active');
-      const elapsed = Math.floor((Date.now() - start) / 1000);
-      setElapsedSeconds(elapsed);
-      if (elapsed >= goalSecs && sessionCompletedDate !== todayDate) {
-        setSessionCompleted(todayDate);
-        setShowComplete(true);
-      }
-    };
-
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [blockingEnabled, appsSelected, dailyProgress.sessionStartMs, blockDurationHours, goalConfig?.lockTime, goalSavedAt, sessionCompletedDate, setSessionCompleted]);
-  const firstName = viewer?.name?.split(' ')[0] ?? 'Learner';
-
-  const cardWidth = Dimensions.get('window').width - Spacing.lg * 2;
-
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
-
-  return (
-    <View style={{ flex: 1 }}>
-      {/* ── Header ── */}
-      <View style={[headerStyles.bar, { borderBottomColor: C.border }]}>
-        <View style={{ flex: 1 }}>
-          <Text style={[headerStyles.greeting, { fontSize: fs(12), fontFamily: F.regular, color: C.muted }]}>
-            {greeting}
-          </Text>
-          <Text style={[headerStyles.title, { fontSize: fs(22), fontFamily: F.bold, color: C.text }]} numberOfLines={1}>
-            Hi, {firstName}!
-          </Text>
-        </View>
-        <View style={headerStyles.right}>
-          {isPremium ? (
-            <View style={[headerStyles.badge, { backgroundColor: `${C.primary}14`, borderColor: `${C.primary}30` }]}>
-              <Ionicons name="star" size={10} color={C.primary} />
-              <Text style={[{ fontFamily: F.extraBold, fontSize: fs(10), color: C.primary }]}>PRO</Text>
-            </View>
-          ) : (
-            <TouchableOpacity
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                onUpgrade();
-              }}
-              activeOpacity={0.8}
-              style={[headerStyles.badge, { backgroundColor: `${C.primary}10`, borderColor: `${C.primary}22` }]}
-            >
-              <Ionicons name="flash-outline" size={10} color={C.primary} />
-              <Text style={[{ fontFamily: F.bold, fontSize: fs(10), color: C.primary }]}>Upgrade</Text>
-            </TouchableOpacity>
-          )}
-          {viewer?.image ? (
-            <Image source={{ uri: viewer.image }} style={[headerStyles.avatar, { borderColor: C.border }]} />
-          ) : viewer?.name ? (
-            <View style={[headerStyles.avatarFallback, { backgroundColor: `${C.primary}18`, borderColor: C.border }]}>
-              <Text style={[{ color: C.primary, fontFamily: F.bold, fontSize: fs(14) }]}>{viewer.name[0].toUpperCase()}</Text>
-            </View>
-          ) : null}
-        </View>
-      </View>
-
-
-      {/* ── Daily quote ── */}
-      <DailyQuote C={C} fs={fs} F={F} />
-
-      {/* ── Gradient cards ── */}
-      <View style={{ flex: 1, paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm, paddingBottom: Spacing.sm, gap: 10 }}>
-        {(() => {
-          const lifetimeCount = myStats?.totalNotesCreated ?? personalCourses.length;
-          const atLimit = !isPremium && lifetimeCount >= FREE_NOTE_LIMIT;
-          const noteBadge = !isPremium
-            ? atLimit ? `${FREE_NOTE_LIMIT}/${FREE_NOTE_LIMIT} notes — upgrade`
-                      : `${lifetimeCount}/${FREE_NOTE_LIMIT} notes`
-            : undefined;
-          return (
-            <GradientCard
-              flex
-              width={cardWidth}
-              title="Create a note"
-              subtitle={atLimit ? 'Upgrade to add unlimited notes' : 'Upload a PDF and AI generates your lessons'}
-              gradientColors={CardGradients.salmon}
-              onPress={onUpload}
-              actionLabel={atLimit ? 'Upgrade ✨' : 'Get started'}
-              badge={noteBadge}
-              isDark={isDark}
-              imageSource={require('../assets/create-note-mascot.png')}
-            />
-          );
-        })()}
-        {blockingEnabled && (
-          !appsSelected
-            ? <NoAppsBlockedBanner width={cardWidth} isDark={isDark} onSetup={onGoalSetup} />
-            : blockPhase === 'active'
-              ? <AppsLockedBanner width={cardWidth} blockedCount={blockedCount} blockDurationHours={blockDurationHours} elapsedSeconds={elapsedSeconds} isDark={isDark} onStudy={onSeeAll} />
-              : <BlockingScheduledBanner width={cardWidth} isDark={isDark} lockTime={goalConfig?.lockTime ?? '09:00'} phase={blockPhase} onSetup={onGoalSetup} />
-        )}
-        {/* ── Feynman card ── */}
-        <GradientCard
-          flex
-          width={cardWidth}
-          title="Feynman AI"
-          subtitle="Explain it to an AI character — the fastest way to truly learn"
-          gradientColors={CardGradients.feynman}
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onOpenFeynman(); }}
-          actionLabel="Start session ✨"
-          isDark={isDark}
-          imageSource={require('../assets/Fyenman-mascot.png')}
-        />
-      </View>
-
-      {/* ── Session complete modal ── */}
-      <SessionCompleteModal
-        visible={showComplete}
-        lockTime={goalConfig?.lockTime ?? '09:00'}
-        studiedMins={Math.floor(elapsedSeconds / 60)}
-        firstName={viewer?.name?.split(' ')[0] ?? 'Learner'}
-        onDismiss={() => setShowComplete(false)}
-        C={C} F={F} fs={fs}
-      />
-
-    </View>
-  );
+function hexA(hex: string, a: number) {
+  const n = parseInt(hex.replace('#', ''), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
 
 // ── Create folder sheet ───────────────────────────────────────────────────────
@@ -662,13 +93,13 @@ function CreateFolderSheet({ visible, onDismiss, onCreated, C, fs, F }: {
         style={{ flex: 1, justifyContent: 'flex-end' }}
       >
         <TouchableOpacity
-          style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.45)' }}
+          style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.6)' }}
           activeOpacity={1}
           onPress={() => { setName(''); onDismiss(); }}
         />
         <Animated.View
           entering={FadeInDown.duration(220)}
-          style={{ backgroundColor: C.bg, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, paddingBottom: Spacing.xl, gap: Spacing.md }}
+          style={{ backgroundColor: C.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, borderWidth: 1, borderColor: C.border, paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, paddingBottom: Spacing.xl, gap: Spacing.md }}
         >
           {/* Handle */}
           <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: C.borderStrong, alignSelf: 'center', marginBottom: 4 }} />
@@ -676,10 +107,10 @@ function CreateFolderSheet({ visible, onDismiss, onCreated, C, fs, F }: {
           {/* Header row */}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(124,111,247,0.15)', justifyContent: 'center', alignItems: 'center' }}>
-                <Ionicons name="folder" size={20} color="#7C6FF7" />
+              <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: C.primaryBg, justifyContent: 'center', alignItems: 'center' }}>
+                <Ionicons name="folder" size={20} color={C.primary} />
               </View>
-              <Text style={{ fontFamily: F.bold, fontSize: fs(17), color: C.text }}>New Folder</Text>
+              <Text style={{ fontFamily: F.extraBold, fontSize: fs(19), color: C.text }}>New folder</Text>
             </View>
             <TouchableOpacity onPress={() => { setName(''); onDismiss(); }} hitSlop={8}>
               <Text style={{ fontFamily: F.regular, fontSize: fs(15), color: C.muted }}>Cancel</Text>
@@ -689,8 +120,8 @@ function CreateFolderSheet({ visible, onDismiss, onCreated, C, fs, F }: {
           {/* Input */}
           <TextInput
             style={{
-              borderRadius: 14, borderWidth: 1.5, borderColor: name.trim() ? '#7C6FF7' : C.border,
-              backgroundColor: C.surface, paddingHorizontal: 16, paddingVertical: 16,
+              borderRadius: 14, borderWidth: 1, borderColor: name.trim() ? C.primary : C.border,
+              backgroundColor: C.surfaceAlt, paddingHorizontal: 16, paddingVertical: 16,
               fontFamily: F.regular, fontSize: fs(16), color: C.text,
             }}
             placeholder="Folder name"
@@ -714,7 +145,7 @@ function CreateFolderSheet({ visible, onDismiss, onCreated, C, fs, F }: {
             }}
           >
             <Ionicons name="folder-open" size={18} color={name.trim() ? C.bg : C.muted} />
-            <Text style={{ fontFamily: F.bold, fontSize: fs(16), color: name.trim() ? C.bg : C.muted }}>Create Folder</Text>
+            <Text style={{ fontFamily: F.bold, fontSize: fs(16), color: name.trim() ? C.bg : C.muted }}>Create folder</Text>
           </TouchableOpacity>
         </Animated.View>
       </KeyboardAvoidingView>
@@ -763,8 +194,8 @@ function FolderPickerSheet({ visible, folders, activeFolderId, onSelect, onDismi
             style={{ marginHorizontal: 14, marginBottom: 10, borderRadius: 20, overflow: 'hidden', backgroundColor: C.surface }}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border }}>
-              <View style={{ width: 40, height: 40, borderRadius: 11, backgroundColor: 'rgba(124,111,247,0.15)', justifyContent: 'center', alignItems: 'center' }}>
-                <Ionicons name="folder" size={22} color="#7C6FF7" />
+              <View style={{ width: 40, height: 40, borderRadius: 11, backgroundColor: C.primaryBg, justifyContent: 'center', alignItems: 'center' }}>
+                <Ionicons name="folder" size={22} color={C.primary} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={{ fontFamily: F.bold, fontSize: fs(14), color: C.text }} numberOfLines={1}>{folderContextMenu.name}</Text>
@@ -780,10 +211,10 @@ function FolderPickerSheet({ visible, folders, activeFolderId, onSelect, onDismi
                 setTimeout(() => handleDelete(folder), 300);
               }}
             >
-              <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#FEF2F2', justifyContent: 'center', alignItems: 'center' }}>
-                <Ionicons name="trash-outline" size={18} color="#EF4444" />
+              <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: C.errorBg, justifyContent: 'center', alignItems: 'center' }}>
+                <Ionicons name="trash-outline" size={18} color={C.error} />
               </View>
-              <Text style={{ fontFamily: F.semiBold, fontSize: fs(16), color: '#EF4444' }}>Delete Folder</Text>
+              <Text style={{ fontFamily: F.semiBold, fontSize: fs(16), color: C.error }}>Delete folder</Text>
             </TouchableOpacity>
           </Animated.View>
           <TouchableOpacity
@@ -797,8 +228,8 @@ function FolderPickerSheet({ visible, folders, activeFolderId, onSelect, onDismi
       ) : (
         /* ── Normal picker state ── */
         <>
-          <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' }} activeOpacity={1} onPress={onDismiss} />
-          <View style={[libStyles.pickerSheet, { backgroundColor: C.surface }]}>
+          <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' }} activeOpacity={1} onPress={onDismiss} />
+          <View style={[libStyles.pickerSheet, { backgroundColor: C.surface, borderWidth: 1, borderColor: C.border }]}>
             <View style={[libStyles.pickerHandle, { backgroundColor: C.borderStrong }]} />
             {/* All Notes row */}
             <TouchableOpacity
@@ -807,7 +238,7 @@ function FolderPickerSheet({ visible, folders, activeFolderId, onSelect, onDismi
               activeOpacity={0.7}
             >
               <Ionicons name="albums-outline" size={20} color={C.text} />
-              <Text style={[libStyles.pickerRowTxt, { fontFamily: F.semiBold, fontSize: fs(15), color: C.text }]}>All Notes</Text>
+              <Text style={[libStyles.pickerRowTxt, { fontFamily: F.semiBold, fontSize: fs(15), color: C.text }]}>All notes</Text>
               {!activeFolderId && <Ionicons name="checkmark" size={18} color={C.text} />}
             </TouchableOpacity>
             {/* Folder rows — three-dot is a sibling touchable, not nested */}
@@ -820,7 +251,7 @@ function FolderPickerSheet({ visible, folders, activeFolderId, onSelect, onDismi
                   delayLongPress={400}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="folder" size={20} color="#7C6FF7" />
+                  <Ionicons name="folder" size={20} color={C.primary} />
                   <Text style={[libStyles.pickerRowTxt, { fontFamily: F.semiBold, fontSize: fs(15), color: C.text }]} numberOfLines={1}>{f.name}</Text>
                   {activeFolderId === f._id && <Ionicons name="checkmark" size={18} color={C.text} />}
                 </TouchableOpacity>
@@ -841,7 +272,7 @@ function FolderPickerSheet({ visible, folders, activeFolderId, onSelect, onDismi
               <View style={[libStyles.pickerAddIcon, { backgroundColor: C.surfaceAlt }]}>
                 <Ionicons name="add" size={18} color={C.text} />
               </View>
-              <Text style={{ fontFamily: F.semiBold, fontSize: fs(15), color: C.text }}>New Folder</Text>
+              <Text style={{ fontFamily: F.semiBold, fontSize: fs(15), color: C.text }}>New folder</Text>
             </TouchableOpacity>
           </View>
         </>
@@ -852,12 +283,14 @@ function FolderPickerSheet({ visible, folders, activeFolderId, onSelect, onDismi
 
 // ── Library tab ───────────────────────────────────────────────────────────────
 
-function LibraryTab({ onCourseSelect, onUpload, onFeynman, noteCount, C, fs, F }: {
-  onCourseSelect: (id: Id<'courses'>) => void; onUpload: () => void;
+function LibraryTab({ onCourseSelect, onUpload, onFeynman, onRequireAuth, noteCount, openBrowse, onBrowseOpened, C, fs, F }: {
+  openBrowse: boolean; onBrowseOpened: () => void;
+  onCourseSelect: (id: Id<'courses'>) => void; onUpload: () => void; onRequireAuth: () => void;
   onFeynman: (id: string, title: string, feynmanTopics: any[]) => void;
   noteCount: number;
   C: AppColors; fs: (n: number) => number; F: any;
 }) {
+  const [section, setSection] = useState<'paths' | 'notes'>('paths');
   const [query, setQuery] = useState('');
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
   const [showFolderPicker, setShowFolderPicker] = useState(false);
@@ -869,8 +302,10 @@ function LibraryTab({ onCourseSelect, onUpload, onFeynman, noteCount, C, fs, F }
   const personalCourses = (rawLibCourses ?? []) as any[];
   const folders = (useQuery(api.courses.listFolders) ?? []) as any[];
   const { isPremium } = useEntitlement();
+  const glim = useAppStore((s) => s.glim);
+  const palette = useMemo(() => paletteForInterests(glim.interests), [glim.interests]);
 
-  const activeFolderName = (folders as any[]).find((f: any) => f._id === activeFolderId)?.name ?? null;
+  const activeFolderName = folders.find((f: any) => f._id === activeFolderId)?.name ?? null;
 
   const filtered = useMemo(() => {
     let list = personalCourses;
@@ -881,40 +316,52 @@ function LibraryTab({ onCourseSelect, onUpload, onFeynman, noteCount, C, fs, F }
 
   return (
     <View style={{ flex: 1 }}>
-      <View style={[headerStyles.bar, { borderBottomColor: C.border }]}>
-        <Text style={[{ fontFamily: F.bold, fontSize: fs(24), color: C.text }]}>My Library</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          {!isPremium && (
-            <View style={{ backgroundColor: C.surface, borderColor: C.border, borderWidth: 1, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 }}>
-              <Text style={{ fontFamily: F.semiBold, fontSize: fs(12), color: C.muted }}>
-                {noteCount}/{FREE_NOTE_LIMIT} notes
-              </Text>
-            </View>
-          )}
-          <TouchableOpacity
-            onPress={() => { Haptics.selectionAsync(); setShowFolderPicker(true); }}
-            activeOpacity={0.75}
-            style={[libStyles.folderChip, { backgroundColor: C.surface, borderColor: C.border }]}
-          >
-            <Ionicons name="folder" size={15} color="#7C6FF7" />
-            <Text style={[libStyles.folderChipTxt, { color: C.text, maxWidth: 90 }]} numberOfLines={1}>
-              {activeFolderName ?? 'All Notes'}
-            </Text>
-            <Ionicons name="chevron-down" size={12} color={C.muted} />
-          </TouchableOpacity>
+      {/* header */}
+      <View style={lib.header}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontFamily: F.extraBold, fontSize: fs(30), color: C.text, letterSpacing: -0.8 }}>Library</Text>
+          <Text style={{ fontFamily: F.regular, fontSize: fs(14), color: C.sub, marginTop: 2 }}>
+            {section === 'paths' ? 'Topics that go deeper every day' : 'Study your own notes, PDFs and lectures'}
+          </Text>
         </View>
+        {NOTES_ENABLED && section === 'notes' && !isPremium && (
+          <View style={[lib.chip, { backgroundColor: C.surface, borderColor: C.border }]}>
+            <Text style={{ fontFamily: F.semiBold, fontSize: fs(12), color: C.sub }}>
+              {Math.min(noteCount, FREE_NOTE_LIMIT)}/{FREE_NOTE_LIMIT} free
+            </Text>
+          </View>
+        )}
       </View>
 
-      <View style={{ paddingHorizontal: Spacing.lg, paddingTop: Spacing.md }}>
-        <View style={[libStyles.searchBar, { backgroundColor: C.surface, borderColor: C.border }]}>
-          <Ionicons name="search-outline" size={16} color={C.muted} />
+      {/* Paths | Notes */}
+      {NOTES_ENABLED && <View style={[lib.segment, { backgroundColor: C.surface, borderColor: C.border }]}>
+        {(['paths', 'notes'] as const).map((k) => (
+          <TouchableOpacity
+            key={k}
+            activeOpacity={0.8}
+            onPress={() => { if (k !== section) { Haptics.selectionAsync(); setSection(k); } }}
+            style={[lib.segmentItem, section === k && { backgroundColor: C.surfaceAlt }]}
+          >
+            <Ionicons name={k === 'paths' ? 'trail-sign-outline' : 'document-text-outline'} size={15} color={section === k ? C.text : C.muted} />
+            <Text style={{ fontFamily: F.semiBold, fontSize: fs(14), color: section === k ? C.text : C.muted }}>
+              {k === 'paths' ? 'Paths' : 'My notes'}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>}
+
+      {/* search + folder (notes only) */}
+      {section === 'notes' && <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: Spacing.lg, paddingTop: Spacing.md }}>
+        <View style={[lib.search, { backgroundColor: C.surface, borderColor: C.border }]}>
+          <Ionicons name="search" size={15} color={C.muted} />
           <TextInput
-            style={[libStyles.searchInput, { fontFamily: F.regular, fontSize: fs(14), color: C.text }]}
-            placeholder="Search your notes..."
+            style={{ flex: 1, paddingTop: 0, fontFamily: F.regular, fontSize: fs(14), color: C.text }}
+            placeholder="Search"
             placeholderTextColor={C.muted}
             value={query}
             onChangeText={setQuery}
             returnKeyType="search"
+            selectionColor={C.primary}
           />
           {query.length > 0 && (
             <TouchableOpacity onPress={() => setQuery('')} hitSlop={8}>
@@ -922,109 +369,102 @@ function LibraryTab({ onCourseSelect, onUpload, onFeynman, noteCount, C, fs, F }
             </TouchableOpacity>
           )}
         </View>
-      </View>
+        <TouchableOpacity
+          onPress={() => { Haptics.selectionAsync(); setShowFolderPicker(true); }}
+          activeOpacity={0.75}
+          style={[lib.folderBtn, { backgroundColor: activeFolderId ? C.primaryBg : C.surface, borderColor: activeFolderId ? C.primaryRing : C.border }]}
+        >
+          <Ionicons name={activeFolderId ? 'folder' : 'folder-outline'} size={15} color={activeFolderId ? C.primary : C.sub} />
+          <Text style={{ fontFamily: F.semiBold, fontSize: fs(13), color: activeFolderId ? C.text : C.sub, maxWidth: 90 }} numberOfLines={1}>
+            {activeFolderName ?? 'All'}
+          </Text>
+          <Ionicons name="chevron-down" size={12} color={C.muted} />
+        </TouchableOpacity>
+      </View>}
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, paddingBottom: Spacing.xl, gap: 8 }}
+        contentContainerStyle={{ paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, paddingBottom: Spacing.xl, gap: 10 }}
       >
-        {isLibLoading && [1, 2, 3].map((i) => (
-          <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: Spacing.md, backgroundColor: C.surface, borderColor: C.border }}>
-            <View style={{ width: 50, height: 50, borderRadius: 14, backgroundColor: C.borderStrong }} />
+        {section === 'paths' && (
+          <PathsSection layout="grid" C={C} F={F} fs={fs} onRequireAuth={onRequireAuth}
+            openBrowse={openBrowse} onBrowseOpened={onBrowseOpened} />
+        )}
+        {section === 'notes' && <>
+        {isLibLoading && [0, 1, 2].map((i) => (
+          <View key={i} style={[lib.card, { backgroundColor: C.surface, borderColor: C.border, opacity: 1 - i * 0.25 }]}>
+            <View style={[lib.tile, { backgroundColor: C.surfaceAlt }]} />
             <View style={{ flex: 1, gap: 8 }}>
-              <View style={{ height: 11, borderRadius: 6, width: '55%', backgroundColor: C.borderStrong }} />
-              <View style={{ height: 11, borderRadius: 6, width: '35%', backgroundColor: C.borderStrong }} />
+              <View style={{ height: 10, borderRadius: 5, width: '60%', backgroundColor: C.surfaceAlt }} />
+              <View style={{ height: 10, borderRadius: 5, width: '30%', backgroundColor: C.surfaceAlt }} />
             </View>
           </View>
         ))}
-        {!isLibLoading && filtered.map((course: any) => {
-          const { emoji, color } = topicColor(course.title);
-          const date = new Date(course._creationTime).toLocaleString('en-US', {
-            month: 'short', day: 'numeric', year: 'numeric',
-            hour: '2-digit', minute: '2-digit', hour12: false,
-          });
+
+        {!isLibLoading && filtered.map((course: any, i: number) => {
+          const { icon, color } = topicIcon(course.title);
+          const date = new Date(course._creationTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
           const isGenerating = course.status === 'generating';
           return (
-            <View key={course._id} style={{ marginBottom: 3, opacity: isGenerating ? 0.6 : 1 }}>
-              {/* Duo shadow */}
-              <View style={{
-                position: 'absolute', bottom: -3, left: 0, right: 0, top: 0,
-                borderRadius: 16, backgroundColor: C.text,
-              }} />
-              {/* Card */}
-              <View style={{
-                flexDirection: 'row', alignItems: 'center',
-                backgroundColor: C.surface,
-                borderWidth: 2, borderColor: C.text,
-                borderRadius: 16,
-                transform: [{ translateY: -3 }],
-              }}>
-                {/* Main tap area */}
+            <Animated.View key={course._id} entering={FadeInDown.delay(Math.min(i, 8) * 35).duration(320)}>
+              <View style={[lib.card, { backgroundColor: C.surface, borderColor: C.border, opacity: isGenerating ? 0.7 : 1 }]}>
                 <TouchableOpacity
-                  style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 14 }}
-                  activeOpacity={0.85}
+                  style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 14 }}
+                  activeOpacity={0.7}
                   onPress={() => { Haptics.selectionAsync(); onCourseSelect(course._id as Id<'courses'>); }}
                   onLongPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setContextMenuCourse(course); }}
                   delayLongPress={400}
                 >
-                  <View style={{
-                    width: 44, height: 44, borderRadius: 12,
-                    backgroundColor: `${color}18`, borderWidth: 1.5, borderColor: `${color}35`,
-                    justifyContent: 'center', alignItems: 'center',
-                  }}>
-                    <Text style={{ fontSize: 22 }}>{isGenerating ? '⏳' : emoji}</Text>
+                  <View style={[lib.tile, { backgroundColor: hexA(color, 0.12), borderColor: hexA(color, 0.22) }]}>
+                    {isGenerating
+                      ? <ActivityIndicator size="small" color={color} />
+                      : <Ionicons name={icon} size={20} color={color} />}
                   </View>
-                  <View style={{ flex: 1, gap: 3 }}>
-                    <Text style={[{ fontFamily: F.extraBold, fontSize: fs(14), color: C.text, lineHeight: 19 }]} numberOfLines={1}>
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <Text style={{ fontFamily: F.semiBold, fontSize: fs(15), color: C.text }} numberOfLines={1}>
                       {course.title}
                     </Text>
-                    {isGenerating ? (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                        <ActivityIndicator size="small" color={C.primary} style={{ transform: [{ scale: 0.65 }] }} />
-                        <Text style={[{ fontFamily: F.regular, fontSize: fs(11), color: C.primary }]}>Generating…</Text>
-                      </View>
-                    ) : (
-                      <Text style={[{ fontFamily: F.regular, fontSize: fs(11), color: C.muted }]}>{date}</Text>
-                    )}
+                    <Text style={{ fontFamily: F.regular, fontSize: fs(12), color: isGenerating ? C.primary : C.muted }}>
+                      {isGenerating ? 'Generating…' : date}
+                    </Text>
                   </View>
                 </TouchableOpacity>
-                {/* Three-dot button — sibling, not nested */}
                 <TouchableOpacity
                   onPress={() => { Haptics.selectionAsync(); setContextMenuCourse(course); }}
-                  hitSlop={8}
-                  style={{ paddingHorizontal: 14, paddingVertical: 14 }}
+                  hitSlop={10}
+                  style={{ paddingLeft: 12, paddingVertical: 6 }}
                 >
-                  <Ionicons name="ellipsis-vertical" size={16} color={C.muted} />
+                  <Ionicons name="ellipsis-horizontal" size={17} color={C.muted} />
                 </TouchableOpacity>
               </View>
-            </View>
+            </Animated.View>
           );
         })}
 
         {!isLibLoading && filtered.length === 0 && (
-          activeFolderId && !query.trim() ? (
-            <TouchableOpacity
-              onPress={onUpload}
-              activeOpacity={0.75}
-              style={{ borderWidth: 1.5, borderStyle: 'dashed', borderColor: C.borderStrong, borderRadius: 16, paddingVertical: Spacing.xl, alignItems: 'center', gap: Spacing.sm, marginTop: Spacing.md }}
-            >
-              <Ionicons name="document-text-outline" size={36} color={C.muted} />
-              <Text style={{ fontFamily: F.semiBold, fontSize: fs(14), color: C.muted }}>Create your first note</Text>
-            </TouchableOpacity>
-          ) : (
-            <Animated.View entering={FadeInDown.duration(260)} style={{ alignItems: 'center', paddingVertical: Spacing.xxl, gap: Spacing.md }}>
-              <View style={{ width: 72, height: 72, borderRadius: 20, borderWidth: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: C.primaryBg, borderColor: C.border }}>
-                <Text style={{ fontSize: 34 }}>📚</Text>
-              </View>
-              <Text style={{ fontSize: fs(16), fontFamily: F.semiBold, color: C.text }}>
-                {query.trim() ? 'No results found' : 'Your library is empty'}
-              </Text>
-              <Text style={{ fontSize: fs(13), fontFamily: F.regular, color: C.sub, textAlign: 'center', lineHeight: 20, paddingHorizontal: Spacing.md }}>
-                {query.trim() ? 'Try a different search' : 'Tap + to add your first course'}
-              </Text>
-            </Animated.View>
-          )
+          <Animated.View entering={FadeIn.duration(400)} style={{ alignItems: 'center', paddingTop: Spacing.xl, gap: Spacing.sm }}>
+            <Glim size={96} stage={glim.stage} palette={palette} mood="sleepy" wander={false} />
+            <Text style={{ fontSize: fs(18), fontFamily: F.extraBold, color: C.text, marginTop: Spacing.md }}>
+              {query.trim() ? 'Nothing matches' : activeFolderId ? 'This folder is empty' : 'Nothing here yet'}
+            </Text>
+            <Text style={{ fontSize: fs(14), fontFamily: F.regular, color: C.sub, textAlign: 'center', lineHeight: 21, paddingHorizontal: Spacing.xl }}>
+              {query.trim()
+                ? 'Try a different search.'
+                : 'Add class notes, a PDF or a lecture and turn it into flashcards, quizzes and Feynman practice.'}
+            </Text>
+            {!query.trim() && (
+              <TouchableOpacity
+                onPress={onUpload}
+                activeOpacity={0.85}
+                style={[lib.cta, { backgroundColor: C.text }]}
+              >
+                <Ionicons name="add" size={18} color={C.bg} />
+                <Text style={{ fontFamily: F.semiBold, fontSize: fs(15), color: C.bg }}>Add notes</Text>
+              </TouchableOpacity>
+            )}
+          </Animated.View>
         )}
+        </>}
       </ScrollView>
 
       <FolderPickerSheet
@@ -1046,50 +486,40 @@ function LibraryTab({ onCourseSelect, onUpload, onFeynman, noteCount, C, fs, F }
       {/* ── Course context menu ── */}
       {contextMenuCourse && (
         <Modal transparent visible animationType="fade" onRequestClose={() => setContextMenuCourse(null)}>
-          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'flex-end' }}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }}>
             <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setContextMenuCourse(null)} />
             <Animated.View
-              entering={FadeInDown.duration(220)}
-              style={{ marginHorizontal: 14, marginBottom: 10, borderRadius: 20, overflow: 'hidden', backgroundColor: C.surface }}
+              entering={FadeInDown.duration(240)}
+              style={[lib.menu, { backgroundColor: C.surface, borderColor: C.border }]}
             >
-              {/* Course header */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border }}>
-                {(() => { const { emoji, color } = topicColor(contextMenuCourse.title); return (
-                  <View style={{ width: 40, height: 40, borderRadius: 11, backgroundColor: `${color}18`, justifyContent: 'center', alignItems: 'center' }}>
-                    <Text style={{ fontSize: 21 }}>{emoji}</Text>
+              <View style={[lib.menuRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border }]}>
+                {(() => { const { icon, color } = topicIcon(contextMenuCourse.title); return (
+                  <View style={[lib.tile, { width: 40, height: 40, backgroundColor: hexA(color, 0.12), borderColor: hexA(color, 0.22) }]}>
+                    <Ionicons name={icon} size={18} color={color} />
                   </View>
                 ); })()}
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: F.bold, fontSize: fs(14), color: C.text }} numberOfLines={1}>{contextMenuCourse.title}</Text>
-                  <Text style={{ fontFamily: F.regular, fontSize: fs(11), color: C.muted }}>{contextMenuCourse.totalLessons ?? 0} lessons</Text>
-                </View>
+                <Text style={{ flex: 1, fontFamily: F.semiBold, fontSize: fs(15), color: C.text }} numberOfLines={1}>{contextMenuCourse.title}</Text>
               </View>
-              {/* Feynman action */}
               <TouchableOpacity
-                activeOpacity={0.75}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border }}
+                activeOpacity={0.7}
+                style={[lib.menuRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border }]}
                 onPress={() => {
                   const course = contextMenuCourse;
                   setContextMenuCourse(null);
-                  setTimeout(() => {
-                    onFeynman(course._id, course.title, course.feynmanTopics ?? []);
-                  }, 250);
+                  setTimeout(() => onFeynman(course._id, course.title, course.feynmanTopics ?? []), 250);
                 }}
               >
-                <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#EDE9FE', justifyContent: 'center', alignItems: 'center' }}>
-                  <Ionicons name="bulb-outline" size={18} color="#7C3AED" />
-                </View>
-                <Text style={{ fontFamily: F.semiBold, fontSize: fs(16), color: C.text }}>Feynman AI</Text>
+                <Ionicons name="mic-outline" size={19} color={C.text} />
+                <Text style={{ fontFamily: F.semiBold, fontSize: fs(15), color: C.text }}>Explain it (Feynman)</Text>
               </TouchableOpacity>
-              {/* Delete action */}
               <TouchableOpacity
-                activeOpacity={0.75}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingVertical: 16 }}
+                activeOpacity={0.7}
+                style={lib.menuRow}
                 onPress={() => {
                   const course = contextMenuCourse;
                   setContextMenuCourse(null);
                   setTimeout(() => {
-                    Alert.alert('Delete Course', 'This will permanently delete the course and all its lessons.', [
+                    Alert.alert('Delete this note?', 'This permanently deletes it and everything made from it.', [
                       { text: 'Cancel', style: 'cancel' },
                       {
                         text: 'Delete', style: 'destructive',
@@ -1102,19 +532,16 @@ function LibraryTab({ onCourseSelect, onUpload, onFeynman, noteCount, C, fs, F }
                   }, 250);
                 }}
               >
-                <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#FEF2F2', justifyContent: 'center', alignItems: 'center' }}>
-                  <Ionicons name="trash-outline" size={18} color="#EF4444" />
-                </View>
-                <Text style={{ fontFamily: F.semiBold, fontSize: fs(16), color: '#EF4444' }}>Delete Course</Text>
+                <Ionicons name="trash-outline" size={19} color={C.error} />
+                <Text style={{ fontFamily: F.semiBold, fontSize: fs(15), color: C.error }}>Delete</Text>
               </TouchableOpacity>
             </Animated.View>
-            {/* Cancel pill */}
             <TouchableOpacity
-              style={{ marginHorizontal: 14, marginBottom: 36, borderRadius: 16, paddingVertical: 16, alignItems: 'center', backgroundColor: C.surface }}
+              style={[lib.menuCancel, { backgroundColor: C.surface, borderColor: C.border }]}
               activeOpacity={0.75}
               onPress={() => setContextMenuCourse(null)}
             >
-              <Text style={{ fontFamily: F.bold, fontSize: fs(16), color: C.text }}>Cancel</Text>
+              <Text style={{ fontFamily: F.semiBold, fontSize: fs(15), color: C.text }}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </Modal>
@@ -1123,19 +550,24 @@ function LibraryTab({ onCourseSelect, onUpload, onFeynman, noteCount, C, fs, F }
   );
 }
 
+const lib = StyleSheet.create({
+  segment: { flexDirection: 'row', marginHorizontal: Spacing.lg, marginTop: Spacing.md, padding: 4, borderRadius: 14, borderWidth: 1, gap: 4 },
+  segmentItem: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 36, borderRadius: 10 },
+  header: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm, gap: 12 },
+  chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, marginBottom: 4 },
+  search: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 14, borderWidth: 1, paddingHorizontal: 12, height: 44 },
+  folderBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 14, borderWidth: 1, paddingHorizontal: 12, height: 44 },
+  card: { flexDirection: 'row', alignItems: 'center', borderRadius: 18, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 14, gap: 14 },
+  tile: { width: 44, height: 44, borderRadius: 13, borderWidth: 1, borderColor: 'transparent', alignItems: 'center', justifyContent: 'center' },
+  cta: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, paddingHorizontal: 20, paddingVertical: 13, marginTop: Spacing.md },
+  menu: { marginHorizontal: 14, marginBottom: 10, borderRadius: 22, borderWidth: 1, overflow: 'hidden' },
+  menuRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 18, paddingVertical: 16 },
+  menuCancel: { marginHorizontal: 14, marginBottom: 36, borderRadius: 18, borderWidth: 1, paddingVertical: 16, alignItems: 'center' },
+});
+
 const libStyles = StyleSheet.create({
-  searchBar: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    borderRadius: 14, borderWidth: 1.5, paddingHorizontal: 14, paddingVertical: 12,
-  },
-  searchInput: { flex: 1, paddingTop: 0 },
-  folderChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    borderRadius: 20, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 6,
-  },
-  folderChipTxt: { fontSize: 13, fontFamily: 'Nunito-SemiBold' },
   pickerSheet: {
-    borderTopLeftRadius: 22, borderTopRightRadius: 22,
+    borderTopLeftRadius: 28, borderTopRightRadius: 28,
     paddingBottom: 36,
   },
   pickerHandle: {
@@ -1159,65 +591,66 @@ const libStyles = StyleSheet.create({
   },
 });
 
-const headerStyles = StyleSheet.create({
-  bar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md, borderBottomWidth: StyleSheet.hairlineWidth },
-  greeting: { letterSpacing: 0.6, marginBottom: 1 },
-  title: {},
-  right: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  badge: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5, borderWidth: StyleSheet.hairlineWidth },
-  avatar: { width: 34, height: 34, borderRadius: 17, borderWidth: 1 },
-  avatarFallback: { width: 34, height: 34, borderRadius: 17, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
-});
-
 // ── Root ─────────────────────────────────────────────────────────────────────
 
 const FREE_NOTE_LIMIT = 1;
-const CANCEL_FLOW_OFFERING = 'com.loqlearn.app.premium_monthly_exclusive';
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const { C, fs, F, isDark } = useTheme();
+  const { C, fs, F } = useTheme();
   const { isAuthenticated } = useConvexAuth();
-  const { setFlow } = useAppStore();
   const { isConnected, networkLoading } = useNetworkStatus();
   const { isPremium } = useEntitlement();
   const rawAllCourses = useQuery(api.courses.listMine);
   const myStats = useQuery(api.courses.getMyStats);
   const noteCount = myStats?.totalNotesCreated ?? (rawAllCourses ?? []).length;
   const [activeTab, setActiveTab] = useState<HomeTab>('home');
+  const [showQuest, setShowQuest] = useState(false);
   const [showFeynman, setShowFeynman]     = useState(false);
   const [feynmanCourse, setFeynmanCourse] = useState<{ id: string; title: string; feynmanTopics: any[] } | null>(null);
   const [showUpload, setShowUpload] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  // + button with notes hidden: jump to Library and open "Learn anything".
+  const [openBrowse, setOpenBrowse] = useState(false);
   const [createSourceTab, setCreateSourceTab] = useState<'pdf' | 'youtube' | 'text' | 'capture'>('pdf');
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authReason, setAuthReason] = useState<AuthReason>('account');
+  // What to do once the user signs in (continue what they were trying to do).
+  const afterAuth = React.useRef<(() => void) | null>(null);
+  const askAuth = (reason: AuthReason, then?: () => void) => {
+    setAuthReason(reason);
+    afterAuth.current = then ?? null;
+    setShowAuthModal(true);
+  };
+
+  // Right after a trial/purchase starts: offer to save Glim + Pro to an account.
+  // Waits for the quest screen to close (iOS can't stack two sheets).
+  const askToSaveAccount = useAppStore((s) => s.askToSaveAccount);
+  const setAskToSaveAccount = useAppStore((s) => s.setAskToSaveAccount);
+  const questCount = useAppStore((s) => Object.keys(s.questLog).length);
+  const guidePending = useAppStore((s) => s.guidePending);
+  // Dev: replay the guided first quest on every launch (lib/features.ts).
+  useEffect(() => { if (GUIDE_PREVIEW) useAppStore.getState().setGuidePending(true); }, []);
+  useEffect(() => {
+    if (!askToSaveAccount) return;
+    if (isAuthenticated) { setAskToSaveAccount(false); return; }
+    // Ask to save Glim only after their first quest — not the second they've paid.
+    if (questCount === 0) return;
+    if (showQuest || showAuthModal) return;
+    const t = setTimeout(() => { setAskToSaveAccount(false); askAuth('save'); }, 700);
+    return () => clearTimeout(t);
+  }, [askToSaveAccount, isAuthenticated, showQuest, showAuthModal, questCount, guidePending]);
   const [detailCourse, setDetailCourse] = useState<Id<'courses'> | null>(null);
   const [activeCourse, setActiveCourse] = useState<Id<'courses'> | null>(null);
   const [playerMode, setPlayerMode] = useState<'flashcards' | 'quiz' | 'diagram' | undefined>(undefined);
   const [pdfView, setPdfView] = useState<{ url: string; title: string } | null>(null);
 
-  const showUpgradeWall = async () => {
-    if (!isAuthenticated) { setShowAuthModal(true); return; }
-    try {
-      const result = await RevenueCatUI.presentPaywall();
-      if (result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED) {
-        await Purchases.getCustomerInfo();
-        return;
-      }
-      if (result === PAYWALL_RESULT.CANCELLED) {
-        const offerings = await Purchases.getOfferings();
-        const cancelOffering = offerings.all[CANCEL_FLOW_OFFERING];
-        if (cancelOffering) {
-          const cancelResult = await RevenueCatUI.presentPaywall({ offering: cancelOffering });
-          if (cancelResult === PAYWALL_RESULT.PURCHASED || cancelResult === PAYWALL_RESULT.RESTORED) {
-            await Purchases.getCustomerInfo();
-          }
-        }
-      }
-    } catch {
-      Toast.show({ type: 'error', text1: 'Upgrade unavailable', text2: 'Check your connection and try again.' });
-    }
-  };
+  // One paywall everywhere (components/paywall/Paywall.tsx).
+  const showUpgradeWall = async () => { await openPaywall(); };
+  // Latest version, so a post-sign-in retry sees isAuthenticated = true.
+  const upgradeRef = React.useRef(showUpgradeWall);
+  upgradeRef.current = showUpgradeWall;
+
 
   const guardNoteLimit = (): boolean => {
     if (isPremium || noteCount < FREE_NOTE_LIMIT) return true;
@@ -1230,11 +663,12 @@ export default function HomeScreen() {
     if (!guardNoteLimit()) return;
     const tab = opt === 'youtube' ? 'youtube' : opt === 'text' ? 'text' : opt === 'capture' ? 'capture' : 'pdf';
     setCreateSourceTab(tab);
-    if (isAuthenticated) { setShowUpload(true); } else { setShowAuthModal(true); }
+    if (isAuthenticated) { setShowUpload(true); } else { askAuth('notes', () => setShowUpload(true)); }
   };
 
   const handleCreatePress = () => {
-    if (!isAuthenticated) { setShowAuthModal(true); return; }
+    if (!NOTES_ENABLED) { setActiveTab('library'); setOpenBrowse(true); return; }
+    if (!isAuthenticated) { askAuth('notes', () => setShowCreateModal(true)); return; }
     if (!guardNoteLimit()) return;
     setShowCreateModal(true);
   };
@@ -1283,10 +717,10 @@ export default function HomeScreen() {
       {showOfflineBanner && (
         <Animated.View
           entering={FadeIn.duration(200)}
-          style={[rootStyles.networkBanner, { backgroundColor: C.warning }]}
+          style={[rootStyles.networkBanner, { backgroundColor: C.warningBg }]}
         >
-          <Ionicons name="wifi-outline" size={13} color="#fff" />
-          <Text style={{ color: '#fff', fontFamily: F.semiBold, fontSize: fs(12) }}>
+          <Ionicons name="cloud-offline-outline" size={13} color={C.warning} />
+          <Text style={{ color: C.warning, fontFamily: F.semiBold, fontSize: fs(12) }}>
             No internet connection
           </Text>
         </Animated.View>
@@ -1294,22 +728,17 @@ export default function HomeScreen() {
 
       <View style={{ flex: 1 }}>
         {activeTab === 'home' && (
-          <HomeTabContent
-            onUpload={() => { if (!isAuthenticated) { setShowAuthModal(true); return; } if (!guardNoteLimit()) return; setShowCreateModal(true); }}
-            onCourseSelect={setDetailCourse}
-            onSeeAll={() => setActiveTab('library')}
-            onGoalSetup={() => setFlow('goalsetup')}
-            onOpenFeynman={() => { setFeynmanCourse(null); setShowFeynman(true); }}
-            onUpgrade={showUpgradeWall}
-            C={C} fs={fs} F={F} isDark={isDark}
-          />
+          <TodayTab onStartQuest={() => setShowQuest(true)} C={C} fs={fs} F={F} />
         )}
         {activeTab === 'library' && (
           <LibraryTab
+            onRequireAuth={() => askAuth('path')}
             onCourseSelect={setDetailCourse}
-            onUpload={() => { if (!isAuthenticated) { setShowAuthModal(true); return; } if (!guardNoteLimit()) return; setShowCreateModal(true); }}
+            onUpload={() => { if (!isAuthenticated) { askAuth('notes', () => setShowCreateModal(true)); return; } if (!guardNoteLimit()) return; setShowCreateModal(true); }}
             onFeynman={(id, title, feynmanTopics) => { setFeynmanCourse({ id, title, feynmanTopics }); setShowFeynman(true); }}
             noteCount={noteCount}
+            openBrowse={openBrowse}
+            onBrowseOpened={() => setOpenBrowse(false)}
             C={C} fs={fs} F={F}
           />
         )}
@@ -1326,6 +755,8 @@ export default function HomeScreen() {
         C={C} F={F} fs={fs}
       />
 
+      <QuestScreen visible={showQuest} onClose={() => setShowQuest(false)} />
+
       <CreateModal
         visible={showCreateModal}
         onDismiss={() => setShowCreateModal(false)}
@@ -1335,8 +766,14 @@ export default function HomeScreen() {
 
       <AuthModal
         visible={showAuthModal}
-        onDismiss={() => setShowAuthModal(false)}
-        onAuthSuccess={() => { setShowAuthModal(false); setShowUpload(true); }}
+        reason={authReason}
+        onDismiss={() => { setShowAuthModal(false); afterAuth.current = null; }}
+        onAuthSuccess={() => {
+          setShowAuthModal(false);
+          const next = afterAuth.current;
+          afterAuth.current = null;
+          if (next) setTimeout(next, 350); // let the sheet slide away first
+        }}
       />
 
       {/* ── Feynman modal ── */}
@@ -1360,22 +797,3 @@ const rootStyles = StyleSheet.create({
   networkBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: Spacing.lg, paddingVertical: 7 },
 });
 
-// ── Shared styles ─────────────────────────────────────────────────────────────
-
-function makeSharedStyles(_C: AppColors) {
-  return StyleSheet.create({
-    skeletonCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: Spacing.md },
-    skeletonIcon: { width: 50, height: 50, borderRadius: 14 },
-    skeletonLine: { height: 11, borderRadius: 6 },
-    empty: { alignItems: 'center', paddingVertical: Spacing.xxl, gap: Spacing.md },
-    emptyIcon: { width: 72, height: 72, borderRadius: 20, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
-    emptyTitle: {},
-    emptySub: { textAlign: 'center', lineHeight: 20, paddingHorizontal: Spacing.md },
-    uploadCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: Spacing.md },
-    uploadIcon: { width: 44, height: 44, borderRadius: 12, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
-    arrowBtn: { width: 34, height: 34, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-    courseRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.md, paddingVertical: 13, gap: 12 },
-    courseIcon: { width: 44, height: 44, borderRadius: 12, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
-    courseInfo: { flex: 1, gap: 5 },
-  });
-}

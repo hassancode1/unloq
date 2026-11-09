@@ -223,7 +223,7 @@ export default function GoalSetupScreen({ onComplete, onBack }: Props) {
       if (status === 'denied') {
         Alert.alert(
           'Screen Time Access Required',
-          'Please go to Settings → Screen Time → Loq Learn and allow access.',
+          'Please go to Settings → Screen Time → Unloq and allow access.',
           [{ text: 'OK' }],
         );
         return;

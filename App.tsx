@@ -2,8 +2,8 @@ import * as SplashScreen from "expo-splash-screen";
 import * as WebBrowser from "expo-web-browser";
 
 WebBrowser.maybeCompleteAuthSession();
-import { useCallback, useEffect, useRef } from "react";
-import { AppState } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AppState, LogBox } from "react-native";
 import Purchases from "react-native-purchases";
 import { useConvexAuth, useQuery, ConvexReactClient } from "convex/react";
 import type { ReactNode } from "react";
@@ -18,6 +18,7 @@ const secureStorage = {
   removeItem: (key: string) => SecureStore.deleteItemAsync(key),
 };
 import Toast from "react-native-toast-message";
+import { StatusBar } from "expo-status-bar";
 import {
   useFonts,
   Nunito_400Regular,
@@ -26,16 +27,36 @@ import {
   Nunito_700Bold,
   Nunito_800ExtraBold,
 } from "@expo-google-fonts/nunito";
+import {
+  SpaceGrotesk_500Medium,
+  SpaceGrotesk_600SemiBold,
+  SpaceGrotesk_700Bold,
+} from "@expo-google-fonts/space-grotesk";
+import {
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+} from "@expo-google-fonts/inter";
 import { useAppStore, type GoalConfig } from "./store/useAppStore";
 import { blockApps, unblockApps, clearShields } from "./lib/familyControls";
 import ScreenBlocking from "./lib/screenBlocking";
 import { setupNotificationHandler } from "./lib/notifications";
+import { ProgressSync } from "./lib/progressSync";
 import AppSplashScreen from "./app/splash";
 import OnboardingScreen from "./app/onboarding";
-import GoalSetupScreen from "./app/goal-setup";
 import HomeScreen from "./app/home";
-import LockedScreen from "./app/locked";
-import SessionTimerBanner from "./components/SessionTimerBanner";
+import ProGate from "./app/pro-gate";
+import PaywallHost from "./components/paywall/PaywallHost";
+import GlimLab from "./app/glim-lab";
+import { QuestResultPreview } from "./components/quest/QuestResult";
+
+// Dev-only: render the Glim mascot playground instead of the app.
+const GLIM_LAB = __DEV__ && false;
+// Dev-only: open the quest result screen with sample data (animation review).
+const RESULT_PREVIEW = __DEV__ && false;
+// Dev-only: always start at onboarding so it can be replayed on every reload.
+const FORCE_ONBOARDING = __DEV__ && false;
 
 const convex = new ConvexReactClient(process.env.EXPO_PUBLIC_CONVEX_URL!);
 
@@ -196,11 +217,12 @@ function LockCheck() {
 }
 
 function RevenueCatSync() {
-  const { isAuthenticated } = useConvexAuth();
+  const { isAuthenticated, isLoading } = useConvexAuth();
   const user = useQuery(api.users.currentUser);
   const setRevenueCatReady = useAppStore((s) => s.setRevenueCatReady);
 
   useEffect(() => {
+    if (isLoading) return; // don't act on the "not signed in yet" state at launch
     if (isAuthenticated && user?._id) {
       Purchases.logIn(user._id)
         .then(() => {
@@ -209,30 +231,47 @@ function RevenueCatSync() {
           // after a reinstall without requiring the user to manually tap "Restore".
           Purchases.restorePurchases().catch(() => {});
         })
-        .catch(() => {});
+        // Still mark ready so nothing waits forever (e.g. no RevenueCat key in dev).
+        .catch(() => setRevenueCatReady(true));
     } else if (!isAuthenticated) {
-      setRevenueCatReady(false);
-      Purchases.logOut().catch(() => {});
+      // Signed out (or never signed in): RevenueCat runs on an anonymous id,
+      // which is enough to buy/start a trial — so entitlements must still load.
+      Purchases.logOut().catch(() => {}).finally(() => setRevenueCatReady(true));
     }
-  }, [isAuthenticated, user?._id]);
+  }, [isLoading, isAuthenticated, user?._id]);
 
   return null;
 }
 
 // Shows the splash screen while we wait for RevenueCat to identify the user,
 // preventing a flash of "upgrade" UI for pro subscribers on app open.
+// Only gates the FIRST launch: once the app has shown, signing in later must
+// not swap everything for the splash — that unmounted the sign-in sheet
+// mid-flow and made people sign in twice.
 function AppGate({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading: authLoading } = useConvexAuth();
   const revenueCatReady = useAppStore((s) => s.revenueCatReady);
+  const booted = useRef(false);
+  const [rcTimedOut, setRcTimedOut] = useState(false);
 
-  if (authLoading || (isAuthenticated && !revenueCatReady)) {
-    return <AppSplashScreen />;
-  }
+  // Never wait on RevenueCat for more than 3s.
+  useEffect(() => {
+    const t = setTimeout(() => setRcTimedOut(true), 3000);
+    return () => clearTimeout(t);
+  }, []);
+
+  const waiting = authLoading || (isAuthenticated && !revenueCatReady && !rcTimedOut);
+  if (!booted.current && waiting) return <AppSplashScreen />;
+  booted.current = true;
   return <>{children}</>;
 }
 
 SplashScreen.preventAutoHideAsync();
 setupNotificationHandler();
+
+// Dev overlay: RevenueCat logs a user cancelling Apple's sheet at error level.
+// That's a normal outcome (the paywall just resets), not a bug.
+LogBox.ignoreLogs([/Purchase was cancelled/]);
 
 const REVENUECAT_IOS_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY ?? '';
 if (REVENUECAT_IOS_KEY) {
@@ -248,12 +287,24 @@ export default function App() {
     "Nunito-SemiBold":  Nunito_600SemiBold,
     "Nunito-Bold":      Nunito_700Bold,
     "Nunito-ExtraBold": Nunito_800ExtraBold,
+    // Onboarding type: Space Grotesk headlines, Inter body
+    "SpaceGrotesk-Medium":   SpaceGrotesk_500Medium,
+    "SpaceGrotesk-SemiBold": SpaceGrotesk_600SemiBold,
+    "SpaceGrotesk-Bold":     SpaceGrotesk_700Bold,
+    "Inter-Regular":  Inter_400Regular,
+    "Inter-Medium":   Inter_500Medium,
+    "Inter-SemiBold": Inter_600SemiBold,
+    "Inter-Bold":     Inter_700Bold,
   });
 
   useEffect(() => {
     if (fontsLoaded) {
       SplashScreen.hideAsync();
-      if (flow === "loading") setFlow("onboarding");
+      // Onboarding saves the Glim profile only on its last step, so a profile
+      // with interests means it was already finished — go straight home.
+      const finished = useAppStore.getState().glim.interests.length > 0;
+      if (FORCE_ONBOARDING) setFlow("onboarding");
+      else if (flow === "loading" || flow === "onboarding") setFlow(finished ? "home" : "onboarding");
     }
   }, [fontsLoaded]);
 
@@ -266,21 +317,39 @@ export default function App() {
 
   if (!fontsLoaded) return <AppSplashScreen />;
 
+  if (RESULT_PREVIEW) {
+    return (
+      <SafeAreaProvider>
+        <QuestResultPreview />
+      </SafeAreaProvider>
+    );
+  }
+
+  if (GLIM_LAB) {
+    return (
+      <SafeAreaProvider>
+        <GlimLab />
+      </SafeAreaProvider>
+    );
+  }
+
   return (
     <ConvexAuthProvider client={convex} storage={secureStorage}>
       <RevenueCatSync />
+      <ProgressSync />
       <LockCheck />
       <AppGate>
         <SafeAreaProvider>
           {flow === "onboarding" && (
-            <OnboardingScreen onComplete={() => setFlow("goalsetup")} />
+            <OnboardingScreen onComplete={() => setFlow("home")} />
           )}
-          {flow === "goalsetup" && (
-            <GoalSetupScreen onComplete={() => setFlow("home")} />
+          {/* App blocking is legacy — goalsetup / locked flows land on home. */}
+          {(flow === "home" || flow === "goalsetup" || flow === "locked") && (
+            // Hard paywall: no Pro → "Glim is resting" (see lib/features.ts)
+            <ProGate><HomeScreen /></ProGate>
           )}
-          {flow === "home" && <HomeScreen />}
-          {flow === "locked" && <LockedScreen />}
-          <SessionTimerBanner />
+          {flow !== "onboarding" && <StatusBar style="light" />}
+          <PaywallHost />
         </SafeAreaProvider>
         <Toast />
       </AppGate>

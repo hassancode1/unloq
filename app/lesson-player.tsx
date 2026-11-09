@@ -33,10 +33,12 @@ import { api } from '../convex/_generated/api';
 import { Id } from '../convex/_generated/dataModel';
 import { useTheme } from '../hooks/useTheme';
 import { useAppStore } from '../store/useAppStore';
+import Glim from '../components/mascot/Glim';
+import { paletteForInterests } from '../components/mascot/palettes';
 import { Spacing } from '../constants/spacing';
 import type { AppColors } from '../constants/Colors';
 
-const GREEN      = '#16A34A';
+const GREEN      = '#4ADE80';
 const PRIMARY_DEEP = '#4338CA'; // shadow for DuoButton
 
 type ScreenView = 'list' | 'article' | 'diagram' | 'flashcards' | 'quiz';
@@ -56,8 +58,7 @@ function DuoButton({
 
   return (
     <View style={{ opacity: disabled ? 0.4 : 1 }}>
-      <View style={[duo.shadow, { backgroundColor: shadowColor }]} />
-      <Animated.View style={{ transform: [{ translateY: ty }] }}>
+      <Animated.View style={{ transform: [{ scale: ty.interpolate({ inputRange: [0, 4], outputRange: [1, 0.97] }) }] }}>
         <TouchableOpacity
           style={[duo.btn, { backgroundColor: color }]}
           onPressIn={pressIn} onPressOut={pressOut} onPress={onPress}
@@ -73,8 +74,8 @@ function DuoButton({
 
 const duo = StyleSheet.create({
   shadow: { position: 'absolute', bottom: -4, left: 0, right: 0, height: 52, borderRadius: 14 },
-  btn:    { height: 52, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  label:  { color: '#fff', fontSize: 16, fontFamily: 'PJS-Bold' },
+  btn:    { height: 54, borderRadius: 999, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  label:  { color: '#fff', fontSize: 16, fontFamily: 'Inter-SemiBold' },
 });
 
 // ── Shared footer ─────────────────────────────────────────────────────────────
@@ -88,7 +89,7 @@ function Footer({ children, C }: { children: React.ReactNode; C: AppColors }) {
 }
 
 const footer = StyleSheet.create({
-  wrap: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, paddingBottom: Spacing.lg, borderTopWidth: StyleSheet.hairlineWidth },
+  wrap: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, paddingBottom: Spacing.lg },
 });
 
 // ── Article view ──────────────────────────────────────────────────────────────
@@ -237,7 +238,7 @@ function FlashcardView({
       'worklet';
       if (finished) {
         runOnJS(toggleBack)();
-        flipScale.value = withSpring(1, { damping: 14, stiffness: 220 });
+        flipScale.value = withTiming(1, { duration: 170, easing: Easing.out(Easing.quad) });
       }
     });
   };
@@ -296,8 +297,8 @@ function FlashcardView({
           <Animated.View style={[fc.swipeTag, fc.swipeTagRight, { opacity: knowOpacity, borderColor: GREEN }]}>
             <Text style={[fc.swipeTagTxt, { color: GREEN, fontFamily: F.extraBold }]}>KNOW IT</Text>
           </Animated.View>
-          <Animated.View style={[fc.swipeTag, fc.swipeTagLeft, { opacity: againOpacity, borderColor: '#EF4444' }]}>
-            <Text style={[fc.swipeTagTxt, { color: '#EF4444', fontFamily: F.extraBold }]}>AGAIN</Text>
+          <Animated.View style={[fc.swipeTag, fc.swipeTagLeft, { opacity: againOpacity, borderColor: C.error }]}>
+            <Text style={[fc.swipeTagTxt, { color: C.error, fontFamily: F.extraBold }]}>AGAIN</Text>
           </Animated.View>
 
           {/* Flip wrapper — scaleX collapses and expands on tap */}
@@ -368,9 +369,9 @@ const fc = StyleSheet.create({
   stackArea:   { flex: 1, marginHorizontal: Spacing.lg, marginVertical: Spacing.sm },
   card: {
     position: 'absolute', top: 0, bottom: 0, left: 0, right: 0,
-    borderRadius: 24, borderWidth: StyleSheet.hairlineWidth,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07, shadowRadius: 12, elevation: 3,
+    borderRadius: 28, borderWidth: 1,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 18 },
+    shadowOpacity: 0.45, shadowRadius: 30, elevation: 10,
   },
   nextCard: {
     top: 10, left: 10, right: 10, bottom: -6,
@@ -500,7 +501,7 @@ function DiagramView({
             <View style={dm.emojiBadge}>
               <Text style={{ fontSize: 18 }}>{NODE_EMOJIS[0]}</Text>
             </View>
-            <Reanimated.View entering={FadeInDown.duration(350).springify()}>
+            <Reanimated.View entering={FadeInDown.duration(350)}>
               <View style={[dm.node, { backgroundColor: NODE_COLORS[0], shadowColor: NODE_COLORS[0] }]}>
                 <Text style={[dm.nodeText, { fontFamily: F.bold, fontSize: fs(16) }]} numberOfLines={3}>
                   {diagram.root}
@@ -526,7 +527,7 @@ function DiagramView({
                 </View>
 
                 {/* Node pill */}
-                <Reanimated.View entering={FadeInDown.delay(delay).duration(320).springify()}>
+                <Reanimated.View entering={FadeInDown.delay(delay).duration(320)}>
                   <View style={[dm.node, { backgroundColor: color, shadowColor: color }]}>
                     <Text style={[dm.nodeText, { fontFamily: F.bold, fontSize: fs(15) }]} numberOfLines={3}>
                       {branch.name}
@@ -633,6 +634,7 @@ function QuizView({
   lesson: any; onFinish: (score: number, total: number) => void;
   C: AppColors; fs: (n: number) => number; F: any;
 }) {
+  const glimProfile = useAppStore((st) => st.glim);
   const questions: any[] = lesson.quiz ?? [];
   const [idx, setIdx]           = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
@@ -677,7 +679,7 @@ function QuizView({
       if (finished) {
         runOnJS(goNext)();
         slideX.value = 380;
-        slideX.value = withSpring(0, { damping: 18, stiffness: 200 });
+        slideX.value = withTiming(0, { duration: 260, easing: Easing.out(Easing.cubic) });
       }
     });
   };
@@ -685,17 +687,16 @@ function QuizView({
   // ── Results ──
   if (done) {
     const score = Math.round((correct / questions.length) * 100);
-    const emoji = score >= 80 ? '🌟' : score >= 60 ? '👍' : '💪';
     const label = score >= 80 ? 'Excellent work!' : score >= 60 ? 'Good job!' : 'Keep practising!';
 
     return (
       <View style={[qz.results, { flex: 1 }]}>
-        <Reanimated.Text entering={ZoomIn.springify().damping(12)} style={{ fontSize: 64, lineHeight: 80 }}>
-          {emoji}
-        </Reanimated.Text>
+        <Reanimated.View entering={FadeIn.duration(400)}>
+          <Glim size={120} stage={glimProfile.stage} palette={paletteForInterests(glimProfile.interests)} mood={score >= 60 ? 'happy' : 'idle'} />
+        </Reanimated.View>
         <Reanimated.Text
-          entering={FadeInDown.delay(120).springify().damping(14)}
-          style={[{ fontFamily: F.extraBold, fontSize: fs(52), lineHeight: fs(64), color: score >= 60 ? GREEN : '#EF4444' }]}
+          entering={FadeInDown.delay(120).duration(300)}
+          style={[{ fontFamily: F.extraBold, fontSize: fs(52), lineHeight: fs(64), color: C.text, letterSpacing: -1.5 }]}
         >
           {score}%
         </Reanimated.Text>
@@ -713,10 +714,10 @@ function QuizView({
         </Reanimated.Text>
         <Reanimated.View entering={FadeInUp.delay(320).duration(280)} style={qz.pipRow}>
           {questions.map((_, i) => (
-            <View key={i} style={[qz.pip, i < correct ? { backgroundColor: GREEN, borderColor: GREEN } : { backgroundColor: '#FEE2E2', borderColor: '#EF4444' }]} />
+            <View key={i} style={[qz.pip, i < correct ? { backgroundColor: GREEN, borderColor: GREEN } : { backgroundColor: C.errorBg, borderColor: C.error }]} />
           ))}
         </Reanimated.View>
-        <Reanimated.View entering={FadeInUp.delay(400).springify()} style={{ width: '100%', marginTop: Spacing.md }}>
+        <Reanimated.View entering={FadeInUp.delay(400).duration(300)} style={{ width: '100%', marginTop: Spacing.md }}>
           <DuoButton label="Continue" color={C.primary} onPress={() => onFinish(correct, questions.length)} icon={<Ionicons name="arrow-forward" size={17} color="#fff" />} />
         </Reanimated.View>
       </View>
@@ -725,10 +726,10 @@ function QuizView({
 
   if (!q) return null;
 
-  const optBg     = (opt: string) => { if (!answered) return selected === opt ? `${C.primary}12` : 'transparent'; if (opt === q.correctAnswer) return '#F0FDF4'; if (opt === selected) return '#FEF2F2'; return 'transparent'; };
-  const optBorder = (opt: string) => { if (!answered) return selected === opt ? C.primary : C.border; if (opt === q.correctAnswer) return GREEN; if (opt === selected) return '#EF4444'; return C.border; };
-  const optColor  = (opt: string) => { if (!answered) return selected === opt ? C.primary : C.text; if (opt === q.correctAnswer) return GREEN; if (opt === selected) return '#EF4444'; return C.muted; };
-  const bulletBg  = (opt: string) => { if (answered && opt === q.correctAnswer) return GREEN; if (answered && opt === selected) return '#EF4444'; if (!answered && opt === selected) return C.primary; return C.surfaceAlt; };
+  const optBg     = (opt: string) => { if (!answered) return selected === opt ? `${C.primary}12` : 'transparent'; if (opt === q.correctAnswer) return C.successBg; if (opt === selected) return C.errorBg; return 'transparent'; };
+  const optBorder = (opt: string) => { if (!answered) return selected === opt ? C.primary : C.border; if (opt === q.correctAnswer) return GREEN; if (opt === selected) return C.error; return C.border; };
+  const optColor  = (opt: string) => { if (!answered) return selected === opt ? C.primary : C.text; if (opt === q.correctAnswer) return GREEN; if (opt === selected) return C.error; return C.muted; };
+  const bulletBg  = (opt: string) => { if (answered && opt === q.correctAnswer) return GREEN; if (answered && opt === selected) return C.error; if (!answered && opt === selected) return C.primary; return C.surfaceAlt; };
 
   return (
     <>
@@ -764,13 +765,13 @@ function QuizView({
                   {opt}
                 </Text>
                 {answered && opt === q.correctAnswer && (
-                  <Reanimated.View entering={ZoomIn.springify().damping(12)}>
+                  <Reanimated.View entering={ZoomIn.duration(300)}>
                     <Ionicons name="checkmark-circle" size={18} color={GREEN} />
                   </Reanimated.View>
                 )}
                 {answered && opt === selected && opt !== q.correctAnswer && (
-                  <Reanimated.View entering={ZoomIn.springify().damping(12)}>
-                    <Ionicons name="close-circle" size={18} color="#EF4444" />
+                  <Reanimated.View entering={ZoomIn.duration(300)}>
+                    <Ionicons name="close-circle" size={18} color={C.error} />
                   </Reanimated.View>
                 )}
               </TouchableOpacity>
@@ -847,7 +848,7 @@ function LoadingView({ C, onBack }: { C: AppColors; onBack: () => void }) {
         <Reanimated.View style={spinStyle}>
           <Ionicons name="reload-outline" size={28} color={C.primary} />
         </Reanimated.View>
-        <Reanimated.Text entering={FadeIn.delay(200)} style={[lv.label, { color: C.muted, fontFamily: 'PJS-Regular' }]}>
+        <Reanimated.Text entering={FadeIn.delay(200)} style={[lv.label, { color: C.muted, fontFamily: 'Inter-Regular' }]}>
           Loading course…
         </Reanimated.Text>
       </View>

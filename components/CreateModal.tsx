@@ -1,16 +1,11 @@
+// "Add notes" sheet. PDF is the hero (most students start there); the other
+// sources sit beside it at a lower weight — not four equal rows.
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import React from 'react';
-import {
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { CreateOptionColors } from '../constants/Colors';
 import type { AppColors } from '../constants/Colors';
 import { FontFamily } from '../constants/theme';
 
@@ -25,122 +20,75 @@ interface Props {
   fs: (n: number) => number;
 }
 
-interface OptionConfig {
-  key: CreateOptionKey;
-  label: string;
-  desc: string;
-  colorKey: string;
-  icon: string;
-}
-
-const OPTIONS: OptionConfig[] = [
-  { key: 'capture', label: 'Capture Text or Image',  desc: 'Photo or gallery image — AI reads and generates lessons', colorKey: 'capture', icon: 'camera' },
-  { key: 'pdf',     label: 'PDF Document',           desc: 'Upload a PDF and AI generates your lessons',              colorKey: 'pdf',     icon: 'document-text' },
-  { key: 'text',    label: 'Custom Text',            desc: 'Paste or type any text to generate a note',              colorKey: 'text',    icon: 'text' },
-  { key: 'youtube', label: 'YouTube Video',          desc: 'Paste a YouTube link to generate a note',                colorKey: 'youtube', icon: 'logo-youtube' },
+const SMALL: { key: CreateOptionKey; label: string; icon: any }[] = [
+  { key: 'capture', label: 'Photo',   icon: 'camera-outline' },
+  { key: 'text',    label: 'Text',    icon: 'create-outline' },
+  { key: 'youtube', label: 'YouTube', icon: 'logo-youtube' },
 ];
 
 export default function CreateModal({ visible, onDismiss, onSelectOption, C, F, fs }: Props) {
   const insets = useSafeAreaInsets();
+  const pick = (k: CreateOptionKey) => {
+    Haptics.selectionAsync().catch(() => {});
+    onSelectOption(k);
+  };
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onDismiss}
-      statusBarTranslucent
-    >
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onDismiss} statusBarTranslucent>
       <Pressable style={styles.backdrop} onPress={onDismiss} />
-      <View style={[styles.sheet, { backgroundColor: C.surface, paddingBottom: insets.bottom + 16 }]}>
-        <View style={styles.handle} />
+      <View style={[styles.sheet, { backgroundColor: C.surface, borderColor: C.border, paddingBottom: insets.bottom + 16 }]}>
+        <View style={[styles.handle, { backgroundColor: C.borderStrong }]} />
 
         <View style={styles.header}>
-          <Text style={[styles.title, { color: C.text, fontFamily: F.extraBold, fontSize: fs(18) }]}>
-            Create a Note
-          </Text>
-          <TouchableOpacity onPress={onDismiss} hitSlop={12}>
-            <Ionicons name="close" size={24} color={C.sub} />
-          </TouchableOpacity>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: C.text, fontFamily: F.extraBold, fontSize: fs(22), letterSpacing: -0.4 }}>Add notes</Text>
+            <Text style={{ color: C.sub, fontFamily: F.regular, fontSize: fs(13), marginTop: 2 }}>
+              We’ll turn it into flashcards, quizzes and Feynman practice.
+            </Text>
+          </View>
+          <Pressable onPress={onDismiss} hitSlop={12} style={[styles.close, { backgroundColor: C.surfaceAlt }]}>
+            <Ionicons name="close" size={18} color={C.sub} />
+          </Pressable>
         </View>
 
-        {OPTIONS.map((opt) => {
-          const accent = CreateOptionColors[opt.colorKey] ?? C.primary;
-          return (
-            <TouchableOpacity
-              key={opt.key}
-              style={[styles.row, { backgroundColor: `${accent}14`, borderColor: `${accent}30` }]}
-              onPress={() => onSelectOption(opt.key)}
-              activeOpacity={0.7}
+        <Pressable
+          onPress={() => pick('pdf')}
+          style={({ pressed }) => [styles.hero, { backgroundColor: C.text, opacity: pressed ? 0.9 : 1 }]}
+        >
+          <View style={[styles.heroIcon, { backgroundColor: 'rgba(0,0,0,0.08)' }]}>
+            <Ionicons name="document-text" size={22} color={C.bg} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: C.bg, fontFamily: F.extraBold, fontSize: fs(17) }}>Upload a PDF</Text>
+            <Text style={{ color: C.bg, opacity: 0.6, fontFamily: F.regular, fontSize: fs(13) }}>Lecture slides, readings, notes</Text>
+          </View>
+          <Ionicons name="arrow-forward" size={20} color={C.bg} />
+        </Pressable>
+
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          {SMALL.map((o) => (
+            <Pressable
+              key={o.key}
+              onPress={() => pick(o.key)}
+              style={({ pressed }) => [styles.tile, { backgroundColor: C.surfaceAlt, borderColor: C.border, opacity: pressed ? 0.8 : 1 }]}
             >
-              <View style={[styles.iconCircle, { backgroundColor: `${accent}22` }]}>
-                <Ionicons name={opt.icon as any} size={22} color={accent} />
-              </View>
-              <View style={styles.rowText}>
-                <Text style={[styles.rowLabel, { color: C.text, fontFamily: F.bold, fontSize: fs(15) }]}>
-                  {opt.label}
-                </Text>
-                <Text style={[styles.rowDesc, { color: C.sub, fontFamily: F.regular, fontSize: fs(12) }]}>
-                  {opt.desc}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={C.muted} />
-            </TouchableOpacity>
-          );
-        })}
+              <Ionicons name={o.icon} size={22} color={C.text} />
+              <Text style={{ color: C.text, fontFamily: F.semiBold, fontSize: fs(13) }}>{o.label}</Text>
+            </Pressable>
+          ))}
+        </View>
       </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-  },
-  sheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingTop: 12,
-    paddingHorizontal: 16,
-    gap: 8,
-  },
-  handle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#D0D0E0',
-    alignSelf: 'center',
-    marginBottom: 8,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  title: {
-    flex: 1,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-  },
-  iconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rowText: {
-    flex: 1,
-    gap: 2,
-  },
-  rowLabel: {},
-  rowDesc: {},
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
+  sheet: { borderTopLeftRadius: 28, borderTopRightRadius: 28, borderWidth: 1, paddingTop: 10, paddingHorizontal: 18, gap: 12 },
+  handle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 6 },
+  header: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 6 },
+  close: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  hero: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 18, borderRadius: 20 },
+  heroIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  tile: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 18, borderRadius: 18, borderWidth: 1 },
 });

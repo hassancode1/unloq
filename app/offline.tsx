@@ -6,11 +6,15 @@ import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../hooks/useTheme';
 import { Spacing } from '../constants/spacing';
+import Glim from '../components/mascot/Glim';
+import { paletteForInterests } from '../components/mascot/palettes';
+import { useAppStore } from '../store/useAppStore';
 
 type Props = { onRetry: () => void };
 
 export default function OfflineScreen({ onRetry }: Props) {
   const { C, F, fs } = useTheme();
+  const glimProfile = useAppStore((st) => st.glim);
   const insets = useSafeAreaInsets();
 
   const handleRetry = () => {
@@ -21,17 +25,15 @@ export default function OfflineScreen({ onRetry }: Props) {
   return (
     <View style={[S.root, { backgroundColor: C.bg, paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <Animated.View entering={FadeInUp.duration(400)} style={S.iconWrap}>
-        <View style={[S.iconCircle, { backgroundColor: `${C.muted}14`, borderColor: `${C.muted}28` }]}>
-          <Ionicons name="wifi-outline" size={44} color={C.muted} />
-        </View>
+        <Glim size={130} stage={glimProfile.stage} palette={paletteForInterests(glimProfile.interests)} mood="sleepy" droop={0.3} />
       </Animated.View>
 
       <Animated.View entering={FadeInDown.duration(400)} style={S.content}>
         <Text style={[S.title, { fontFamily: F.extraBold, fontSize: fs(26), color: C.text }]}>
-          No Internet Connection
+          You’re offline
         </Text>
         <Text style={[S.sub, { fontFamily: F.regular, fontSize: fs(15), color: C.sub }]}>
-          Unloq needs an internet connection to load your lessons and sync progress.
+          {glimProfile.name} can’t reach your notes right now. Reconnect and try again.
         </Text>
       </Animated.View>
 
@@ -40,13 +42,13 @@ export default function OfflineScreen({ onRetry }: Props) {
         style={[S.footer, { paddingBottom: Math.max(insets.bottom, Spacing.xl) }]}
       >
         <TouchableOpacity
-          style={[S.btn, { backgroundColor: C.primary }]}
+          style={[S.btn, { backgroundColor: C.text }]}
           activeOpacity={0.85}
           onPress={handleRetry}
         >
-          <Ionicons name="refresh-outline" size={18} color="#fff" />
-          <Text style={[S.btnTxt, { fontFamily: F.bold, fontSize: fs(16) }]}>
-            Try Again
+          <Ionicons name="refresh-outline" size={18} color={C.bg} />
+          <Text style={[S.btnTxt, { fontFamily: F.bold, fontSize: fs(16), color: C.bg }]}>
+            Try again
           </Text>
         </TouchableOpacity>
       </Animated.View>

@@ -22,27 +22,28 @@ export const LightColors = {
   goldBg:       '#FFFBEB',
 };
 
-// Premium dark — electric blue accent, near-black background
+// Premium dark — matches the onboarding (components/onboarding/ui.tsx `O`).
+// Near-black greyscale with one calm accent; depth from soft borders, not colour.
 export const DarkColors = {
-  bg:           '#080810',
-  surface:      '#0E0E1A',
-  surfaceAlt:   '#161624',
-  border:       '#1E1E32',
-  borderStrong: '#2A2A44',
-  text:         '#F0F4FF',
-  sub:          '#8892B0',
-  muted:        '#4A5280',
-  primary:      '#3B82F6',
-  primaryBg:    '#0A1628',
-  primaryRing:  '#1E3A6E',
-  success:      '#34D399',
-  successBg:    '#022C22',
+  bg:           '#06050A',
+  surface:      '#0F0E15',
+  surfaceAlt:   '#17161F',
+  border:       '#211F2B',
+  borderStrong: '#2E2C3A',
+  text:         '#F5F5FA',
+  sub:          '#8E8C9E',
+  muted:        '#5C5A6B',
+  primary:      '#6E8BFF',
+  primaryBg:    '#12162A',
+  primaryRing:  '#2A3666',
+  success:      '#4ADE80',
+  successBg:    '#0C1F14',
   error:        '#F87171',
-  errorBg:      '#2D0A0A',
+  errorBg:      '#25100F',
   warning:      '#FBBF24',
-  warningBg:    '#1C1400',
+  warningBg:    '#211A08',
   gold:         '#FBBF24',
-  goldBg:       '#1C1400',
+  goldBg:       '#211A08',
 };
 
 export type AppColors = typeof LightColors;

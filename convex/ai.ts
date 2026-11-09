@@ -4,6 +4,7 @@ import { action } from "./_generated/server";
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
 import { type Id } from "./_generated/dataModel";
+import { GEMINI_MODEL } from "./lib/gemini";
 
 
 
@@ -237,7 +238,7 @@ async function callGeminiExamTopic(
 ): Promise<string> {
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+  const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
   return withGeminiRetry(async () => {
     const result = await model.generateContent({
       contents: [{
@@ -272,7 +273,7 @@ async function callGeminiExamPdf(
 ): Promise<string> {
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+  const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
   return withGeminiRetry(async () => {
     const result = await model.generateContent({
       contents: [{
@@ -307,7 +308,7 @@ async function callGeminiText(
 ): Promise<string> {
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+  const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
   return withGeminiRetry(async () => {
     const result = await model.generateContent({
       contents: [{ role: "user", parts: [{ text:
@@ -339,10 +340,10 @@ async function callGeminiVideo(
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
   const genAI = new GoogleGenerativeAI(apiKey);
 
-  // gemini-1.5-pro supports YouTube URL via fileData
+  // Gemini supports YouTube URLs via fileData
   return withGeminiRetry(async () => {
     try {
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+      const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
       const result = await model.generateContent({
         contents: [{ role: "user", parts: [
           { fileData: { mimeType: "video/mp4", fileUri: youtubeUrl } },
@@ -353,7 +354,7 @@ async function callGeminiVideo(
       return result.response.text().trim();
     } catch {
       // Fallback: ask Gemini to generate from its knowledge of the video URL
-      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+      const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
       const result = await model.generateContent({
         contents: [{ role: "user", parts: [{ text:
           "You are given a YouTube video URL. Use your knowledge of the video's content to generate a structured course.\n\n" +
@@ -381,7 +382,7 @@ async function callGeminiImage(
 ): Promise<string> {
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+  const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
   return withGeminiRetry(async () => {
     const result = await model.generateContent({
       contents: [{ role: "user", parts: [
@@ -413,7 +414,7 @@ async function callGemini(
 ): Promise<string> {
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+  const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
   return withGeminiRetry(async () => {
     const result = await model.generateContent({
       contents: [{ role: "user", parts: [
@@ -972,7 +973,7 @@ export const generateQuizForCourse = action({
 
     const { GoogleGenerativeAI } = await import("@google/generative-ai");
     const genAI = new GoogleGenerativeAI(geminiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
 
     let totalSaved = 0;
 
@@ -1055,7 +1056,7 @@ Return ONLY a JSON object:
 Include 3-5 branches, each with 2-3 points.`;
 
         try {
-          const resp = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent", {
+          const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -1098,7 +1099,7 @@ export const evaluateFeynmanExplanation = action({
 
     const { GoogleGenerativeAI } = await import("@google/generative-ai");
     const genAI = new GoogleGenerativeAI(geminiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
 
     const prompt = `You are an expert learning coach evaluating a student's understanding of a topic using the Feynman Technique. The student explained the topic to someone who is ${characterAge} years old.
 

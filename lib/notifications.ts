@@ -65,8 +65,8 @@ export async function scheduleStudyReminders(cfg: GoalConfig): Promise<boolean> 
     await Notifications.scheduleNotificationAsync({
       identifier: `${NOTIFICATION_IDENTIFIER_PREFIX}${weekday}`,
       content: {
-        title: 'Time to learn 📖',
-        body: "Complete today's lesson to stay on track.",
+        title: 'Your quest is ready',
+        body: 'A new topic is waiting. Explain it and help your Glim grow.',
         sound: true,
       },
       trigger: {

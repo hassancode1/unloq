@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { setStudyProgress } from '../lib/familyControls';
+import { dayKey, stageForXp, type QuestEntry } from '../lib/quests';
+import { REVIEW_AFTER_DAYS } from '../convex/lib/xp';
 
 export type AppFlow = 'loading' | 'onboarding' | 'goalsetup' | 'home' | 'locked';
 
@@ -19,6 +21,44 @@ interface DailyProgress {
   count: number;
   sessionStartMs: number | null; // ms timestamp when today's block session started
 }
+
+export type LearnStyle = 'bites' | 'deep';
+/** 'choose' = user picks the daily topic, 'random' = we surprise them. */
+export type TopicMode = 'choose' | 'random';
+
+/** Everything the onboarding collects about the user + their Glim. */
+export interface GlimProfile {
+  name: string;
+  interests: string[];
+  learnStyle: LearnStyle;
+  topicMode: TopicMode;
+  dailyMinutes: number;
+  scrollWindows: string[];
+  reminderTime: string; // 'HH:MM'
+  screenHours: number;
+  commitDays: number;
+  xp: number;
+  stage: 0 | 1 | 2 | 3 | 4;
+}
+
+export interface ActivePath {
+  order: number;
+  addedAt: number;
+}
+
+export const DEFAULT_GLIM: GlimProfile = {
+  name: 'Glim',
+  interests: [],
+  learnStyle: 'bites',
+  topicMode: 'random',
+  dailyMinutes: 10,
+  scrollWindows: [],
+  reminderTime: '20:00',
+  screenHours: 4,
+  commitDays: 7,
+  xp: 0,
+  stage: 0,
+};
 
 export const FONT_SCALE_MIN  = 0.85;
 export const FONT_SCALE_MAX  = 1.30;
@@ -42,6 +82,34 @@ interface AppState {
   // YYYY-MM-DD on which the user completed their session — prevents the
   // completion modal from re-firing when HomeScreen remounts on the same day.
   sessionCompletedDate: string | null;
+  glim: GlimProfile;
+  /** One entry per day the daily quest was completed, keyed YYYY-MM-DD. */
+  questLog: Record<string, QuestEntry>;
+  /** "Keep learning" quests after the daily one, by day. The streak and week row use questLog only. */
+  extras: Record<string, QuestEntry[]>;
+  /** Paths the user is following → next topic index (0-based). */
+  activePaths: Record<string, ActivePath>;
+  /** True once starter paths were picked from onboarding interests. */
+  pathsSeeded: boolean;
+  /** Random id for this install (rate-limits the public onboarding demo grader). */
+  deviceId: string;
+  /** Today's wheel result: the topic it landed on and whether the one re-spin is used. */
+  todaySpin: { day: string; key: string; respun: boolean } | null;
+  /** Guided first quest after the first unlock (components/guide/CoachTip.tsx). */
+  guidePending: boolean;
+  setGuidePending: (v: boolean) => void;
+  /** When we last asked for an App Store rating (lib/review.ts). */
+  reviewAskedAt: number | null;
+  setReviewAskedAt: (t: number) => void;
+  setTodaySpin: (v: { day: string; key: string; respun: boolean }) => void;
+  /** Set after a trial/purchase starts; Home asks to save Glim to an account (not persisted). */
+  askToSaveAccount: boolean;
+  setAskToSaveAccount: (v: boolean) => void;
+  /** The custom paywall modal (components/paywall/PaywallHost.tsx); not persisted. */
+  paywallOpen: boolean;
+  setPaywallOpen: (v: boolean) => void;
+  /** Onboarding interests that already got a starter path (never re-added after an unfollow). */
+  seededInterests: string[];
 
   setFlow: (flow: AppFlow) => void;
   setRevenueCatReady: (ready: boolean) => void;
@@ -60,6 +128,14 @@ interface AppState {
   setBlockingEnabled: (enabled: boolean) => void;
   setGoalSavedAt: (ts: number) => void;
   setSessionCompleted: (date: string | null) => void;
+  updateGlim: (patch: Partial<GlimProfile>) => void;
+  /** Records today's quest and grows Glim. No-op if today is already done. */
+  completeQuest: (entry: QuestEntry) => void;
+  /** Bonus review of a past quest's missed ideas. Passed → XP + done; not → try again later. */
+  completeReview: (day: string, r: { xp: number; passed: boolean; missed: string[] }) => void;
+  addPath: (pathId: string, order?: number) => void;
+  removePath: (pathId: string) => void;
+  seedPaths: (pathIds: string[], interests?: string[]) => void;
 }
 
 function todayStr() {
@@ -85,6 +161,23 @@ export const useAppStore = create<AppState>()(
       blockingEnabled: false,
       goalSavedAt: null,
       sessionCompletedDate: null,
+      glim: DEFAULT_GLIM,
+      questLog: {},
+      extras: {},
+      activePaths: {},
+      pathsSeeded: false,
+      deviceId: `d-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+      todaySpin: null,
+      guidePending: false,
+      setGuidePending: (v) => set({ guidePending: v }),
+      reviewAskedAt: null,
+      setReviewAskedAt: (t) => set({ reviewAskedAt: t }),
+      setTodaySpin: (v) => set({ todaySpin: v }),
+      askToSaveAccount: false,
+      setAskToSaveAccount: (v) => set({ askToSaveAccount: v }),
+      paywallOpen: false,
+      setPaywallOpen: (v) => set({ paywallOpen: v }),
+      seededInterests: [],
 
       setFlow: (flow) => set({ flow }),
       setRevenueCatReady: (ready) => set({ revenueCatReady: ready }),
@@ -133,6 +226,47 @@ export const useAppStore = create<AppState>()(
       setBlockingEnabled: (enabled) => set({ blockingEnabled: enabled }),
       setGoalSavedAt: (ts) => set({ goalSavedAt: ts }),
       setSessionCompleted: (date) => set({ sessionCompletedDate: date }),
+      updateGlim: (patch) => set((s) => ({ glim: { ...s.glim, ...patch } })),
+      completeReview: (day, { xp, passed, missed }) => set((s) => {
+        const e = s.questLog[day];
+        if (!e || e.reviewedAt) return {};
+        const total = s.glim.xp + xp;
+        const next: QuestEntry = passed
+          ? { ...e, reviewedAt: Date.now(), reviewXp: xp }
+          : { ...e, missed: missed.length ? missed : e.missed, reviewAfter: Date.now() + REVIEW_AFTER_DAYS * 86400000 };
+        return {
+          questLog: { ...s.questLog, [day]: next },
+          glim: { ...s.glim, xp: total, stage: Math.max(s.glim.stage, stageForXp(total)) as GlimProfile['stage'] },
+        };
+      }),
+      completeQuest: (entry) => set((s) => {
+        const key = dayKey(new Date(entry.completedAt));
+        const extra = !!s.questLog[key]; // the day's first quest is the daily one
+        const xp = s.glim.xp + entry.xp;
+        const active = entry.pathId ? s.activePaths[entry.pathId] : undefined;
+        return {
+          ...(extra
+            ? { extras: { ...s.extras, [key]: [...(s.extras?.[key] ?? []), entry] } }
+            : { questLog: { ...s.questLog, [key]: entry } }),
+          glim: { ...s.glim, xp, stage: Math.max(s.glim.stage, stageForXp(xp)) as GlimProfile['stage'] },
+          ...(active && entry.pathId
+            ? { activePaths: { ...s.activePaths, [entry.pathId]: { ...active, order: active.order + 1 } } }
+            : {}),
+        };
+      }),
+      addPath: (pathId, order = 0) => set((s) => (
+        s.activePaths[pathId] ? {} : { activePaths: { ...s.activePaths, [pathId]: { order, addedAt: Date.now() } } }
+      )),
+      removePath: (pathId) => set((s) => {
+        const { [pathId]: _, ...rest } = s.activePaths;
+        return { activePaths: rest };
+      }),
+      seedPaths: (pathIds, interests = []) => set((s) => {
+        const next = { ...s.activePaths };
+        pathIds.forEach((id, i) => { if (!next[id]) next[id] = { order: 0, addedAt: Date.now() - i }; });
+        const seededInterests = Array.from(new Set([...(s.seededInterests ?? []), ...interests]));
+        return { activePaths: next, pathsSeeded: true, seededInterests };
+      }),
       toggleDarkMode: () => set((s) => ({ darkMode: !s.darkMode })),
       increaseFontScale: () =>
         set((s) => ({
@@ -168,6 +302,16 @@ export const useAppStore = create<AppState>()(
         blockingEnabled: s.blockingEnabled,
         goalSavedAt: s.goalSavedAt,
         sessionCompletedDate: s.sessionCompletedDate,
+        glim: s.glim,
+        questLog: s.questLog,
+        extras: s.extras,
+        activePaths: s.activePaths,
+        pathsSeeded: s.pathsSeeded,
+        deviceId: s.deviceId,
+        seededInterests: s.seededInterests,
+        todaySpin: s.todaySpin,
+        reviewAskedAt: s.reviewAskedAt,
+        guidePending: s.guidePending,
       }),
     },
   ),

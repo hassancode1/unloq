@@ -1,0 +1,81 @@
+{
+  "identifier" : "6F1B2C3D-4E5F-4A6B-8C7D-9E0F1A2B3C4D",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+
+  ],
+  "settings" : {
+
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "21500001",
+      "localizations" : [
+
+      ],
+      "name" : "Unloq Pro",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "79.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "6750000001",
+          "introductoryOffer" : {
+            "internalID" : "6750000011",
+            "numberOfPeriods" : 1,
+            "paymentMode" : "free",
+            "subscriptionPeriod" : "P3D"
+          },
+          "localizations" : [
+            {
+              "description" : "Explain out loud, get graded, grow Glim.",
+              "displayName" : "Unloq Annual",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.loqlearn.app.premium_yearly_2",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "Unloq Annual",
+          "subscriptionGroupID" : "21500001",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "8.99",
+          "familyShareable" : false,
+          "groupNumber" : 2,
+          "internalID" : "6750000002",
+          "localizations" : [
+            {
+              "description" : "Explain out loud, get graded, grow Glim.",
+              "displayName" : "Unloq Monthly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.loqlearn.app.premium_monthly_2",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Unloq Monthly",
+          "subscriptionGroupID" : "21500001",
+          "type" : "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}

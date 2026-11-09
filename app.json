@@ -1,15 +1,13 @@
 {
   "expo": {
-    "name": "Loqlearn",
+    "name": "Unloq",
     "slug": "loqlearn",
     "version": "2.0.2",
     "orientation": "portrait",
-    "icon": "./assets/logo.png",
-    "userInterfaceStyle": "light",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
     "splash": {
-      "image": "./assets/logo.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#4338CA"
+      "backgroundColor": "#06050A"
     },
     "ios": {
       "supportsTablet": false,
@@ -19,13 +17,13 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "Unloq uses the camera to let you capture notes and documents for your study sessions.",
-        "NSMicrophoneUsageDescription": "Unloq uses the microphone to record audio when capturing study material.",
+        "NSMicrophoneUsageDescription": "Unloq uses the microphone so you can explain what you learned out loud to Glim.",
         "NSPhotoLibraryUsageDescription": "Unloq accesses your photo library so you can upload images as study material."
       }
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#6366F1",
+        "backgroundColor": "#06050A",
         "foregroundImage": "./assets/android-icon-foreground.png"
       },
       "package": "com.loqlearn.app"
@@ -35,13 +33,29 @@
     },
     "scheme": "loqlearn",
     "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#06050A",
+          "dark": {
+            "backgroundColor": "#06050A"
+          }
+        }
+      ],
       "expo-font",
       "expo-secure-store",
       "@react-native-community/datetimepicker",
       "./plugins/withFamilyControls",
       "expo-apple-authentication",
       "expo-web-browser",
-      ["expo-speech-recognition", { "microphonePermission": "Allow Unloq to listen while you teach concepts back to your crew." }]
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Unloq uses the microphone so you can explain what you learned out loud to Glim."
+        }
+      ],
+      "expo-audio",
+      "expo-video"
     ],
     "extra": {
       "eas": {

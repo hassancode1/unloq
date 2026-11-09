@@ -34,6 +34,9 @@ import { api } from '../convex/_generated/api';
 import { useTheme } from '../hooks/useTheme';
 import { Spacing } from '../constants/spacing';
 import Toast from 'react-native-toast-message';
+import Glim from '../components/mascot/Glim';
+import { paletteForInterests } from '../components/mascot/palettes';
+import { useAppStore } from '../store/useAppStore';
 
 const DEFAULT_LESSON_COUNT = 7;
 const DEFAULT_DIFFICULTY   = 'intermediate' as const;
@@ -58,6 +61,7 @@ function GeneratingView({ onBack, onGoToLibrary }: { onBack: () => void; onGoToL
   const [allDone, setAllDone] = useState(false);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
+  const glimProfile = useAppStore((st) => st.glim);
   const pulse = useSharedValue(1);
   const barW  = useSharedValue(0);
   const d1 = useSharedValue(0), d2 = useSharedValue(0), d3 = useSharedValue(0);
@@ -97,15 +101,12 @@ function GeneratingView({ onBack, onGoToLibrary }: { onBack: () => void; onGoToL
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <Animated.View entering={FadeIn.duration(400)} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28, gap: 16 }}>
-        <View style={{ width: 88, height: 88, alignItems: 'center', justifyContent: 'center', marginBottom: 4 }}>
-          <Animated.View style={[{ position: 'absolute', width: 88, height: 88, borderRadius: 44, backgroundColor: C.primary }, pulseStyle]} />
-          <View style={{ width: 72, height: 72, borderRadius: 22, borderWidth: 1, borderColor: C.primaryRing, backgroundColor: C.primaryBg, justifyContent: 'center', alignItems: 'center' }}>
-            <Ionicons name="document-text" size={28} color={C.primary} />
-          </View>
+        <View style={{ marginBottom: 8 }}>
+          <Glim size={120} stage={glimProfile.stage} palette={paletteForInterests(glimProfile.interests)} mood="idle" interactive={false} />
         </View>
 
         <Text style={{ fontSize: fs(22), fontFamily: F.extraBold, color: C.text, textAlign: 'center' }}>Building your note…</Text>
-        <Text style={{ fontSize: fs(14), fontFamily: F.regular, color: C.sub, textAlign: 'center', lineHeight: 20 }}>Hang tight — AI is working its magic.</Text>
+        <Text style={{ fontSize: fs(14), fontFamily: F.regular, color: C.sub, textAlign: 'center', lineHeight: 20 }}>{glimProfile.name} is reading it and pulling out what matters.</Text>
 
         <View style={{ width: '100%', height: 4, borderRadius: 2, backgroundColor: C.surfaceAlt, overflow: 'hidden' }}>
           <Animated.View style={[{ height: '100%', borderRadius: 2, backgroundColor: C.primary }, barStyle]} />
@@ -429,8 +430,8 @@ export default function UploadScreen({ onBack, onGoToLibrary, initialSourceTab, 
           {source === 'youtube' && (
             <Animated.View entering={FadeInDown.duration(280)} style={{ gap: Spacing.md }}>
               <Text style={{ fontFamily: F.extraBold, fontSize: fs(15), color: C.text }}>Paste your YouTube link</Text>
-              <View style={[S.urlCard, { backgroundColor: C.surface, borderColor: youtubeUrl.trim() ? (youtubeValid ? C.success : '#EF4444') : C.border }]}>
-                <View style={[S.ytIconBox, { backgroundColor: '#EF444415' }]}>
+              <View style={[S.urlCard, { backgroundColor: C.surface, borderColor: youtubeUrl.trim() ? (youtubeValid ? C.success : C.error) : C.border }]}>
+                <View style={[S.ytIconBox, { backgroundColor: `${C.error}22` }]}>
                   <Ionicons name="logo-youtube" size={16} color="#EF4444" />
                 </View>
                 <TextInput
@@ -445,7 +446,7 @@ export default function UploadScreen({ onBack, onGoToLibrary, initialSourceTab, 
                   autoFocus
                 />
                 {youtubeUrl.trim().length > 0 && (
-                  <Ionicons name={youtubeValid ? 'checkmark-circle' : 'close-circle'} size={18} color={youtubeValid ? C.success : '#EF4444'} />
+                  <Ionicons name={youtubeValid ? 'checkmark-circle' : 'close-circle'} size={18} color={youtubeValid ? C.success : C.error} />
                 )}
               </View>
               {youtubeValid && (
